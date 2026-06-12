@@ -1,0 +1,30 @@
+{
+  "name": "@safesips/mobile",
+  "version": "1.0.0",
+  "description": "SafeSips real-time privacy map native app (Expo + MapLibre).",
+  "license": "MIT",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "prebuild": "expo prebuild",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@maplibre/maplibre-react-native": "^10.0.0",
+    "@safesips/shared": "file:../shared",
+    "expo": "~52.0.0",
+    "expo-location": "~18.0.0",
+    "expo-status-bar": "~2.0.0",
+    "react": "18.3.1",
+    "react-native": "0.76.3",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.0",
+    "@types/react": "~18.3.12",
+    "typescript": "^5.6.3"
+  },
+  "private": true
+}

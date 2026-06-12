@@ -1,0 +1,28 @@
+{
+  "name": "safesips-realtime-map",
+  "private": true,
+  "version": "1.0.0",
+  "description": "SafeSips real-time privacy-preserving location sharing map (web + mobile + shared backend).",
+  "license": "MIT",
+  "workspaces": [
+    "shared",
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "build:shared": "npm run build -w @safesips/shared",
+    "dev:shared": "npm run dev -w @safesips/shared",
+    "dev:server": "npm run dev -w @safesips/server",
+    "dev:web": "npm run dev -w @safesips/web",
+    "dev": "npm run build:shared && concurrently -n shared,server,web -c gray,cyan,green \"npm:dev:shared\" \"npm:dev:server\" \"npm:dev:web\"",
+    "build": "npm run build:shared && npm run build -w @safesips/server && npm run build -w @safesips/web",
+    "start:server": "npm run start -w @safesips/server",
+    "mobile": "npm --prefix mobile run start"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=18.18"
+  }
+}

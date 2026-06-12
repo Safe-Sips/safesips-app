@@ -1,0 +1,18 @@
+{
+  "name": "SafeSips Live Safety Map",
+  "short_name": "SafeSips",
+  "description": "Share an approximate area while keeping your exact location private.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0f",
+  "theme_color": "#0a0a0f",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

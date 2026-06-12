@@ -1,0 +1,382 @@
+:root {
+  --bg: #0a0a0f;
+  --panel: rgba(18, 18, 26, 0.92);
+  --panel-border: rgba(255, 255, 255, 0.08);
+  --text: #f4f4f7;
+  --muted: #9aa0ad;
+  --yellow: #ffd400;
+  --blue: #2f7bff;
+  --danger: #ff4d5e;
+  --radius: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Nunito", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app-shell {
+  position: relative;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+}
+
+.map-root {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+  background: #05060a;
+  z-index: 1;
+}
+
+/* Slightly darken OSM tiles to fit the dark theme. */
+.leaflet-tile-pane {
+  filter: brightness(0.72) saturate(1.05) contrast(1.05);
+}
+.leaflet-container {
+  background: #05060a;
+}
+
+/* ----------------------------- Control panel ---------------------------- */
+
+.panel {
+  position: absolute;
+  z-index: 1000;
+  top: 16px;
+  left: 16px;
+  width: min(360px, calc(100% - 32px));
+  background: var(--panel);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.brand h1 {
+  font-size: 20px;
+  margin: 0;
+  letter-spacing: 0.5px;
+}
+.tagline {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.brand-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, var(--blue) 0 26%, transparent 30%),
+    radial-gradient(circle at 50% 50%, rgba(255, 212, 0, 0.25) 0 70%, transparent 72%);
+  border: 1px solid rgba(255, 212, 0, 0.5);
+}
+
+.status-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.status-connected {
+  background: rgba(46, 213, 115, 0.16);
+  color: #2ed573;
+}
+.status-connecting {
+  background: rgba(255, 212, 0, 0.16);
+  color: var(--yellow);
+}
+.status-disconnected {
+  background: rgba(255, 77, 94, 0.16);
+  color: var(--danger);
+}
+
+/* ------------------------------- Buttons -------------------------------- */
+
+.btn {
+  border: none;
+  border-radius: 10px;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 11px 14px;
+  cursor: pointer;
+  transition: transform 0.05s ease, filter 0.15s ease, opacity 0.15s ease;
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-block {
+  width: 100%;
+}
+.btn-primary {
+  background: var(--yellow);
+  color: #1a1700;
+}
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.05);
+}
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+.btn-ghost {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+.btn-danger {
+  background: rgba(255, 77, 94, 0.16);
+  color: var(--danger);
+}
+
+.address-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.address-form input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 11px 12px;
+  font-size: 14px;
+  font-family: inherit;
+}
+.address-form input::placeholder {
+  color: var(--muted);
+}
+.address-form input:focus {
+  outline: 2px solid rgba(255, 212, 0, 0.5);
+}
+
+.hint {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 10px 0 0;
+}
+.error {
+  font-size: 13px;
+  color: var(--danger);
+  margin: 10px 0 0;
+}
+
+/* --------------------------- Sharing status ----------------------------- */
+
+.sharing-card {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--panel-border);
+}
+.sharing-card.is-sharing {
+  border-color: rgba(255, 212, 0, 0.4);
+  background: rgba(255, 212, 0, 0.06);
+}
+.sharing-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  padding: 4px 0;
+}
+.sharing-label {
+  color: var(--muted);
+}
+.sharing-value {
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.dot-live {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--yellow);
+  box-shadow: 0 0 0 0 rgba(255, 212, 0, 0.6);
+  animation: livePulse 1.6s ease-out infinite;
+}
+@keyframes livePulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 212, 0, 0.6);
+  }
+  100% {
+    box-shadow: 0 0 0 8px rgba(255, 212, 0, 0);
+  }
+}
+.sharing-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.sharing-actions .btn {
+  flex: 1;
+}
+
+.privacy-note {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 14px 0 0;
+}
+.privacy-note strong {
+  color: var(--yellow);
+}
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.swatch-blue {
+  background: var(--blue);
+  border: 2px solid #fff;
+}
+.swatch-yellow {
+  background: rgba(255, 212, 0, 0.25);
+  border: 1px solid var(--yellow);
+}
+
+/* ------------------------------- Modal ---------------------------------- */
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal-card {
+  width: min(420px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  padding: 22px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+}
+.modal-card h2 {
+  margin: 0 0 12px;
+  font-size: 19px;
+}
+.modal-card p {
+  font-size: 14px;
+  line-height: 1.55;
+  margin: 0 0 12px;
+}
+.modal-card .muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+/* ------------------------- Map circle animations ------------------------ */
+
+.privacy-circle {
+  animation: privacyPulse 2.4s ease-in-out infinite;
+}
+@keyframes privacyPulse {
+  0%,
+  100% {
+    stroke-opacity: 0.95;
+    stroke-width: 2;
+  }
+  50% {
+    stroke-opacity: 0.35;
+    stroke-width: 4;
+  }
+}
+
+.radar-sweep {
+  stroke-opacity: 0.7;
+  animation: radarSweep 3s linear infinite;
+}
+@keyframes radarSweep {
+  to {
+    stroke-dashoffset: -360;
+  }
+}
+
+.self-dot {
+  filter: drop-shadow(0 0 6px rgba(47, 123, 255, 0.9));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .privacy-circle,
+  .radar-sweep,
+  .dot-live {
+    animation: none;
+  }
+}
+
+/* ------------------------------ Responsive ------------------------------ */
+
+@media (max-width: 560px) {
+  .panel {
+    top: auto;
+    bottom: 12px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-height: 64dvh;
+    overflow-y: auto;
+  }
+}

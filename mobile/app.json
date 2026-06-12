@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "SafeSips",
+    "slug": "safesips",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "safesips",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#0a0a0f"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "SafeSips uses your location only to create a private, approximate 200 m area. Your exact position stays on your device."
+      }
+    },
+    "android": {
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "SafeSips uses your location only to create a private, approximate 200 m area. Your exact position stays on your device."
+        }
+      ],
+      "@maplibre/maplibre-react-native"
+    ]
+  }
+}
