@@ -1,5 +1,7 @@
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import type { AddressSuggestion } from "../geocode";
 import type { ConnectionState } from "../hooks/usePresence";
+import AddressInput from "./AddressInput";
 
 interface ControlsProps {
   connection: ConnectionState;
@@ -11,6 +13,7 @@ interface ControlsProps {
   othersCount: number;
   onShareGps: () => void;
   onSubmitAddress: (address: string) => void;
+  onPickAddress: (suggestion: AddressSuggestion) => void;
   onUpdate: () => void;
   onStop: () => void;
 }
@@ -40,16 +43,11 @@ export default function Controls({
   othersCount,
   onShareGps,
   onSubmitAddress,
+  onPickAddress,
   onUpdate,
   onStop,
 }: ControlsProps) {
-  const [address, setAddress] = useState("");
   const timeSince = useTimeSince(lastUpdateAt);
-
-  const handleSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    onSubmitAddress(address);
-  };
 
   return (
     <aside className="panel">
@@ -81,24 +79,11 @@ export default function Controls({
         Share My Location
       </button>
 
-      <form className="address-form" onSubmit={handleSubmit}>
-        <input
-          type="text"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          placeholder="Enter your address"
-          aria-label="Enter your address"
-          autoComplete="off"
-          maxLength={500}
-        />
-        <button
-          className="btn btn-secondary"
-          type="submit"
-          disabled={connection !== "connected" || !address.trim()}
-        >
-          Go
-        </button>
-      </form>
+      <AddressInput
+        disabled={connection !== "connected"}
+        onSubmitAddress={onSubmitAddress}
+        onPickSuggestion={onPickAddress}
+      />
 
       {geoStatus && <p className="hint">{geoStatus}</p>}
       {geoError && <p className="error">{geoError}</p>}

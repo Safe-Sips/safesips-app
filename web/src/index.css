@@ -167,8 +167,13 @@ body {
   gap: 8px;
   margin-top: 12px;
 }
-.address-form input {
+.address-field {
+  position: relative;
   flex: 1;
+  min-width: 0;
+}
+.address-form input {
+  width: 100%;
   min-width: 0;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--panel-border);
@@ -183,6 +188,39 @@ body {
 }
 .address-form input:focus {
   outline: 2px solid rgba(255, 212, 0, 0.5);
+}
+
+.address-suggestions {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 1100;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+  background: rgba(12, 12, 18, 0.98);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+.address-suggestion {
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text);
+  cursor: pointer;
+}
+.address-suggestion:hover,
+.address-suggestion.is-active {
+  background: rgba(255, 212, 0, 0.12);
+}
+.address-suggestion-muted {
+  color: var(--muted);
+  cursor: default;
 }
 
 .hint {

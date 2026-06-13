@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { LatLng } from "@safesips/shared";
+import type { AddressSuggestion } from "./geocode";
 import Controls from "./components/Controls";
 import LegalFooter from "./components/LegalFooter";
 import LegalModal from "./components/LegalModal";
@@ -11,7 +12,9 @@ import { PRIVACY_POLICY, TERMS_OF_SERVICE } from "./legal/content";
 
 const ACK_KEY = "safesips.sensitiveAck";
 
-type PendingAction = { kind: "gps" } | { kind: "address"; address: string };
+type PendingAction =
+  | { kind: "gps" }
+  | { kind: "address"; address: string; lat?: number; lng?: number };
 type LegalDoc = "privacy" | "terms" | null;
 
 export default function App() {
@@ -76,7 +79,7 @@ export default function App() {
           setGeoError("No match found for that address.");
           return;
         }
-        lastSource.current = { kind: "address", address };
+        lastSource.current = { kind: "address", address: result.displayName };
         setExactAndPublish({ lat: result.lat, lng: result.lng });
       } catch {
         setGeoStatus(null);
@@ -84,6 +87,26 @@ export default function App() {
       }
     },
     [setExactAndPublish]
+  );
+
+  const runPickedAddress = useCallback(
+    (suggestion: AddressSuggestion) => {
+      clearNotice();
+      if (!acked) {
+        setPending({
+          kind: "address",
+          address: suggestion.displayName,
+          lat: suggestion.lat,
+          lng: suggestion.lng,
+        });
+        return;
+      }
+      setGeoError(null);
+      setGeoStatus(null);
+      lastSource.current = { kind: "address", address: suggestion.displayName };
+      setExactAndPublish({ lat: suggestion.lat, lng: suggestion.lng });
+    },
+    [acked, clearNotice, setExactAndPublish]
   );
 
   // Gate the first share behind the sensitive-location warning.
@@ -106,8 +129,15 @@ export default function App() {
     const action = pending;
     setPending(null);
     if (action?.kind === "gps") runGps();
-    else if (action?.kind === "address") runAddress(action.address);
-  }, [pending, runGps, runAddress]);
+    else if (action?.kind === "address") {
+      if (action.lat != null && action.lng != null) {
+        lastSource.current = { kind: "address", address: action.address };
+        setExactAndPublish({ lat: action.lat, lng: action.lng });
+      } else {
+        runAddress(action.address);
+      }
+    }
+  }, [pending, runGps, runAddress, setExactAndPublish]);
 
   const onUpdate = useCallback(() => {
     const source = lastSource.current;
@@ -140,6 +170,7 @@ export default function App() {
         othersCount={state.others.length}
         onShareGps={() => guarded({ kind: "gps" })}
         onSubmitAddress={(address) => guarded({ kind: "address", address })}
+        onPickAddress={runPickedAddress}
         onUpdate={onUpdate}
         onStop={onStop}
       />
