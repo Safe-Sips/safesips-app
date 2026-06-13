@@ -336,13 +336,14 @@ What the live map does
 User-facing features (web)
 - Share My Location — requests geolocation permission only when pressed; high-accuracy GPS with 10 s timeout.
 - Enter your address + Go — geocodes free text via OpenStreetMap Nominatim for users without GPS or on desktop.
+- Address autocomplete — as the user types (≥3 characters), Nominatim suggestions appear above the field; selecting one shares immediately using the resolved coordinates. Labels show place name, street, and city only.
 - Update — re-runs the last source (GPS or address) and generates a fresh random mask each time.
 - Stop sharing — removes the public circle from all clients immediately.
 - Sensitive-location warning modal — shown before the first share; warns against sharing from home, school, workplace, shelter, or medical facility; includes “not 911” emergency disclaimer; acknowledgment persisted in localStorage.
 - Privacy Policy & Terms — footer links open in-app legal modals (draft summaries; require lawyer review before launch).
 - Live control panel — connection status (Online / Connecting / Offline), sharing status with pulse indicator, last-update timer, count of others nearby, privacy note, and map legend.
 - Full-screen interactive map — Leaflet + OpenStreetMap tiles; auto-recenter on share; dark-themed UI with glassmorphism panel.
-- Responsive layout — floating side panel on desktop; bottom sheet on screens ≤560 px with scroll.
+- Responsive layout — bottom-left glass control panel on desktop; full-width bottom sheet on screens ≤560 px with scroll.
 - PWA manifest — installable metadata (standalone, theme colors, icon); no service worker yet.
 - Accessibility — modal dialog roles, form labels, prefers-reduced-motion disables circle animations.
 
@@ -366,6 +367,9 @@ Security headers | X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Per
 Connection abuse | MAX_CONNECTIONS_PER_IP (default 20) per client network | IMPLEMENTED
 Health endpoint | Production returns { status: "ok" } only; no activeUsers count leak | IMPLEMENTED
 Geocoding (web + mobile) | Nominatim User-Agent, 10 s timeout, coordinate validation, 500-char address limit | IMPLEMENTED
+Address autocomplete (web) | Debounced Nominatim search (400 ms, min 3 chars); keyboard + click pick; web/src/components/AddressInput.tsx | IMPLEMENTED (June 13, 2026)
+Autocomplete labels (web + safesips-website) | Suggestions show place name, street, and city only via formatShortAddressLabel() | IMPLEMENTED (June 13, 2026)
+Embedded live map (safesips-website) | Same autocomplete + bottom-left panel as web client; overlay title left-aligned in Nunito | IMPLEMENTED (June 13, 2026)
 Socket reliability | try/catch on location:update, sweep timer, and presence cleanup | IMPLEMENTED
 Emergency disclaimer | “Not 911” / “Not 112” warning on web app footer, sensitive-location modal, mobile app, and safesips-website marketing site | IMPLEMENTED
 Privacy Policy & Terms | In-app modals on safesips-app web client + footer modals on safesips-website (GitHub: Safe-Sips/safesips-website); draft summaries — require qualified legal review before public launch | IMPLEMENTED (draft)
@@ -670,6 +674,8 @@ Prototype security hardening | IMPLEMENTED | June 13, 2026 — CodeRabbit review
 Marketing website legal UI | IMPLEMENTED | June 13, 2026 — safesips-website index.html footer + live map panel: Privacy Policy, Terms, emergency disclaimers (repo: Safe-Sips/safesips-website).
 Production deployment config | CONFIGURED | api.safesips.org (API), safesips.org / www / app (web CORS). Requires host setup and legal review before go-live.
 CodeRabbit dev tooling | IMPLEMENTED | Cursor extension + Windows-native CLI; agent can run coderabbit --agent -t uncommitted for automated review loops.
+Web map control panel placement | IMPLEMENTED | Bottom-left on desktop; bottom sheet ≤560 px (June 13, 2026).
+Address autocomplete | IMPLEMENTED | Typeahead on safesips-app web client + safesips-website embedded map; short place/street/city labels (June 13, 2026).
 
 Important unresolved decisions
 - Final industrial dimensions, battery size, charging method, and sensor architecture.
@@ -733,6 +739,8 @@ Web UI features
 Feature | Description | Status
 Share My Location | GPS button; permission requested only on press | IMPLEMENTED
 Address input | Nominatim geocoding; fallback when GPS denied or on desktop | IMPLEMENTED
+Address autocomplete | Debounced Nominatim suggestions; pick shares coords directly; AddressInput.tsx | IMPLEMENTED (web only)
+Suggestion labels | Place name, street, city only (formatShortAddressLabel in geocode.ts) | IMPLEMENTED (web + safesips-website)
 Update / Stop sharing | Re-share with new mask; immediate global removal | IMPLEMENTED
 Sensitive-location warning | Modal before first share; localStorage acknowledgment; includes “not 911” emergency disclaimer | IMPLEMENTED
 Privacy Policy & Terms | Footer links open in-app legal modals (draft summaries) | IMPLEMENTED (draft — legal review required)
@@ -741,7 +749,7 @@ Connection pill | Online / Connecting / Offline from Socket.io state | IMPLEMENT
 Sharing dashboard | Status, live last-update timer, others-nearby count | IMPLEMENTED
 Privacy copy | “Your precise location stays private…” + map legend | IMPLEMENTED
 Animated circles | Yellow 200 m fill + radar/pulse border; reduced-motion fallback | IMPLEMENTED
-Dark glass panel | Navy/black theme; responsive bottom sheet on mobile | IMPLEMENTED
+Dark glass panel | Navy/black theme; bottom-left on desktop; bottom sheet on mobile | IMPLEMENTED
 Map | Leaflet + OSM tiles; auto-recenter at zoom ≥16 when sharing | IMPLEMENTED
 
 Backend features
@@ -768,6 +776,7 @@ Real-time others | Yes | Yes
 Update / Stop | Yes | Yes
 Sensitive warning | Modal + localStorage persist; not-911 disclaimer | Native Alert; session-only; not-911 disclaimer | IMPLEMENTED
 Geocoding | Nominatim with User-Agent, timeout, validation | Same | IMPLEMENTED
+Address autocomplete | Yes (AddressInput.tsx) | No | PLANNED
 Legal UI | Privacy Policy + Terms modals | Not yet (mobile) | PLANNED
 
 Geocoding & address input (web + mobile)
@@ -777,6 +786,8 @@ User-Agent | Identifies app to Nominatim per usage policy | IMPLEMENTED
 Fetch timeout | 10 s abort | IMPLEMENTED
 Coordinate validation | Rejects NaN/invalid lat/lng from geocoder | IMPLEMENTED
 Address length cap | 500 characters max | IMPLEMENTED
+Autocomplete debounce | 400 ms; minimum 3 characters before Nominatim query | IMPLEMENTED (web + safesips-website)
+Suggestion formatting | addressdetails=1; labels use place, street, city fields only | IMPLEMENTED (web + safesips-website)
 
 Developer tooling & quality (June 13, 2026)
 
@@ -809,6 +820,7 @@ Chat, filters, themes | Not in scope of current prototype
 Database | In-memory server store only; no location history
 Service worker / push | PWA manifest only; no offline or notifications
 Mobile legal UI | Privacy Policy / Terms modals on native app (web has draft modals)
+Mobile address autocomplete | Not yet on Expo client; web + safesips-website have parity | PLANNED
 Formal legal sign-off | Draft in-app policies require qualified counsel review before launch
 Hosted production deploy | .env.production configured for safesips.org; DNS/hosting not yet live
 
@@ -839,8 +851,8 @@ Interpretation rules used during consolidation
 - In-app Privacy Policy and Terms summaries are drafting aids; they require qualified legal review before public launch or reliance in litigation.
 Version control
 
-Version: 1.2 — Security, legal, and production-readiness update
-Compiled: June 13, 2026 (v1.1 implemented prototype June 13, 2026; v1.0 consolidated June 12, 2026)
+Version: 1.3 — Live map UX polish (autocomplete, panel placement, short address labels)
+Compiled: June 13, 2026 (v1.2 security/legal June 13, 2026; v1.1 implemented prototype June 13, 2026; v1.0 consolidated June 12, 2026)
 Owners: David Mathe and Luca Mureșan
 Recommended update practice: Add dated entries to the decision log whenever product, claims, design, app, pricing, or timeline changes. Record implementation milestones in section 19.
 
