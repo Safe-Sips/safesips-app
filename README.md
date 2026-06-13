@@ -87,11 +87,43 @@ Production build:
 
 ```bash
 npm run build          # builds shared + server + web
-npm run start:server   # node dist/index.js
+npm run start:server   # node dist/index.js (set NODE_ENV=production + server/.env.production)
 # serve web/dist with any static host / CDN behind HTTPS
 ```
 
-## Run the mobile app
+## Production deployment (safesips.org)
+
+Targets: **api.safesips.org** (API + WebSockets) and **app.safesips.org** (static web).
+
+| Component | Config |
+|-----------|--------|
+| API | [server/.env.production](server/.env.production) — `CORS_ORIGINS`, rate/TTL limits |
+| Web build | [web/.env.production](web/.env.production) — `VITE_SERVER_URL=https://api.safesips.org` |
+
+### Docker (recommended)
+
+```bash
+npm run build
+npm run deploy:compose   # builds images; web on http://localhost:8080, API on :4000
+```
+
+See [deploy/README.md](deploy/README.md) for TLS/WSS nginx templates (`deploy/nginx-api.conf`, `deploy/nginx-web.conf`).
+
+### Verify before go-live
+
+```bash
+# Local
+npm run dev              # in another terminal, or:
+npm run build && npm run start:server
+npm run smoke-test
+npm run uptime-check
+
+# After DNS + TLS are configured
+API_URL=https://api.safesips.org WEB_ORIGIN=https://app.safesips.org npm run smoke-test
+```
+
+CI runs build + smoke test on every push via [.github/workflows/deploy-check.yml](.github/workflows/deploy-check.yml).
+
 
 The shared package must be built first so Metro can resolve it:
 

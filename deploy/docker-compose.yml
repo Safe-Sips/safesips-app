@@ -1,0 +1,47 @@
+# Production stack for safesips.org
+# Usage: docker compose -f deploy/docker-compose.yml up -d --build
+
+services:
+  safesips-server:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.server
+    env_file:
+      - ../server/.env.production
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    expose:
+      - "4000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  safesips-web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Optional reverse proxy — mount real certs before exposing 443
+  # safesips-proxy:
+  #   image: nginx:1.27-alpine
+  #   volumes:
+  #     - ./nginx-api.conf:/etc/nginx/conf.d/api.conf:ro
+  #     - /etc/letsencrypt:/etc/letsencrypt:ro
+  #   ports:
+  #     - "443:443"
+  #   depends_on:
+  #     - safesips-server
+  #     - safesips-web

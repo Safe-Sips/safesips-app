@@ -17,10 +17,14 @@
     "dev": "npm run build:shared && concurrently -n shared,server,web -c gray,cyan,green \"npm:dev:shared\" \"npm:dev:server\" \"npm:dev:web\"",
     "build": "npm run build:shared && npm run build -w @safesips/server && npm run build -w @safesips/web",
     "start:server": "npm run start -w @safesips/server",
-    "mobile": "npm --prefix mobile run start"
+    "mobile": "npm --prefix mobile run start",
+    "smoke-test": "node scripts/smoke-test.mjs",
+    "uptime-check": "node scripts/uptime-check.mjs",
+    "deploy:compose": "docker compose -f deploy/docker-compose.yml up -d --build"
   },
   "devDependencies": {
-    "concurrently": "^10.0.3"
+    "concurrently": "^10.0.3",
+    "socket.io-client": "^4.8.1"
   },
   "overrides": {
     "shell-quote": "1.8.4",
