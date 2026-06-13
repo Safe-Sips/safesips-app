@@ -26,13 +26,21 @@ export function circlePolygon(
   publicId: string,
   steps = 64
 ): CircleFeature {
+  if (!Number.isFinite(radiusMeters) || radiusMeters <= 0) {
+    throw new RangeError("radiusMeters must be a positive finite number.");
+  }
+  const ringSteps = Math.floor(steps);
+  if (!Number.isFinite(ringSteps) || ringSteps < 3) {
+    throw new RangeError("steps must be an integer >= 3.");
+  }
+
   const coords: Position[] = [];
   const latRad = (center.lat * Math.PI) / 180;
   const metersPerDegreeLng =
     EARTH_METERS_PER_DEGREE_LAT * Math.cos(latRad) || 1e-9;
 
-  for (let i = 0; i <= steps; i += 1) {
-    const angle = (i / steps) * 2 * Math.PI;
+  for (let i = 0; i <= ringSteps; i += 1) {
+    const angle = (i / ringSteps) * 2 * Math.PI;
     const dNorth = radiusMeters * Math.cos(angle);
     const dEast = radiusMeters * Math.sin(angle);
     const lat = center.lat + dNorth / EARTH_METERS_PER_DEGREE_LAT;

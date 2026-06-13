@@ -4,18 +4,25 @@ export interface GeocodeResult extends LatLng {
   displayName: string;
 }
 
+/** Nominatim asks consumers to identify themselves and keep volume low. */
+const NOMINATIM_USER_AGENT =
+  "SafeSips/1.0 (privacy-preserving location sharing; contact: support@safesips.app)";
+
+const GEOCODE_TIMEOUT_MS = 10_000;
+export const MAX_ADDRESS_LENGTH = 500;
+
 /**
- * Geocode a free-text address using the public OpenStreetMap Nominatim
- * service. Returns the best match, or null when nothing is found.
- *
- * Note: Nominatim asks consumers to keep request volume low and identify
- * themselves; this is fine for the prototype scale described in the spec.
+ * Geocode a free-text address using OpenStreetMap Nominatim.
+ * Returns the best match, or null when nothing is found.
  */
 export async function geocodeAddress(
   address: string
 ): Promise<GeocodeResult | null> {
   const query = address.trim();
   if (!query) return null;
+  if (query.length > MAX_ADDRESS_LENGTH) {
+    throw new Error("Address is too long.");
+  }
 
   const url = new URL("https://nominatim.openstreetmap.org/search");
   url.searchParams.set("q", query);
@@ -23,7 +30,11 @@ export async function geocodeAddress(
   url.searchParams.set("limit", "1");
 
   const res = await fetch(url.toString(), {
-    headers: { Accept: "application/json" },
+    headers: {
+      Accept: "application/json",
+      "User-Agent": NOMINATIM_USER_AGENT,
+    },
+    signal: AbortSignal.timeout(GEOCODE_TIMEOUT_MS),
   });
   if (!res.ok) {
     throw new Error(`Geocoding failed (${res.status}).`);
@@ -38,9 +49,15 @@ export async function geocodeAddress(
   if (!data.length) return null;
 
   const [first] = data;
+  const lat = Number.parseFloat(first.lat);
+  const lng = Number.parseFloat(first.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    throw new Error("Geocoding returned invalid coordinates.");
+  }
+
   return {
-    lat: Number.parseFloat(first.lat),
-    lng: Number.parseFloat(first.lon),
+    lat,
+    lng,
     displayName: first.display_name,
   };
 }

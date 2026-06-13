@@ -25,7 +25,7 @@ function Recenter({ exact }: { exact: LatLng | null }) {
         animate: true,
       });
     }
-  }, [exact, map]);
+  }, [exact?.lat, exact?.lng, map]);
   return null;
 }
 

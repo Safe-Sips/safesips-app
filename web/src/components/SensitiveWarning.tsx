@@ -26,7 +26,8 @@ export default function SensitiveWarning({
         </p>
         <p className="muted">
           Location masking reduces precision but does not eliminate every
-          privacy risk. You can stop sharing at any time.
+          privacy risk. SafeSips is not an emergency service — call 911 in an
+          emergency. You can stop sharing at any time.
         </p>
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onCancel}>

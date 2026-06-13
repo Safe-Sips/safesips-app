@@ -89,6 +89,7 @@ export default function Controls({
           placeholder="Enter your address"
           aria-label="Enter your address"
           autoComplete="off"
+          maxLength={500}
         />
         <button
           className="btn btn-secondary"

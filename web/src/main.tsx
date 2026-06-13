@@ -4,7 +4,10 @@ import App from "./App";
 import "leaflet/dist/leaflet.css";
 import "./index.css";
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+const root = document.getElementById("root");
+if (!root) throw new Error("Root element #root not found in DOM");
+
+ReactDOM.createRoot(root).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>

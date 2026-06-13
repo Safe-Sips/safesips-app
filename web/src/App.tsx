@@ -1,14 +1,18 @@
 import { useCallback, useRef, useState } from "react";
 import type { LatLng } from "@safesips/shared";
 import Controls from "./components/Controls";
+import LegalFooter from "./components/LegalFooter";
+import LegalModal from "./components/LegalModal";
 import MapView from "./components/MapView";
 import SensitiveWarning from "./components/SensitiveWarning";
 import { geocodeAddress } from "./geocode";
 import { usePresence } from "./hooks/usePresence";
+import { PRIVACY_POLICY, TERMS_OF_SERVICE } from "./legal/content";
 
 const ACK_KEY = "safesips.sensitiveAck";
 
 type PendingAction = { kind: "gps" } | { kind: "address"; address: string };
+type LegalDoc = "privacy" | "terms" | null;
 
 export default function App() {
   const { state, publish, stop, clearNotice } = usePresence();
@@ -22,6 +26,7 @@ export default function App() {
     () => localStorage.getItem(ACK_KEY) === "1"
   );
   const [pending, setPending] = useState<PendingAction | null>(null);
+  const [legalDoc, setLegalDoc] = useState<LegalDoc>(null);
   const lastSource = useRef<PendingAction | null>(null);
 
   const setExactAndPublish = useCallback(
@@ -115,6 +120,7 @@ export default function App() {
     setExact(null);
     lastSource.current = null;
     setGeoStatus(null);
+    setGeoError(null);
   }, [stop]);
 
   return (
@@ -141,6 +147,22 @@ export default function App() {
         open={pending !== null}
         onConfirm={confirmWarning}
         onCancel={() => setPending(null)}
+      />
+      <LegalFooter
+        onOpenPrivacy={() => setLegalDoc("privacy")}
+        onOpenTerms={() => setLegalDoc("terms")}
+      />
+      <LegalModal
+        title="Privacy Policy"
+        body={PRIVACY_POLICY}
+        open={legalDoc === "privacy"}
+        onClose={() => setLegalDoc(null)}
+      />
+      <LegalModal
+        title="Terms of Service"
+        body={TERMS_OF_SERVICE}
+        open={legalDoc === "terms"}
+        onClose={() => setLegalDoc(null)}
       />
     </div>
   );

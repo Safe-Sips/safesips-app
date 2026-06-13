@@ -11,3 +11,4 @@ npm-debug.log*
 .DS_Store
 coverage/
 *.tsbuildinfo
+.coderabbit-review-output.json

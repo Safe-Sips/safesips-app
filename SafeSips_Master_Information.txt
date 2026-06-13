@@ -11,7 +11,7 @@ SINGLE SOURCE OF TRUTH
 How to use this file
 This document consolidates the product idea, final creative direction, technical concept, application, business model, and communication rules discussed across earlier SafeSips conversations. It is designed to prevent the project from drifting between versions.
 
-Project status: Research and prototype concept developed at ICHB Bucharest; not yet a validated commercial safety device.
+Project status: Research and prototype concept developed at ICHB Bucharest; not yet a validated commercial safety device. Live privacy map web/mobile prototype implemented June 2026; security, legal, and production-readiness hardening applied June 13, 2026.
 Current authorship: David Mathe and Luca Mureșan.
 Primary market: Romania first, with international scalability.
 Proposed company: SafeSips Technologies SRL.
@@ -37,7 +37,8 @@ Contents
 07 Creative themes and visual system: 17 Decision log
 08 Website story and structure: 18 Immediate next steps
 09 Messaging and copy bank: Appendix: sources and notes
-10 Audience and use cases
+10 Audience and use cases: (continued)
+19 Implemented digital prototype (June 2026)
 
 01 Executive snapshot
 
@@ -53,6 +54,7 @@ Primary audience: Young women aged 18–30, students, and party-goers; secondary
 Final product look: A slim, normal matte-black pen with a subtle dark clip, a sampling tip, a small transparent microfluidic window, and a thin hot-pink LED ring.
 Targets screened in concept: GHB, ketamine, and Rohypnol through separate channels.
 App functions: Instant Bluetooth alert, trusted-contact notification, optional location sharing, anonymous community map, and privacy controls.
+App implementation status (June 2026): Anonymous community map with masked real-time location sharing is live on web and mobile. Security hardening, draft legal UI, and production env configuration added June 13, 2026. Bluetooth alerts and trusted-contact notification are not yet built.
 Commercial model: Reusable electronic device plus sealed, single-use test cartridges; direct-to-consumer, refills, venue packs, and optional B2B service.
 Brand feeling: Warm, empowering, stylish, calm, credible, youthful, and non-clinical.
 
@@ -219,7 +221,7 @@ Feature | Purpose | Important constraint
 Instant notification | Receive a quiet Bluetooth alert when the device records a possible signal. | Wording must communicate uncertainty and avoid panic.
 Trusted contacts | Notify pre-selected people and share location when the user chooses. | Explicit consent, clear controls, and revocation.
 Safety actions | Show calm, immediate next steps and options to seek help. | Must not imply the device alone resolves the situation.
-Community safety map | Display anonymized general-area reports. | No precise public location, identity, or unverified accusation.
+Community safety map | Display anonymized general-area reports. | No precise public location, identity, or unverified accusation. | IMPLEMENTED (June 2026): live web + mobile prototype with 50 m mask, 200 m yellow circles, anonymous UUID sessions, real-time Socket.io sync. Trusted-group and incident-only modes not yet built.
 Privacy controls | Let users control contact lists, location sharing, reports, and retention. | “100% Private” is a concept label only; public claims require evidence.
 
 Concept alert screen
@@ -276,6 +278,10 @@ Warm support and calm clarity.: Aggressive warnings, guilt, or surveillance aest
 
 08 Website story and structure
 
+Two web experiences are now defined: (A) the planned immersive marketing homepage, and (B) the implemented live safety map prototype shipped in June 2026. When this section conflicts with section 19, section 19 reflects what is actually built today.
+
+A. Planned marketing homepage — still to build
+
 A single scroll-driven film with the pen as the main character.
 Homepage narrative
 
@@ -316,6 +322,76 @@ Optional features after the main site works
 - Mini diagram: Drink → Pen tip → 3 channels → LED → App.
 - Scroll progress labels: Pocket, Glass, Channels, Alert, App.
 - Compact “For clubs / universities” card.
+
+B. Implemented live safety map — shipped June 2026
+
+Status: IMPLEMENTED prototype at safesips-app/ (web + server + shared + mobile). This is the current public-facing web experience: a single-page real-time privacy map, not the nine-chapter marketing scroll site above.
+
+What the live map does
+- Lets any visitor share an approximate location on a live map while keeping their exact GPS position private.
+- Shows the user’s exact position as a blue dot on their device only; all other users see a yellow 200 m privacy circle centered on a randomized point within 50 m of the true location.
+- Broadcasts masked locations in real time to every connected user via WebSockets (Socket.io).
+- Supports anonymous multi-user presence: each session gets a server-assigned UUID; no accounts, profiles, or display names.
+
+User-facing features (web)
+- Share My Location — requests geolocation permission only when pressed; high-accuracy GPS with 10 s timeout.
+- Enter your address + Go — geocodes free text via OpenStreetMap Nominatim for users without GPS or on desktop.
+- Update — re-runs the last source (GPS or address) and generates a fresh random mask each time.
+- Stop sharing — removes the public circle from all clients immediately.
+- Sensitive-location warning modal — shown before the first share; warns against sharing from home, school, workplace, shelter, or medical facility; includes “not 911” emergency disclaimer; acknowledgment persisted in localStorage.
+- Privacy Policy & Terms — footer links open in-app legal modals (draft summaries; require lawyer review before launch).
+- Live control panel — connection status (Online / Connecting / Offline), sharing status with pulse indicator, last-update timer, count of others nearby, privacy note, and map legend.
+- Full-screen interactive map — Leaflet + OpenStreetMap tiles; auto-recenter on share; dark-themed UI with glassmorphism panel.
+- Responsive layout — floating side panel on desktop; bottom sheet on screens ≤560 px with scroll.
+- PWA manifest — installable metadata (standalone, theme colors, icon); no service worker yet.
+- Accessibility — modal dialog roles, form labels, prefers-reduced-motion disables circle animations.
+
+Technical build (implemented)
+
+Area | Direction
+Monorepo | safesips-app/ with npm workspaces: shared/, server/, web/; mobile/ (Expo) links shared via file: dependency.
+Web client | React 18 + Vite + react-leaflet + Leaflet; OpenStreetMap raster tiles (no Mapbox token required).
+Real-time backend | Express + Socket.io; in-memory presence store; GET /health endpoint.
+Shared package | @safesips/shared — maskLocation(), wire types, payload validation used by web, server, and mobile.
+Mobile client | Expo + React Native + MapLibre; same socket protocol and masking logic; interoperates with web on one server.
+Privacy masking | Client-side only: uniform-by-area random point within 50 m; new offset on every update; exact coords never sent.
+Server safeguards | Payload validation, rate limiting (default 2 s between updates), TTL expiry (default 60 s inactivity), periodic sweep, disconnect cleanup, CORS via env, per-IP connection cap (default 20), security headers (HSTS in production), try/catch on socket handlers.
+Configuration | server/.env (dev) and server/.env.production (prod); web/.env + web/.env.production (VITE_SERVER_URL); mobile/.env.production (EXPO_PUBLIC_SERVER_URL). Production CORS rejects wildcards; explicit HTTPS origins required.
+
+Security & legal hardening — June 13, 2026 (CodeRabbit-assisted review)
+
+Area | Change | Status
+Production CORS | Wildcard (*) blocked when NODE_ENV=production; explicit HTTPS origins required | IMPLEMENTED
+Security headers | X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy; HSTS in production | IMPLEMENTED
+Connection abuse | MAX_CONNECTIONS_PER_IP (default 20) per client network | IMPLEMENTED
+Health endpoint | Production returns { status: "ok" } only; no activeUsers count leak | IMPLEMENTED
+Geocoding (web + mobile) | Nominatim User-Agent, 10 s timeout, coordinate validation, 500-char address limit | IMPLEMENTED
+Socket reliability | try/catch on location:update, sweep timer, and presence cleanup | IMPLEMENTED
+Emergency disclaimer | “Not 911” warning on web footer, sensitive-location modal, and mobile app | IMPLEMENTED
+Privacy Policy & Terms | In-app modals on web (footer links); summary text — requires qualified legal review before public launch | IMPLEMENTED (draft)
+Production domains | safesips.org, www.safesips.org, app.safesips.org (web); api.safesips.org (API) — from business plan; update .env.production if host differs | CONFIGURED
+CodeRabbit integration | VS Code/Cursor extension + native Windows CLI; Cursor rule at .cursor/rules/coderabbit.mdc for agent-driven reviews | IMPLEMENTED
+Dependency audit | npm audit clean (0 vulnerabilities); Vite 8 + @vitejs/plugin-react 6; concurrently 10 | IMPLEMENTED
+
+Production deployment (planned host: safesips.org)
+
+Component | Production setting
+Web client | VITE_SERVER_URL=https://api.safesips.org (baked in at vite build via web/.env.production)
+API server | NODE_ENV=production; CORS_ORIGINS=https://safesips.org,https://www.safesips.org,https://app.safesips.org
+Mobile app | EXPO_PUBLIC_SERVER_URL=https://api.safesips.org
+Server startup | Loads server/.env.production when NODE_ENV=production
+
+Legal caution (digital prototype)
+In-app Privacy Policy and Terms of Service summaries are drafting aids only. They do not replace jurisdiction-specific legal review (Romania / EU GDPR, consumer law, location-data rules) before commercial launch or public marketing claims.
+
+Socket events (implemented)
+- Client → server: location:update (masked lat/lng only), location:stop.
+- Server → client: presence:self (anonymous publicId), presence:init (snapshot), presence:upsert, presence:remove, error:notice.
+
+Not yet implemented on web (planned marketing site or future app scope)
+- Nine-chapter scroll storytelling, 3D pen model, GSAP ScrollTrigger, waitlist modal, navigation sections (The Pen, How It Works, Mission).
+- User authentication, trusted contacts, Bluetooth pen alerts, chat, map filters, theme toggle, database persistence, push notifications, admin dashboard.
+
 09 Messaging and copy bank
 
 Approved language, content hooks, and phrases to avoid.
@@ -531,8 +607,8 @@ Area: Required action
 Chemical validation: Independent protocol across relevant drinks and concentrations; publish supported limits.
 Quality control: Lot codes, expiry, calibration, control samples, release criteria, and complaint traceability.
 Product safety: Technical file, risk assessment, electrical and chemical safety, packaging and disposal instructions.
-Data protection: Consent, minimization, encryption, location generalization, access control, retention, deletion.
-User communication: Clear uncertainty, no absolute claims, immediate next steps, emergency guidance.
+Data protection: Consent, minimization, encryption, location generalization, access control, retention, deletion. | PARTIAL (prototype): exact location never sent; masked coords ephemeral in memory; sensitive-location consent modal; draft Privacy Policy in web app. Encryption at rest, accounts, and formal GDPR documentation still pending.
+User communication: Clear uncertainty, no absolute claims, immediate next steps, emergency guidance. | PARTIAL (prototype): emergency “not 911” disclaimers; masking limitations stated in UI; draft Terms with limitation-of-liability summary. Full claim governance for pen product still pending.
 Venue protocol: Staff training, escalation path, device handling, cartridge storage, incident logging.
 Incident response: Ability to pause a batch, investigate complaints, notify partners, and correct communication.
 
@@ -554,7 +630,7 @@ False negatives create misplaced confidence | Very high | Conservative claims, c
 False positives create panic or reputational harm | Very high | Calibration, confirmation instructions, support protocol, incident review.
 Cartridge instability or contamination | High | Sealing, shelf-life studies, lot tracking, storage controls, single-use design.
 Optical reader misreads colored drinks | High | Reference channels, drink-color compensation, broad validation.
-Privacy or location misuse | High | Consent, general-area reporting, minimal retention, security review.
+Privacy or location misuse | High | Consent, general-area reporting, minimal retention, security review. | PARTIAL (June 13, 2026): CodeRabbit full-repo review; CORS lockdown, connection limits, geocoding hardening, legal UI drafts. Formal security audit and lawyer review still required before launch.
 Product is too expensive for target users | High | Prototype cost reduction, refill economics, campus/venue access models.
 Brand promises more than evidence supports | High | Claims governance and public validation reports.
 Copying or weak defensibility | Medium | Brand, design, data, partnerships, execution, and protectable IP where available.
@@ -586,12 +662,17 @@ Science targets | PROPOSED / VALIDATE | GHB, ketamine, Rohypnol; separate candid
 Commercial architecture | PROPOSED | Reusable electronic body plus disposable cartridges.
 Launch | PROPOSED / VALIDATE | September 2027 after 12 months of development and validation.
 Authors | CONFIRMED | David Mathe and Luca Mureșan.
+Live safety map prototype | IMPLEMENTED | June 2026 — React/Vite/Leaflet web client, Express/Socket.io server, Expo/MapLibre mobile, @safesips/shared masking package. See section 08B and section 19.
+Marketing homepage (3D scroll) | PLANNED | Nine-chapter immersive story not yet built; remains the target public site after prototype validation.
+Web map tech stack | CONFIRMED (prototype) | Leaflet + OpenStreetMap tiles; Socket.io; client-side maskLocation(); no Mapbox token; dark glass UI; Vite 8 build toolchain.
+Prototype security hardening | IMPLEMENTED | June 13, 2026 — CodeRabbit review (18 findings); server CORS/headers/connection limits; geocoding fixes; Privacy Policy/Terms/emergency disclaimers; production .env.production files for safesips.org. See section 08B and section 19.
+Production deployment config | CONFIGURED | api.safesips.org (API), safesips.org / www / app (web CORS). Requires host setup and legal review before go-live.
+CodeRabbit dev tooling | IMPLEMENTED | Cursor extension + Windows-native CLI; agent can run coderabbit --agent -t uncommitted for automated review loops.
 
 Important unresolved decisions
-- Exact cartridge geometry, sampling method, reagent chemistry, and control-channel design.
 - Final industrial dimensions, battery size, charging method, and sensor architecture.
-- Final app scope, emergency workflow, location model, and data retention.
-- Product classification, certifications, and legally supportable claims.
+- Final app scope, emergency workflow, and long-term data retention (prototype uses ephemeral in-memory presence only).
+- Product classification, certifications, and legally supportable claims — draft in-app legal text exists but must be reviewed by qualified counsel.
 - Confirmed team ownership for chemistry, hardware, software, operations, marketing, and finance.
 - Supplier quotations, prototype bill of materials, pilot budget, and revised pricing.
 - Final logo and wordmark system beyond the selected colors and typography.
@@ -604,9 +685,9 @@ Priority: Action
 2. Define the minimum claim: Choose the narrowest realistic screening claim and the drinks/substances to validate first.
 3. Build a laboratory test plan: Specify controls, concentrations, drink panel, sample volume, reaction time, sensor method, and pass/fail criteria.
 4. Prototype cartridge before final casing: Prove fluid movement and readable reactions before spending heavily on industrial tooling.
-5. Build sensor and app proof of concept: Demonstrate color capture, threshold logic, BLE event, phone alert, and consent-based contact workflow.
+5. Build sensor and app proof of concept: Demonstrate color capture, threshold logic, BLE event, phone alert, and consent-based contact workflow. — PARTIAL: anonymous community map with real-time masked location sharing shipped June 2026; BLE and trusted-contact workflow still pending.
 6. Test with users: Validate whether the physical action, alert wording, and form factor feel discreet and understandable.
-7. Create the website MVP: Use the final matte-black pen direction and the nine-chapter story; keep claims explicitly provisional.
+7. Create the website MVP: Use the final matte-black pen direction and the nine-chapter story; keep claims explicitly provisional. — PARTIAL: live safety map prototype shipped June 2026; immersive marketing homepage still pending.
 8. Secure partners: Identify an independent lab, hardware/microfluidics suppliers, privacy/legal adviser, and pilot venues or campuses.
 9. Rebuild the business case: Replace estimates with quotations, prototype costs, pilot conversion data, and compliance costs.
 10. Launch only after evidence: Publish supported performance, limits, privacy rules, and response instructions before commercial sale.
@@ -622,6 +703,121 @@ Definition of a strong first integrated prototype
 Final direction in one line
 A discreet matte-black pen in a lavender “Night Bloom Lab” world, turning three-channel chemistry into a calm private alert and a wider circle of support.
 
+19 Implemented digital prototype (June 2026)
+
+Status: IMPLEMENTED — working prototype in safesips-app/. This section is the authoritative record of what the digital product does today. It supersedes the conceptual app notes in the appendix below where they differ.
+
+Repository layout
+
+Package | Role | Status
+shared/ (@safesips/shared) | maskLocation(), wire types, PUBLIC_RADIUS_METERS (200), MASK_RADIUS_METERS (50), validateLocationUpdate() | IMPLEMENTED
+server/ (@safesips/server) | Express + Socket.io presence backend; in-memory store; GET /health | IMPLEMENTED
+web/ (@safesips/web) | React + Vite + Leaflet single-page live map; PWA manifest | IMPLEMENTED
+mobile/ (@safesips/mobile) | Expo + React Native + MapLibre; same protocol as web | IMPLEMENTED
+
+Privacy model (enforced in code)
+
+Step | Behavior | Status
+Exact location | Stored in local device memory only; shown as blue dot on own screen | IMPLEMENTED
+Masking | maskLocation() picks uniform-by-area random point within 50 m; longitude scaled by cos(lat) | IMPLEMENTED
+Public broadcast | Only masked { lat, lng } sent via location:update | IMPLEMENTED
+New mask per update | Random offset recalculated on every Update action | IMPLEMENTED
+Server storage | Stores masked center + anonymous publicId + timestamps only | IMPLEMENTED
+Stop sharing | location:stop removes circle from all clients instantly | IMPLEMENTED
+Auto expiry | Inactive records purged after PRESENCE_TTL_MS (default 60 s) | IMPLEMENTED
+
+Web UI features
+
+Feature | Description | Status
+Share My Location | GPS button; permission requested only on press | IMPLEMENTED
+Address input | Nominatim geocoding; fallback when GPS denied or on desktop | IMPLEMENTED
+Update / Stop sharing | Re-share with new mask; immediate global removal | IMPLEMENTED
+Sensitive-location warning | Modal before first share; localStorage acknowledgment; includes “not 911” emergency disclaimer | IMPLEMENTED
+Privacy Policy & Terms | Footer links open in-app legal modals (draft summaries) | IMPLEMENTED (draft — legal review required)
+Emergency disclaimer | Footer + modal: SafeSips is not an emergency service; call 911 | IMPLEMENTED
+Connection pill | Online / Connecting / Offline from Socket.io state | IMPLEMENTED
+Sharing dashboard | Status, live last-update timer, others-nearby count | IMPLEMENTED
+Privacy copy | “Your precise location stays private…” + map legend | IMPLEMENTED
+Animated circles | Yellow 200 m fill + radar/pulse border; reduced-motion fallback | IMPLEMENTED
+Dark glass panel | Navy/black theme; responsive bottom sheet on mobile | IMPLEMENTED
+Map | Leaflet + OSM tiles; auto-recenter at zoom ≥16 when sharing | IMPLEMENTED
+
+Backend features
+
+Feature | Default | Status
+Rate limiting | MIN_UPDATE_INTERVAL_MS = 2000 | IMPLEMENTED
+Payload validation | Lat/lng range checks; extra fields stripped | IMPLEMENTED
+Presence sweep | SWEEP_INTERVAL_MS = 5000 | IMPLEMENTED
+Disconnect cleanup | Immediate presence:remove on socket drop | IMPLEMENTED
+CORS | Explicit origins; wildcards rejected in production | IMPLEMENTED
+Production proxy | trust proxy when NODE_ENV=production | IMPLEMENTED
+Security headers | nosniff, DENY frame, Referrer-Policy, Permissions-Policy, HSTS (prod) | IMPLEMENTED
+Connection limit | MAX_CONNECTIONS_PER_IP = 20 | IMPLEMENTED
+Error handling | try/catch on update, sweep, and cleanup paths | IMPLEMENTED
+Health check | GET /health → { status } in production; { status, activeUsers } in dev | IMPLEMENTED
+Env loading | server/.env.production auto-loaded when NODE_ENV=production | IMPLEMENTED
+
+Mobile parity
+
+Feature | Web | Mobile
+GPS + address sharing | Yes | Yes
+Masked 200 m circles | Yes | Yes
+Real-time others | Yes | Yes
+Update / Stop | Yes | Yes
+Sensitive warning | Modal + localStorage persist; not-911 disclaimer | Native Alert; session-only; not-911 disclaimer | IMPLEMENTED
+Geocoding | Nominatim with User-Agent, timeout, validation | Same | IMPLEMENTED
+Legal UI | Privacy Policy + Terms modals | Not yet (mobile) | PLANNED
+
+Geocoding & address input (web + mobile)
+
+Safeguard | Detail | Status
+User-Agent | Identifies app to Nominatim per usage policy | IMPLEMENTED
+Fetch timeout | 10 s abort | IMPLEMENTED
+Coordinate validation | Rejects NaN/invalid lat/lng from geocoder | IMPLEMENTED
+Address length cap | 500 characters max | IMPLEMENTED
+
+Developer tooling & quality (June 13, 2026)
+
+Tool | Purpose | Status
+CodeRabbit extension | Inline IDE reviews in Cursor | INSTALLED
+CodeRabbit CLI | Agent-driven reviews via coderabbit --agent | INSTALLED (Windows native port)
+Cursor rule | .cursor/rules/coderabbit.mdc guides agent review workflow | IMPLEMENTED
+CodeRabbit review | Full-repo review — 18 findings; security/legal fixes applied | COMPLETED June 13, 2026
+npm audit | 0 vulnerabilities; Vite 8, concurrently 10 | COMPLETED June 13, 2026
+
+Production environment files
+
+File | Purpose
+web/.env.production | VITE_SERVER_URL=https://api.safesips.org
+server/.env.production | NODE_ENV, CORS_ORIGINS, rate/TTL/connection settings
+mobile/.env.production | EXPO_PUBLIC_SERVER_URL=https://api.safesips.org
+server/.env.example | Dev template; points to .env.production for prod
+web/.env.example | Dev template; notes .env.production for vite build
+Map legend | Yes | No
+Map engine | Leaflet | MapLibre + OSM tiles
+
+Still not built (digital roadmap)
+
+Area | Notes
+Marketing homepage | Nine-chapter GSAP/Three.js scroll story (section 08A)
+Authentication | No accounts or login
+Trusted contacts | No private alert circles or contact notification
+Pen / BLE integration | No hardware connection
+Chat, filters, themes | Not in scope of current prototype
+Database | In-memory server store only; no location history
+Service worker / push | PWA manifest only; no offline or notifications
+Mobile legal UI | Privacy Policy / Terms modals on native app (web has draft modals)
+Formal legal sign-off | Draft in-app policies require qualified counsel review before launch
+Hosted production deploy | .env.production configured for safesips.org; DNS/hosting not yet live
+
+Run commands (from safesips-app/)
+
+npm install && npm run build:shared && npm run dev — starts server + web together (development).
+npm run build — production build (web uses web/.env.production automatically).
+Web: http://localhost:5173 | Server: http://localhost:4000 (/health)
+Production API (planned): https://api.safesips.org | Web origins: safesips.org, www.safesips.org, app.safesips.org
+CodeRabbit review (optional): coderabbit review --agent -t uncommitted (from repo root; requires CLI auth).
+
 APPENDIX
 Source material and reference notes
 
@@ -629,6 +825,8 @@ This master file was assembled from the user’s earlier SafeSips conversations 
 - SafeSips Immersive Storytelling Homepage Brief — final matte-black pen version, May 28, 2026.
 - SafeSips 3D immersive storytelling briefs and earlier “Guardian Pen” explorations, May 27–28, 2026.
 - SafeSips Business Plan 2026–2027, updated authorship David Mathe and Luca Mureșan, June 9, 2026.
+- safesips-app monorepo — live privacy map prototype (web, server, shared, mobile), June 2026.
+- CodeRabbit security review and hardening pass — June 13, 2026 (CORS, legal UI, production env, dependency audit).
 - Previous conversation decisions covering the product concept, target audience, app functions, brand palette, website story, slogan, closing line, and technical caution.
 Interpretation rules used during consolidation
 - Later instructions supersede earlier conflicting concepts.
@@ -636,15 +834,17 @@ Interpretation rules used during consolidation
 - Business numbers are reproduced as proposed planning assumptions, not presented as verified market facts.
 - Scientific mechanisms are described as candidate research concepts until validated.
 - Absolute privacy and accuracy wording is flagged for evidence and legal review.
+- In-app Privacy Policy and Terms summaries are drafting aids; they require qualified legal review before public launch or reliance in litigation.
 Version control
 
-Version: 1.0 — Master consolidation
-Compiled: June 12, 2026
+Version: 1.2 — Security, legal, and production-readiness update
+Compiled: June 13, 2026 (v1.1 implemented prototype June 13, 2026; v1.0 consolidated June 12, 2026)
 Owners: David Mathe and Luca Mureșan
-Recommended update practice: Add dated entries to the decision log whenever product, claims, design, app, pricing, or timeline changes.
+Recommended update practice: Add dated entries to the decision log whenever product, claims, design, app, pricing, or timeline changes. Record implementation milestones in section 19.
 
 ============================================================
 SAFESIPS APP: LOCATION SHARING, PRIVACY, AND REAL-TIME MAP
+(Original specification — see section 19 for implemented status)
 ============================================================
 
 APP PURPOSE

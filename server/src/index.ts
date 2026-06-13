@@ -18,11 +18,23 @@ interface SocketData {
 
 const app = express();
 
-// HTTPS/WSS is terminated by the platform/reverse proxy in production; trust it
-// so secure cookies and protocol detection behave correctly.
 if (config.isProduction) {
   app.set("trust proxy", 1);
 }
+
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "geolocation=(self)");
+  if (config.isProduction) {
+    res.setHeader(
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains"
+    );
+  }
+  next();
+});
 
 app.use(
   cors({
@@ -30,8 +42,20 @@ app.use(
   })
 );
 
+const store = new PresenceStore(config.presenceTtlMs);
+
 app.get("/health", (_req, res) => {
-  res.json({ status: "ok", activeUsers: store.active().length });
+  try {
+    if (config.isProduction) {
+      res.json({ status: "ok" });
+      return;
+    }
+    res.json({ status: "ok", activeUsers: store.active().length });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Health check failed:", err);
+    res.status(500).json({ status: "error" });
+  }
 });
 
 const httpServer = http.createServer(app);
@@ -48,21 +72,46 @@ const io = new Server<
   },
 });
 
-const store = new PresenceStore(config.presenceTtlMs);
+const connectionsByIp = new Map<string, number>();
+
+function clientIp(socket: { handshake: { address: string } }): string {
+  return socket.handshake.address;
+}
+
+function removePresence(publicId: string): void {
+  try {
+    if (store.remove(publicId)) {
+      io.emit("presence:remove", { publicId });
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Failed to remove presence:", err);
+  }
+}
 
 io.on("connection", (socket) => {
+  const ip = clientIp(socket);
+  const activeForIp = (connectionsByIp.get(ip) ?? 0) + 1;
+  if (activeForIp > config.maxConnectionsPerIp) {
+    socket.emit("error:notice", {
+      code: "connection_limited",
+      message: "Too many connections from this network.",
+    });
+    socket.disconnect(true);
+    return;
+  }
+  connectionsByIp.set(ip, activeForIp);
+
   const publicId = randomUUID();
   socket.data.publicId = publicId;
   socket.data.lastUpdateAt = 0;
 
-  // Tell the client its anonymous id and the current world state.
   socket.emit("presence:self", { publicId });
   socket.emit("presence:init", store.active());
 
   socket.on("location:update", (payload) => {
     const now = Date.now();
 
-    // Rate limit: reject updates that arrive too frequently.
     if (now - socket.data.lastUpdateAt < config.minUpdateIntervalMs) {
       socket.emit("error:notice", {
         code: "rate_limited",
@@ -80,31 +129,42 @@ io.on("connection", (socket) => {
       return;
     }
 
-    socket.data.lastUpdateAt = now;
-
-    // Only the masked center is stored and broadcast.
-    const record = store.upsert(publicId, result.value, now);
-    io.emit("presence:upsert", record);
+    try {
+      const record = store.upsert(publicId, result.value, now);
+      socket.data.lastUpdateAt = now;
+      io.emit("presence:upsert", record);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("Location update failed:", err);
+      socket.emit("error:notice", {
+        code: "internal_error",
+        message: "Failed to update location.",
+      });
+    }
   });
 
   socket.on("location:stop", () => {
-    if (store.remove(publicId)) {
-      io.emit("presence:remove", { publicId });
-    }
+    removePresence(publicId);
   });
 
   socket.on("disconnect", () => {
-    if (store.remove(publicId)) {
-      io.emit("presence:remove", { publicId });
-    }
+    const remaining = (connectionsByIp.get(ip) ?? 1) - 1;
+    if (remaining <= 0) connectionsByIp.delete(ip);
+    else connectionsByIp.set(ip, remaining);
+
+    removePresence(publicId);
   });
 });
 
-// Periodically remove stale records and notify clients.
 const sweepTimer = setInterval(() => {
-  const expired = store.sweepExpired();
-  for (const publicId of expired) {
-    io.emit("presence:remove", { publicId });
+  try {
+    const expired = store.sweepExpired();
+    for (const publicId of expired) {
+      io.emit("presence:remove", { publicId });
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("Presence sweep failed:", err);
   }
 }, config.sweepIntervalMs);
 sweepTimer.unref?.();

@@ -123,7 +123,8 @@ export default function App() {
         "Before you share",
         "Others will see an approximate 200 m area, not your exact position. " +
           "Think twice before sharing from a sensitive place such as home, " +
-          "school, work, a shelter, or a medical facility.",
+          "school, work, a shelter, or a medical facility. " +
+          "SafeSips is not an emergency service — call 911 in an emergency.",
         [
           { text: "Cancel", style: "cancel" },
           {
@@ -252,6 +253,7 @@ export default function App() {
             placeholder="Enter your address"
             placeholderTextColor="#9aa0ad"
             autoCapitalize="none"
+            maxLength={500}
             returnKeyType="go"
             onSubmitEditing={() => guard(() => runAddress(address))}
           />
@@ -292,7 +294,7 @@ export default function App() {
 
         <Text style={styles.note}>
           Your precise location stays private. Others see only an approximate
-          200 m area.
+          200 m area. Not an emergency service — call 911 in an emergency.
         </Text>
       </View>
     </View>
