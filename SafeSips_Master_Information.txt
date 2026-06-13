@@ -367,8 +367,9 @@ Connection abuse | MAX_CONNECTIONS_PER_IP (default 20) per client network | IMPL
 Health endpoint | Production returns { status: "ok" } only; no activeUsers count leak | IMPLEMENTED
 Geocoding (web + mobile) | Nominatim User-Agent, 10 s timeout, coordinate validation, 500-char address limit | IMPLEMENTED
 Socket reliability | try/catch on location:update, sweep timer, and presence cleanup | IMPLEMENTED
-Emergency disclaimer | “Not 911” warning on web footer, sensitive-location modal, and mobile app | IMPLEMENTED
-Privacy Policy & Terms | In-app modals on web (footer links); summary text — requires qualified legal review before public launch | IMPLEMENTED (draft)
+Emergency disclaimer | “Not 911” / “Not 112” warning on web app footer, sensitive-location modal, mobile app, and safesips-website marketing site | IMPLEMENTED
+Privacy Policy & Terms | In-app modals on safesips-app web client + footer modals on safesips-website (GitHub: Safe-Sips/safesips-website); draft summaries — require qualified legal review before public launch | IMPLEMENTED (draft)
+Marketing website repo | safesips-website/index.html — static landing at safesips.org; includes embedded live map, waitlist, legal modals (June 13, 2026) | IMPLEMENTED
 Production domains | safesips.org, www.safesips.org, app.safesips.org (web); api.safesips.org (API) — from business plan; update .env.production if host differs | CONFIGURED
 CodeRabbit integration | VS Code/Cursor extension + native Windows CLI; Cursor rule at .cursor/rules/coderabbit.mdc for agent-driven reviews | IMPLEMENTED
 Dependency audit | npm audit clean (0 vulnerabilities); Vite 8 + @vitejs/plugin-react 6; concurrently 10 | IMPLEMENTED
@@ -666,6 +667,7 @@ Live safety map prototype | IMPLEMENTED | June 2026 — React/Vite/Leaflet web c
 Marketing homepage (3D scroll) | PLANNED | Nine-chapter immersive story not yet built; remains the target public site after prototype validation.
 Web map tech stack | CONFIRMED (prototype) | Leaflet + OpenStreetMap tiles; Socket.io; client-side maskLocation(); no Mapbox token; dark glass UI; Vite 8 build toolchain.
 Prototype security hardening | IMPLEMENTED | June 13, 2026 — CodeRabbit review (18 findings); server CORS/headers/connection limits; geocoding fixes; Privacy Policy/Terms/emergency disclaimers; production .env.production files for safesips.org. See section 08B and section 19.
+Marketing website legal UI | IMPLEMENTED | June 13, 2026 — safesips-website index.html footer + live map panel: Privacy Policy, Terms, emergency disclaimers (repo: Safe-Sips/safesips-website).
 Production deployment config | CONFIGURED | api.safesips.org (API), safesips.org / www / app (web CORS). Requires host setup and legal review before go-live.
 CodeRabbit dev tooling | IMPLEMENTED | Cursor extension + Windows-native CLI; agent can run coderabbit --agent -t uncommitted for automated review loops.
 

@@ -1,0 +1,29 @@
+---
+description: Run CodeRabbit CLI for AI code reviews during agent workflows
+alwaysApply: true
+---
+
+# CodeRabbit CLI
+
+CodeRabbit CLI is installed natively on Windows (no WSL required).
+
+## Commands
+
+- Help: `coderabbit -h` or `cr -h`
+- Review uncommitted changes (most common): `coderabbit --agent -t uncommitted`
+- Auth status: `coderabbit auth status`
+
+## Agent workflow
+
+When asked to review code or after implementing a feature:
+
+1. Run `coderabbit --agent -t uncommitted` (allow 7–30+ minutes for large changes)
+2. Parse the structured JSON output from `--agent`
+3. Fix critical and high-severity issues; skip nits unless asked
+4. Do not run CodeRabbit more than 3 times on the same set of changes
+
+## Notes
+
+- Do not install CodeRabbit as an npm package — use the CLI only
+- CodeRabbit also reads project context from `.cursor/rules/` and `AGENTS.md`
+- The CodeRabbit VS Code extension handles inline IDE reviews separately
