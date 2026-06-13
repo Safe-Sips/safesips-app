@@ -57,7 +57,7 @@ body {
 .panel {
   position: absolute;
   z-index: 1000;
-  top: 16px;
+  bottom: 16px;
   left: 16px;
   width: min(360px, calc(100% - 32px));
   background: var(--panel);
@@ -371,7 +371,6 @@ body {
 
 @media (max-width: 560px) {
   .panel {
-    top: auto;
     bottom: 12px;
     left: 12px;
     right: 12px;
