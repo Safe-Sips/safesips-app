@@ -1035,21 +1035,39 @@ body {
   cursor: crosshair;
 }
 
-.report-fab {
+.map-fabs {
   position: absolute;
   top: 16px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 1100;
-  background: var(--yellow);
-  color: #1a1700;
+  display: flex;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+}
+.report-fab,
+.help-fab {
   border: none;
   border-radius: 999px;
   padding: 11px 18px;
   font-weight: 800;
   font-size: 14px;
   cursor: pointer;
+  white-space: nowrap;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+.report-fab {
+  background: var(--yellow);
+  color: #1a1700;
+}
+.help-fab {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  backdrop-filter: blur(14px);
+}
+.help-fab:hover {
+  border-color: rgba(255, 77, 94, 0.5);
 }
 .report-banner {
   position: absolute;

@@ -263,6 +263,26 @@ export default function MapPage() {
     );
   }, []);
 
+  // Show nearby help (pharmacies, police, hospital, fuel, 24/7) anytime —
+  // independent of reporting a place unsafe. Falls back to the map center if
+  // location permission is unavailable.
+  const findHelpNearMe = useCallback(() => {
+    const useMapCenter = () => {
+      const center = boundsRef.current?.getCenter();
+      if (center) setHavenPoint({ lat: center.lat, lng: center.lng });
+    };
+    if (!("geolocation" in navigator)) {
+      useMapCenter();
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) =>
+        setHavenPoint({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => useMapCenter(),
+      { enableHighAccuracy: true, timeout: 8_000, maximumAge: 60_000 }
+    );
+  }, []);
+
   return (
     <div className="map-page">
       <MapView
@@ -293,17 +313,22 @@ export default function MapPage() {
         onStop={onStop}
       />
 
-      {/* Report-a-place control + mode banner. */}
+      {/* Report-a-place + find-help controls, or the report-mode banner. */}
       {!reportMode ? (
-        <button
-          className="report-fab"
-          onClick={() => {
-            setReportError(null);
-            setReportMode(true);
-          }}
-        >
-          ＋ Report a place
-        </button>
+        <div className="map-fabs">
+          <button
+            className="report-fab"
+            onClick={() => {
+              setReportError(null);
+              setReportMode(true);
+            }}
+          >
+            ＋ Report a place
+          </button>
+          <button className="help-fab" onClick={findHelpNearMe}>
+            🆘 Help near me
+          </button>
+        </div>
       ) : (
         <div className="report-banner">
           <span>Tap the spot on the map, or</span>
