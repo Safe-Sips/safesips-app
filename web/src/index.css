@@ -8,6 +8,10 @@
   --blue: #2f7bff;
   --danger: #ff4d5e;
   --radius: 14px;
+  /* Render native form controls (incl. <select> dropdown popups) in dark mode.
+     Without this, the option list shows as light text on a white popup on
+     Windows, making "Choose a tag…" unreadable. */
+  color-scheme: dark;
 }
 
 * {
@@ -676,6 +680,12 @@ body {
 }
 .field textarea {
   resize: vertical;
+}
+/* Force readable colors on the native dropdown list (Windows doesn't inherit
+   the control's colors into the option popup). */
+select option {
+  background-color: #14141a;
+  color: var(--text);
 }
 .field input:focus,
 .field select:focus,
