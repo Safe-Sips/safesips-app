@@ -70,7 +70,7 @@ export default function LoginPage() {
         </p>
         <p className="auth-emergency">
           In an emergency call <strong>112</strong>. See{" "}
-          <Link to="/first-aid">spiking first-aid info</Link>.
+          <Link to="/help">spiking first-aid info</Link>.
         </p>
       </form>
     </div>

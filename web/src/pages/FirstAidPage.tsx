@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import {
   DISCLAIMER,
   EMERGENCY_NUMBER,
@@ -8,11 +9,12 @@ import {
 } from "../content/firstAid";
 
 export default function FirstAidPage() {
+  const { user } = useAuth();
   return (
     <div className="page firstaid-page">
       <div className="page-head">
-        <Link className="back-link" to="/">
-          ← Back to map
+        <Link className="back-link" to={user ? "/" : "/login"}>
+          {user ? "← Back to map" : "← Back to login"}
         </Link>
         <h1>If you've been spiked</h1>
       </div>

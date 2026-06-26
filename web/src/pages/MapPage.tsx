@@ -7,7 +7,7 @@ import { useSocket } from "../socket/SocketProvider";
 import { usePresence } from "../hooks/usePresence";
 import { geocodeAddress, type AddressSuggestion } from "../geocode";
 import Controls from "../components/Controls";
-import MapView from "../components/MapView";
+import MapView, { type FocusPoint } from "../components/MapView";
 import SensitiveWarning from "../components/SensitiveWarning";
 import MarkUnsafeDialog from "../components/MarkUnsafeDialog";
 import ReportPanel from "../components/ReportPanel";
@@ -32,6 +32,28 @@ export default function MapPage() {
   const [exact, setExact] = useState<LatLng | null>(null);
   const [geoStatus, setGeoStatus] = useState<string | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
+
+  // Where the map should recenter (initial entry, "use my location", reporting).
+  // This only pans the view — it never shares the location.
+  const [focusPoint, setFocusPoint] = useState<FocusPoint | null>(null);
+
+  // On entry, center the map on the user's current location instead of the
+  // default. View-only: this does NOT share/publish anything.
+  useEffect(() => {
+    if (!("geolocation" in navigator)) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) =>
+        setFocusPoint({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          zoom: 15,
+        }),
+      () => {
+        /* permission denied / unavailable: keep the default view */
+      },
+      { enableHighAccuracy: true, timeout: 8_000, maximumAge: 60_000 }
+    );
+  }, []);
 
   const [acked, setAcked] = useState<boolean>(
     () => localStorage.getItem(ACK_KEY) === "1"
@@ -240,6 +262,8 @@ export default function MapPage() {
         const point = pendingPoint;
         setPendingPoint(null);
         setReportMode(false);
+        // Move the map to the place that was just reported.
+        setFocusPoint({ lat: point.lat, lng: point.lng });
         // If they marked it unsafe, immediately surface nearby help.
         if (input.safety === "unsafe") setHavenPoint(point);
       } catch (e) {
@@ -256,8 +280,12 @@ export default function MapPage() {
   const useMyLocationForReport = useCallback(() => {
     if (!("geolocation" in navigator)) return;
     navigator.geolocation.getCurrentPosition(
-      (pos) =>
-        setPendingPoint({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (pos) => {
+        const point = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setPendingPoint(point);
+        // Move the map so the pending pin is visible.
+        setFocusPoint({ ...point });
+      },
       () => setReportError("Couldn't get your location. Tap the map instead."),
       { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 }
     );
@@ -293,6 +321,7 @@ export default function MapPage() {
         havens={havens}
         pickMode={reportMode && pendingPoint === null}
         pendingPoint={pendingPoint}
+        focusPoint={focusPoint}
         onPickPoint={(p) => setPendingPoint(p)}
         onSelectReport={(r) => setSelected(r)}
         onBoundsChange={onBoundsChange}

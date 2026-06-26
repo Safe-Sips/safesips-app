@@ -166,6 +166,15 @@ function CheckinPlansSection({
   const [autoStopHours, setAutoStopHours] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [, setTick] = useState(0);
+
+  // Tick every second so each plan's "next in" countdown updates live.
+  const hasCountdown = plans.some((p) => p.nextDueAt);
+  useEffect(() => {
+    if (!hasCountdown) return;
+    const id = window.setInterval(() => setTick((t) => t + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [hasCountdown]);
 
   const create = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -92,7 +92,7 @@ authRouter.post(
     });
 
     const rawToken = createVerificationToken(user.id);
-    sendVerificationEmail(user.email, rawToken);
+    void sendVerificationEmail(user.email, rawToken);
 
     const response = authResponse(user, ip, req.headers["user-agent"]);
     // Dev convenience: surface the verify link so testing needs no mailbox.
@@ -194,7 +194,7 @@ authRouter.post(
       return;
     }
     const rawToken = createVerificationToken(user.id);
-    sendVerificationEmail(user.email, rawToken);
+    void sendVerificationEmail(user.email, rawToken);
     const payload: { ok: true; verifyUrl?: string } = { ok: true };
     if (!config.isProduction) payload.verifyUrl = buildVerifyUrl(rawToken);
     res.json(payload);

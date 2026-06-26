@@ -25,7 +25,7 @@ interface PostJoinRow {
   created_at: number;
   author_name: string;
   vote_count: number;
-  viewer_voted: number;
+  viewer_vote: number;
 }
 
 const selectThreads = db.prepare(
@@ -49,8 +49,8 @@ const insertThread = db.prepare(
 const POST_SELECT_BASE = `
   SELECT p.id, p.thread_id, p.author_id, p.body, p.created_at,
          u.display_name AS author_name,
-         (SELECT COUNT(*) FROM forum_post_votes v WHERE v.post_id = p.id) AS vote_count,
-         EXISTS(SELECT 1 FROM forum_post_votes v WHERE v.post_id = p.id AND v.user_id = @viewer) AS viewer_voted
+         (SELECT COALESCE(SUM(v.value), 0) FROM forum_post_votes v WHERE v.post_id = p.id) AS vote_count,
+         COALESCE((SELECT v.value FROM forum_post_votes v WHERE v.post_id = p.id AND v.user_id = @viewer), 0) AS viewer_vote
   FROM forum_posts p
   JOIN users u ON u.id = p.author_id
 `;
@@ -73,15 +73,19 @@ const threadExists = db.prepare(
   `SELECT id FROM forum_threads WHERE id = ? AND status = 'visible'`
 );
 
-const insertPostVote = db.prepare(
-  `INSERT OR IGNORE INTO forum_post_votes (post_id, user_id, value, created_at)
-   VALUES (?, ?, 1, ?)`
+const upsertPostVote = db.prepare(
+  `INSERT INTO forum_post_votes (post_id, user_id, value, created_at)
+   VALUES (?, ?, ?, ?)
+   ON CONFLICT(post_id, user_id) DO UPDATE SET value = excluded.value, created_at = excluded.created_at`
 );
 const deletePostVote = db.prepare(
   `DELETE FROM forum_post_votes WHERE post_id = ? AND user_id = ?`
 );
-const countPostVotes = db.prepare(
-  `SELECT COUNT(*) AS c FROM forum_post_votes WHERE post_id = ?`
+const scorePostVotes = db.prepare(
+  `SELECT COALESCE(SUM(value), 0) AS s FROM forum_post_votes WHERE post_id = ?`
+);
+const selectPostVote = db.prepare(
+  `SELECT value FROM forum_post_votes WHERE post_id = ? AND user_id = ?`
 );
 const postAuthor = db.prepare(
   `SELECT author_id FROM forum_posts WHERE id = ? AND status = 'visible'`
@@ -108,7 +112,7 @@ function postToDTO(row: PostJoinRow): PostDTO {
     authorId: row.author_id,
     authorDisplayName: row.author_name,
     voteCount: row.vote_count,
-    viewerHasVoted: row.viewer_voted === 1,
+    viewerVote: row.viewer_vote,
     createdAt: row.created_at,
   };
 }
@@ -196,14 +200,22 @@ export function getPostAuthor(postId: string): string | undefined {
   return row?.author_id;
 }
 
-export function addPostVote(postId: string, userId: string): boolean {
-  return insertPostVote.run(postId, userId, nowMs()).changes > 0;
+/** Set this user's vote on a post to +1 or -1 (upsert). */
+export function setPostVote(postId: string, userId: string, value: 1 | -1): void {
+  upsertPostVote.run(postId, userId, value, nowMs());
 }
 
-export function removePostVote(postId: string, userId: string): void {
+export function clearPostVote(postId: string, userId: string): void {
   deletePostVote.run(postId, userId);
 }
 
-export function postVoteCount(postId: string): number {
-  return (countPostVotes.get(postId) as { c: number }).c;
+/** Net score: upvotes minus downvotes. */
+export function postVoteScore(postId: string): number {
+  return (scorePostVotes.get(postId) as { s: number }).s;
+}
+
+/** This user's current vote on a post: 1, -1, or 0. */
+export function getPostVote(postId: string, userId: string): number {
+  const row = selectPostVote.get(postId, userId) as { value: number } | undefined;
+  return row?.value ?? 0;
 }

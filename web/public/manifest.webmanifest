@@ -4,8 +4,8 @@
   "description": "Share an approximate area while keeping your exact location private.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0a0f",
-  "theme_color": "#0a0a0f",
+  "background_color": "#eef0fa",
+  "theme_color": "#0e1330",
   "orientation": "portrait-primary",
   "icons": [
     {

@@ -1,17 +1,21 @@
 :root {
-  --bg: #0a0a0f;
-  --panel: rgba(18, 18, 26, 0.92);
-  --panel-border: rgba(255, 255, 255, 0.08);
-  --text: #f4f4f7;
-  --muted: #9aa0ad;
-  --yellow: #ffd400;
+  /* Light "Day Bloom" theme — soft lavender world, navy ink, hot-pink accents.
+     The top navigation bar keeps its dark identity via the --nav-* tokens. */
+  --bg: #eef0fa;
+  --panel: rgba(255, 255, 255, 0.92);
+  --panel-border: rgba(24, 33, 60, 0.12);
+  --text: #1b2440;
+  --muted: #5d6580;
+  --yellow: #f2bd00; /* warm accent / map safety zones */
   --blue: #2f7bff;
-  --danger: #ff4d5e;
+  --danger: #e0263c;
+  --accent: #d6117e; /* hot-pink emphasis & links (readable on light) */
+  /* Dark top bar (kept dark by request). */
+  --nav-bg: #0e1330;
+  --nav-text: #f4f4f7;
+  --nav-muted: #aab2d4;
   --radius: 14px;
-  /* Render native form controls (incl. <select> dropdown popups) in dark mode.
-     Without this, the option list shows as light text on a white popup on
-     Windows, making "Choose a tag…" unreadable. */
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 * {
@@ -26,7 +30,11 @@ body,
 }
 
 body {
-  background: var(--bg);
+  background:
+    radial-gradient(900px 520px at 100% -8%, #ffe2f1 0%, rgba(255, 226, 241, 0) 55%),
+    radial-gradient(900px 640px at -8% 108%, #dfe4fb 0%, rgba(223, 228, 251, 0) 55%),
+    var(--bg);
+  background-attachment: fixed;
   color: var(--text);
   font-family: "Nunito", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -44,16 +52,16 @@ body {
   inset: 0;
   height: 100%;
   width: 100%;
-  background: #05060a;
+  background: #e6eaf6;
   z-index: 1;
 }
 
-/* Slightly darken OSM tiles to fit the dark theme. */
+/* Keep OSM tiles bright and natural for the light theme. */
 .leaflet-tile-pane {
-  filter: brightness(0.72) saturate(1.05) contrast(1.05);
+  filter: saturate(1.04) brightness(1.02);
 }
 .leaflet-container {
-  background: #05060a;
+  background: #e6eaf6;
 }
 
 /* ----------------------------- Control panel ---------------------------- */
@@ -69,7 +77,7 @@ body {
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
   padding: 18px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 18px 50px rgba(24, 33, 60, 0.16);
 }
 
 .panel-header {
@@ -104,11 +112,11 @@ body {
 }
 .status-connected {
   background: rgba(46, 213, 115, 0.16);
-  color: #2ed573;
+  color: #1f9d54;
 }
 .status-connecting {
   background: rgba(255, 212, 0, 0.16);
-  color: var(--yellow);
+  color: var(--accent);
 }
 .status-disconnected {
   background: rgba(255, 77, 94, 0.16);
@@ -125,6 +133,7 @@ body {
   font-size: 14px;
   padding: 11px 14px;
   cursor: pointer;
+  text-decoration: none;
   transition: transform 0.05s ease, filter 0.15s ease, opacity 0.15s ease;
 }
 .btn:active {
@@ -145,11 +154,11 @@ body {
   filter: brightness(1.05);
 }
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(24, 33, 60, 0.07);
   color: var(--text);
 }
 .btn-ghost {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(24, 33, 60, 0.05);
   color: var(--text);
 }
 .btn-danger {
@@ -170,7 +179,7 @@ body {
 .address-form input {
   width: 100%;
   min-width: 0;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(24, 33, 60, 0.05);
   border: 1px solid var(--panel-border);
   border-radius: 10px;
   color: var(--text);
@@ -196,10 +205,10 @@ body {
   list-style: none;
   max-height: 220px;
   overflow-y: auto;
-  background: rgba(12, 12, 18, 0.98);
+  background: #ffffff;
   border: 1px solid var(--panel-border);
   border-radius: 10px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 12px 32px rgba(24, 33, 60, 0.16);
 }
 .address-suggestion {
   padding: 10px 12px;
@@ -235,7 +244,7 @@ body {
   margin-top: 16px;
   padding: 12px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(24, 33, 60, 0.04);
   border: 1px solid var(--panel-border);
 }
 .sharing-card.is-sharing {
@@ -290,7 +299,7 @@ body {
   margin: 14px 0 0;
 }
 .privacy-note strong {
-  color: var(--yellow);
+  color: var(--accent);
 }
 
 .legend {
@@ -327,7 +336,7 @@ body {
   position: absolute;
   inset: 0;
   z-index: 2000;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(14, 19, 48, 0.42);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -339,7 +348,7 @@ body {
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
   padding: 22px;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 24px 64px rgba(24, 33, 60, 0.2);
 }
 .modal-card h2 {
   margin: 0 0 12px;
@@ -442,7 +451,7 @@ body {
   background: none;
   border: none;
   padding: 0;
-  color: var(--yellow);
+  color: var(--accent);
   font: inherit;
   font-size: 11px;
   cursor: pointer;
@@ -489,10 +498,11 @@ body {
 .nav {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 10px 16px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--panel-border);
+  gap: 20px;
+  padding: 14px 24px;
+  background: var(--nav-bg);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 6px 24px rgba(14, 19, 48, 0.18);
   backdrop-filter: blur(14px);
   z-index: 1200;
   flex-shrink: 0;
@@ -502,28 +512,30 @@ body {
   align-items: center;
   gap: 10px;
   font-weight: 800;
+  color: var(--nav-text);
 }
 .nav-title {
   letter-spacing: 0.5px;
+  font-size: 20px;
 }
 .nav-links {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   flex: 1;
   overflow-x: auto;
 }
 .nav-link {
-  color: var(--muted);
+  color: var(--nav-muted);
   text-decoration: none;
   font-weight: 700;
-  font-size: 14px;
-  padding: 8px 12px;
-  border-radius: 9px;
+  font-size: 15.5px;
+  padding: 10px 16px;
+  border-radius: 10px;
   white-space: nowrap;
 }
 .nav-link:hover {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
 }
 .nav-link.is-active {
   color: #1a1700;
@@ -535,13 +547,27 @@ body {
   gap: 10px;
 }
 .nav-name {
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 15px;
   font-weight: 700;
-  color: var(--text);
-  max-width: 140px;
+  color: var(--nav-text);
+  text-decoration: none;
+  padding: 9px 14px;
+  border-radius: 10px;
+  max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+}
+.nav-name:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.nav-name.is-active {
+  color: #1a1700;
+  background: var(--yellow);
 }
 .nav-dot {
   color: var(--danger);
@@ -552,6 +578,16 @@ body {
   font-size: 12px;
   padding: 7px 10px;
   border-radius: 8px;
+}
+/* Buttons sitting on the dark nav need light-on-dark treatment. */
+.nav .btn-ghost,
+.nav .btn-secondary {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--nav-text);
+}
+.nav .btn-ghost:hover,
+.nav .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .shell-main {
@@ -581,7 +617,7 @@ body {
   gap: 6px;
 }
 .verify-banner-dev {
-  color: var(--yellow);
+  color: var(--accent);
   font-size: 12px;
 }
 
@@ -611,7 +647,7 @@ body {
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
   padding: 26px;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 24px 64px rgba(24, 33, 60, 0.16);
 }
 .auth-brand {
   display: flex;
@@ -636,7 +672,7 @@ body {
 }
 .auth-alt a,
 .auth-emergency a {
-  color: var(--yellow);
+  color: var(--accent);
 }
 .auth-emergency {
   margin-top: 16px;
@@ -646,7 +682,7 @@ body {
   color: var(--muted);
 }
 .verify-ok {
-  color: #2ed573;
+  color: #1f9d54;
 }
 .verify-error {
   color: var(--danger);
@@ -669,7 +705,7 @@ body {
 .field select,
 .field textarea,
 .inline-form input {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(24, 33, 60, 0.05);
   border: 1px solid var(--panel-border);
   border-radius: 10px;
   color: var(--text);
@@ -684,7 +720,7 @@ body {
 /* Force readable colors on the native dropdown list (Windows doesn't inherit
    the control's colors into the option popup). */
 select option {
-  background-color: #14141a;
+  background-color: #ffffff;
   color: var(--text);
 }
 .field input:focus,
@@ -738,7 +774,7 @@ select option {
   flex: 1;
 }
 .back-link {
-  color: var(--yellow);
+  color: var(--accent);
   text-decoration: none;
   font-size: 13px;
   font-weight: 700;
@@ -759,7 +795,7 @@ select option {
   font-size: 15px;
 }
 .card-quiet {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(24, 33, 60, 0.035);
 }
 .muted {
   color: var(--muted);
@@ -777,7 +813,7 @@ select option {
 }
 .badge-none,
 .badge-text.badge-none {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(24, 33, 60, 0.06);
   color: var(--muted);
 }
 .badge-bronze {
@@ -786,11 +822,11 @@ select option {
 }
 .badge-silver {
   background: rgba(200, 208, 220, 0.18);
-  color: #d6dde9;
+  color: #6b7385;
 }
 .badge-gold {
   background: rgba(255, 212, 0, 0.18);
-  color: var(--yellow);
+  color: var(--accent);
 }
 .badge-text {
   text-transform: capitalize;
@@ -800,10 +836,10 @@ select option {
   color: #e09b5a;
 }
 .badge-text.badge-silver {
-  color: #d6dde9;
+  color: #6b7385;
 }
 .badge-text.badge-gold {
-  color: var(--yellow);
+  color: var(--accent);
 }
 
 /* ============================== Profile =============================== */
@@ -819,11 +855,11 @@ select option {
 .profile-score-num {
   font-size: 32px;
   font-weight: 800;
-  color: var(--yellow);
+  color: var(--accent);
 }
 .progress-track {
   height: 8px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(24, 33, 60, 0.06);
   border-radius: 999px;
   overflow: hidden;
 }
@@ -839,7 +875,7 @@ select option {
   gap: 10px;
 }
 .stat-cell {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(24, 33, 60, 0.04);
   border: 1px solid var(--panel-border);
   border-radius: 12px;
   padding: 14px;
@@ -928,7 +964,7 @@ select option {
   gap: 2px;
 }
 .vote-btn {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(24, 33, 60, 0.05);
   border: none;
   color: var(--muted);
   width: 30px;
@@ -937,13 +973,27 @@ select option {
   cursor: pointer;
   font-size: 13px;
 }
-.vote-btn.is-voted {
+.vote-btn.is-up {
   background: rgba(255, 212, 0, 0.2);
-  color: var(--yellow);
+  color: var(--accent);
+}
+.vote-btn.is-down {
+  background: rgba(47, 123, 255, 0.22);
+  color: var(--blue);
 }
 .vote-count {
   font-size: 13px;
   font-weight: 700;
+}
+.vote-count.is-up {
+  color: var(--accent);
+}
+.vote-count.is-down {
+  color: var(--blue);
+}
+.vote-error {
+  margin: 6px 0 0;
+  font-size: 12px;
 }
 .post-body {
   flex: 1;
@@ -989,11 +1039,11 @@ select option {
 .pill-primary,
 .pill-active {
   background: rgba(46, 213, 115, 0.16);
-  color: #2ed573;
+  color: #1f9d54;
 }
 .pill-paused {
   background: rgba(255, 212, 0, 0.16);
-  color: var(--yellow);
+  color: var(--accent);
 }
 .plan-actions {
   display: flex;
@@ -1027,7 +1077,7 @@ select option {
   margin: 4px 0 14px;
 }
 .checkin-deadline strong {
-  color: var(--yellow);
+  color: var(--accent);
 }
 
 /* ======================= Map: reports & havens ======================== */
@@ -1055,11 +1105,20 @@ select option {
   font-size: 14px;
   cursor: pointer;
   white-space: nowrap;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 10px 26px rgba(24, 33, 60, 0.16);
+  transition: transform 0.12s ease, filter 0.12s ease, box-shadow 0.12s ease;
+}
+.report-fab:active,
+.help-fab:active {
+  transform: translateY(1px) scale(0.97);
+  box-shadow: 0 6px 16px rgba(24, 33, 60, 0.16);
 }
 .report-fab {
   background: var(--yellow);
   color: #1a1700;
+}
+.report-fab:hover {
+  filter: brightness(1.05);
 }
 .help-fab {
   background: var(--panel);
@@ -1086,7 +1145,7 @@ select option {
   border-radius: 12px;
   padding: 10px 14px;
   font-size: 13px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 10px 26px rgba(24, 33, 60, 0.16);
   max-width: calc(100% - 24px);
 }
 
@@ -1101,7 +1160,7 @@ select option {
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
   padding: 18px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 18px 50px rgba(24, 33, 60, 0.16);
   backdrop-filter: blur(14px);
   max-height: calc(100% - 32px);
   overflow-y: auto;
@@ -1110,7 +1169,7 @@ select option {
   position: absolute;
   top: 12px;
   right: 12px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(24, 33, 60, 0.05);
   border: none;
   color: var(--text);
   width: 28px;
@@ -1132,7 +1191,7 @@ select option {
 }
 .report-badge.is-safe {
   background: rgba(46, 213, 115, 0.16);
-  color: #2ed573;
+  color: #1f9d54;
 }
 .report-panel h3 {
   margin: 4px 0;
@@ -1140,7 +1199,7 @@ select option {
 }
 .report-tag {
   font-size: 13px;
-  color: var(--yellow);
+  color: var(--accent);
   margin: 2px 0;
 }
 .report-note {
@@ -1190,7 +1249,7 @@ select option {
   padding: 10px;
   border-radius: 10px;
   border: 1px solid var(--panel-border);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(24, 33, 60, 0.04);
   color: var(--text);
   font-weight: 700;
   cursor: pointer;
@@ -1202,8 +1261,8 @@ select option {
 }
 .seg-btn.is-on.seg-safe {
   background: rgba(46, 213, 115, 0.16);
-  border-color: #2ed573;
-  color: #2ed573;
+  border-color: #1f9d54;
+  color: #1f9d54;
 }
 
 .haven-panel-head {

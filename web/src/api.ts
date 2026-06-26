@@ -93,6 +93,13 @@ export interface VoteResult {
   viewerHasVoted: boolean;
 }
 
+export interface PostVoteResult {
+  /** Net score (upvotes minus downvotes). */
+  voteCount: number;
+  /** Viewer's current vote: 1, -1, or 0. */
+  viewerVote: number;
+}
+
 export interface SafeHavensResult {
   havens: SafeHavenDTO[];
   cached?: boolean;
@@ -144,10 +151,13 @@ export const api = {
     request<ThreadDetailDTO>(`/api/forum/threads/${id}`),
   createPost: (threadId: string, body: string) =>
     request<PostDTO>(`/api/forum/threads/${threadId}/posts`, { body: { body } }),
-  votePost: (id: string) =>
-    request<VoteResult>(`/api/forum/posts/${id}/vote`, { method: "POST" }),
+  votePost: (id: string, value: 1 | -1) =>
+    request<PostVoteResult>(`/api/forum/posts/${id}/vote`, {
+      method: "POST",
+      body: { value },
+    }),
   unvotePost: (id: string) =>
-    request<VoteResult>(`/api/forum/posts/${id}/vote`, { method: "DELETE" }),
+    request<PostVoteResult>(`/api/forum/posts/${id}/vote`, { method: "DELETE" }),
 
   // Profile
   stats: () => request<UserStatsDTO>("/api/users/me/stats"),

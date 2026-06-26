@@ -72,7 +72,6 @@ reportsRouter.post(
 
 reportsRouter.post(
   "/:id/vote",
-  requireVerified,
   asyncHandler(async (req, res) => {
     const id = req.params.id;
     const author = reports.getReportAuthor(id);

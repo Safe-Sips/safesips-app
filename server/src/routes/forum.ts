@@ -81,10 +81,15 @@ forumRouter.post(
   })
 );
 
+const voteSchema = z.object({ value: z.union([z.literal(1), z.literal(-1)]) });
+
+// Voting only needs an account (not a verified email) — it creates no public
+// content. Creating threads/posts still requires verification.
 forumRouter.post(
   "/posts/:id/vote",
-  requireVerified,
   asyncHandler(async (req, res) => {
+    const body = parseBody(voteSchema, req, res);
+    if (!body) return;
     const id = req.params.id;
     const author = forum.getPostAuthor(id);
     if (!author) {
@@ -92,11 +97,11 @@ forumRouter.post(
       return;
     }
     if (author === req.auth!.userId) {
-      res.status(400).json({ error: "You can't upvote your own post.", code: "self_vote" });
+      res.status(400).json({ error: "You can't vote on your own post.", code: "self_vote" });
       return;
     }
-    forum.addPostVote(id, req.auth!.userId);
-    res.json({ voteCount: forum.postVoteCount(id), viewerHasVoted: true });
+    forum.setPostVote(id, req.auth!.userId, body.value);
+    res.json({ voteCount: forum.postVoteScore(id), viewerVote: body.value });
   })
 );
 
@@ -104,7 +109,7 @@ forumRouter.delete(
   "/posts/:id/vote",
   asyncHandler(async (req, res) => {
     const id = req.params.id;
-    forum.removePostVote(id, req.auth!.userId);
-    res.json({ voteCount: forum.postVoteCount(id), viewerHasVoted: false });
+    forum.clearPostVote(id, req.auth!.userId);
+    res.json({ voteCount: forum.postVoteScore(id), viewerVote: 0 });
   })
 );

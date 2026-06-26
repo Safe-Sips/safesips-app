@@ -18,6 +18,9 @@ import type {
 } from "@safesips/shared";
 import PrivacyCircle from "./PrivacyCircle";
 
+/** A place to recenter the map on. Optional zoom overrides the focus zoom. */
+export type FocusPoint = LatLng & { zoom?: number };
+
 interface MapViewProps {
   /** Exact location, used ONLY locally for the blue dot + auto-centering. */
   exact: LatLng | null;
@@ -28,6 +31,8 @@ interface MapViewProps {
   /** When true, a map click picks a point to report. */
   pickMode: boolean;
   pendingPoint: LatLng | null;
+  /** Recenters the map (on entry, on "use my location", after reporting). */
+  focusPoint: FocusPoint | null;
   onPickPoint: (point: LatLng) => void;
   onSelectReport: (report: ReportDTO) => void;
   onBoundsChange: (bounds: L.LatLngBounds) => void;
@@ -74,6 +79,18 @@ function Recenter({ exact }: { exact: LatLng | null }) {
   return null;
 }
 
+/** Flies the map to a focus point — used for initial centering on the user,
+ *  for "use my location", and to move to a place right after reporting it. */
+function FlyTo({ focus }: { focus: FocusPoint | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!focus) return;
+    const zoom = focus.zoom ?? Math.max(map.getZoom(), FOCUS_ZOOM);
+    map.setView([focus.lat, focus.lng], zoom, { animate: true });
+  }, [focus?.lat, focus?.lng, focus?.zoom, map]);
+  return null;
+}
+
 function MapEvents({
   pickMode,
   onPickPoint,
@@ -96,6 +113,14 @@ function MapEvents({
     onBoundsChange(map.getBounds());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // MapContainer applies its `className` prop only at mount, so the pick-mode
+  // crosshair class can't be toggled reactively through it. Toggle it directly
+  // on the live container element whenever pickMode changes.
+  useEffect(() => {
+    const el = map.getContainer();
+    el.classList.toggle("is-picking", pickMode);
+    return () => el.classList.remove("is-picking");
+  }, [map, pickMode]);
   return null;
 }
 
@@ -107,6 +132,7 @@ export default function MapView({
   havens,
   pickMode,
   pendingPoint,
+  focusPoint,
   onPickPoint,
   onSelectReport,
   onBoundsChange,
@@ -116,7 +142,7 @@ export default function MapView({
       center={DEFAULT_CENTER}
       zoom={DEFAULT_ZOOM}
       zoomControl={false}
-      className={`map-root${pickMode ? " is-picking" : ""}`}
+      className="map-root"
       preferCanvas={false}
     >
       <TileLayer
@@ -190,6 +216,7 @@ export default function MapView({
       )}
 
       <Recenter exact={exact} />
+      <FlyTo focus={focusPoint} />
       <MapEvents
         pickMode={pickMode}
         onPickPoint={onPickPoint}

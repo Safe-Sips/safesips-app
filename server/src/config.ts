@@ -104,6 +104,19 @@ export const config = {
   // Where the web app is served (for verification links in emails).
   webAppUrl: strEnv("WEB_APP_URL", "http://localhost:5173"),
 
+  // SMTP transport for real verification emails. When SMTP_HOST is unset, the
+  // server falls back to logging the link (dev) instead of sending.
+  smtp: process.env.SMTP_HOST?.trim()
+    ? {
+        host: process.env.SMTP_HOST.trim(),
+        port: intEnv("SMTP_PORT", 587),
+        secure: boolEnv("SMTP_SECURE"),
+        user: process.env.SMTP_USER?.trim() || undefined,
+        pass: process.env.SMTP_PASS || undefined,
+      }
+    : null,
+  emailFrom: strEnv("EMAIL_FROM", "SafeSips <no-reply@safesips.app>"),
+
   // Check-in scheduler sweep cadence.
   checkinSweepIntervalMs: intEnv("CHECKIN_SWEEP_INTERVAL_MS", 15_000),
 

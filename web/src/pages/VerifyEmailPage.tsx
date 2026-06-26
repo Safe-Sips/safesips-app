@@ -14,30 +14,29 @@ export default function VerifyEmailPage() {
   const consumed = useRef(false);
 
   useEffect(() => {
-    let active = true;
     if (!token) {
       setStatus("error");
       setMessage("Missing verification token.");
       return;
     }
+    // The `consumed` ref already guarantees this runs exactly once across
+    // StrictMode's double-invoked effects, so we don't guard with a per-run
+    // "active" flag — that flag would be flipped off by the first run's
+    // cleanup and permanently swallow the result, freezing the UI on
+    // "Verifying…". React 18 makes setState-after-unmount a safe no-op.
     if (consumed.current) return;
     consumed.current = true;
     (async () => {
       try {
         await api.verify(token);
-        if (!active) return;
         setStatus("ok");
         setMessage("Your email is verified — thank you!");
         await refresh();
       } catch (err) {
-        if (!active) return;
         setStatus("error");
         setMessage(err instanceof ApiError ? err.message : "Verification failed.");
       }
     })();
-    return () => {
-      active = false;
-    };
   }, [token, refresh]);
 
   return (

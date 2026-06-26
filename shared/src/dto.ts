@@ -123,14 +123,19 @@ export interface PostInput {
   body: string;
 }
 
+/** A vote direction: +1 (up) or -1 (down). */
+export type VoteValue = 1 | -1;
+
 export interface PostDTO {
   id: string;
   threadId: string;
   body: string;
   authorId: string;
   authorDisplayName: string;
+  /** Net score: upvotes minus downvotes. */
   voteCount: number;
-  viewerHasVoted: boolean;
+  /** This viewer's current vote: 1, -1, or 0 (none). */
+  viewerVote: number;
   createdAt: number;
 }
 

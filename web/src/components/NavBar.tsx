@@ -6,7 +6,6 @@ const LINKS = [
   { to: "/forum", label: "Forum", end: false },
   { to: "/checkins", label: "Check-in", end: false },
   { to: "/first-aid", label: "First aid", end: false },
-  { to: "/profile", label: "Profile", end: false },
 ];
 
 export default function NavBar() {
@@ -32,14 +31,20 @@ export default function NavBar() {
       </nav>
       <div className="nav-user">
         {user && (
-          <span className="nav-name" title={user.email}>
+          <NavLink
+            to="/profile"
+            title="Your profile"
+            className={({ isActive }) =>
+              `nav-name${isActive ? " is-active" : ""}`
+            }
+          >
             {user.displayName}
             {!user.emailVerified && (
               <span className="nav-dot" title="Email not verified" aria-hidden>
                 ●
               </span>
             )}
-          </span>
+          </NavLink>
         )}
         <button className="btn btn-ghost btn-sm" onClick={() => logout()}>
           Log out

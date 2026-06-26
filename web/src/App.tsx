@@ -21,8 +21,8 @@ export default function App() {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/verify" element={<VerifyEmailPage />} />
       <Route path="/waitlist" element={<WaitlistPage />} />
-      {/* First-aid info stays public — life-safety content must be reachable. */}
-      <Route path="/first-aid" element={<FirstAidPage />} />
+      {/* Public copy of the first-aid info for logged-out emergency access. */}
+      <Route path="/help" element={<FirstAidPage />} />
 
       {/* Authenticated app */}
       <Route
@@ -37,6 +37,7 @@ export default function App() {
         <Route path="/forum/new" element={<NewThreadPage />} />
         <Route path="/forum/:id" element={<ForumThreadPage />} />
         <Route path="/checkins" element={<CheckinSetupPage />} />
+        <Route path="/first-aid" element={<FirstAidPage />} />
         <Route path="/profile" element={<ProfilePage />} />
       </Route>
 
