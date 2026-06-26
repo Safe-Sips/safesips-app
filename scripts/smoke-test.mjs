@@ -1,9 +1,14 @@
 #!/usr/bin/env node
 /**
- * Production smoke test — CORS, health, and Socket.io round-trip.
+ * Production smoke test — CORS, health, and authenticated Socket.io round-trip.
+ *
+ * The socket handshake now requires a JWT, so this test:
+ *   1. confirms an anonymous (no-token) connection is REJECTED, and
+ *   2. if a test token is available (ALLOW_TEST_TOKEN=1 → GET /api/auth/test-token),
+ *      runs an authenticated presence round-trip and checks it leaks no identity.
  *
  * Usage:
- *   node scripts/smoke-test.mjs
+ *   ALLOW_TEST_TOKEN=1 node scripts/smoke-test.mjs
  *   API_URL=https://api.safesips.org WEB_ORIGIN=https://app.safesips.org node scripts/smoke-test.mjs
  */
 import { io } from "socket.io-client";
@@ -56,34 +61,79 @@ async function checkCors() {
   pass(`CORS allows ${allowOrigin}`);
 }
 
-function checkSocket() {
+/** An unauthenticated socket must be rejected at the handshake. */
+function checkSocketRejectsAnon() {
   return new Promise((resolve) => {
     const socket = io(API_URL, {
       transports: ["websocket"],
       extraHeaders: { Origin: WEB_ORIGIN },
+      reconnection: false,
       timeout: 10_000,
     });
-
     const timer = setTimeout(() => {
-      fail("Socket connect timeout");
+      fail("Anonymous socket neither connected nor errored (timeout)");
       socket.disconnect();
       resolve();
     }, 12_000);
 
     socket.on("connect", () => {
-      socket.emit("location:update", { lat: 44.43, lng: 26.1 });
+      fail("Anonymous socket connected — handshake auth is NOT enforced!");
+      clearTimeout(timer);
+      socket.disconnect();
+      resolve();
     });
+    socket.on("connect_error", (err) => {
+      pass(`Anonymous socket correctly rejected (${err.message})`);
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+async function fetchTestToken() {
+  try {
+    const res = await fetch(`${API_URL}/api/auth/test-token`);
+    if (!res.ok) return null;
+    const body = await res.json();
+    return body.token ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Authenticated presence round-trip; verifies no identity leaks on the wire. */
+function checkSocketAuthed(token) {
+  return new Promise((resolve) => {
+    const socket = io(API_URL, {
+      transports: ["websocket"],
+      auth: { token },
+      extraHeaders: { Origin: WEB_ORIGIN },
+      reconnection: false,
+      timeout: 10_000,
+    });
+    const timer = setTimeout(() => {
+      fail("Authenticated socket connect timeout");
+      socket.disconnect();
+      resolve();
+    }, 12_000);
 
     socket.on("presence:self", ({ publicId }) => {
-      pass(`Socket connected, publicId=${publicId.slice(0, 8)}…`);
+      pass(`Authenticated socket connected, publicId=${publicId.slice(0, 8)}…`);
+      socket.emit("location:update", { lat: 44.43, lng: 26.1 });
+    });
+    socket.on("presence:upsert", (record) => {
+      if ("userId" in record) {
+        fail("presence:upsert leaks userId");
+      } else {
+        pass("presence:upsert carries no account identity");
+      }
       socket.emit("location:stop");
       clearTimeout(timer);
       socket.disconnect();
       resolve();
     });
-
     socket.on("connect_error", (err) => {
-      fail(`Socket connect_error: ${err.message}`);
+      fail(`Authenticated socket connect_error: ${err.message}`);
       clearTimeout(timer);
       resolve();
     });
@@ -95,7 +145,15 @@ async function main() {
   try {
     await checkHealth();
     await checkCors();
-    await checkSocket();
+    await checkSocketRejectsAnon();
+    const token = await fetchTestToken();
+    if (token) {
+      await checkSocketAuthed(token);
+    } else {
+      console.log(
+        "• Skipping authenticated round-trip (no test token; set ALLOW_TEST_TOKEN=1 to enable)."
+      );
+    }
   } catch (err) {
     fail(String(err?.message ?? err));
   }

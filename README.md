@@ -24,6 +24,43 @@ safesips-app/
 project that links `shared` via a `file:` dependency to avoid Expo/Metro
 hoisting issues.
 
+## Accounts & community features
+
+Beyond the anonymous live map, SafeSips now has account-based features backed by
+**SQLite** (`better-sqlite3`):
+
+- **Accounts** — email + password (bcrypt), JWT sessions, email verification.
+  Anti-bot: email verification + auth rate-limiting + a pluggable **Cloudflare
+  Turnstile** hook (enabled only when `TURNSTILE_SECRET` is set).
+- **Profile** — Reddit-style activity history and engagement **badges**
+  (bronze/silver/gold = level 1/2/3), computed from activity in
+  [`shared/src/badges.ts`](shared/src/badges.ts).
+- **Safety reports** — users mark a place safe/unsafe and **upvote** reports
+  (one vote per user). Unlike the masked presence circle, a report is an
+  **intentional public publish of an exact point** tied to the author's display
+  name — the UI warns about this explicitly.
+- **Safe havens** — marking a place unsafe surfaces nearby help (police,
+  hospital, fire station, fuel, pharmacy, 24/7 spots) via an Overpass proxy.
+- **Check-ins & SOS** — schedule recurring check-ins with a security question; a
+  server-side scheduler escalates to your primary SOS contact if you miss one
+  (works even if the app is closed). Notifier is a stub today (logs), pluggable
+  to SMS/email later.
+- **Community forum**, **first-aid info** (spiking), and a **waitlist**.
+
+Privacy invariant is preserved: exact presence coordinates never leave the
+device, the socket handshake is authenticated, and the broadcast presence
+`publicId` is never linked to an account.
+
+Key extra server env (see [server/.env.example](server/.env.example)):
+`JWT_SECRET` (required in production), `DATABASE_PATH`, `TURNSTILE_SECRET`
+(optional), `WEB_APP_URL`. Web: `VITE_TURNSTILE_SITEKEY` (optional).
+
+Run the test suite (badges, votes, check-in state machine):
+
+```bash
+npm test
+```
+
 ## Prerequisites
 
 - **Node.js >= 18.18** and npm (this repo was authored on a machine without

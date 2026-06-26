@@ -1,12 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  LatLng,
-  maskLocation,
-  PresenceRecord,
-} from "@safesips/shared";
-import { createSocket, type AppSocket } from "../socket";
+import { LatLng, maskLocation, PresenceRecord } from "@safesips/shared";
+import { useSocket, type ConnectionState } from "../socket/SocketProvider";
 
-export type ConnectionState = "connecting" | "connected" | "disconnected";
+export type { ConnectionState } from "../socket/SocketProvider";
 
 export interface PresenceState {
   connection: ConnectionState;
@@ -20,87 +16,82 @@ export interface PresenceState {
 }
 
 /**
- * Owns the socket connection and presence state.
+ * Presence state on top of the shared authenticated socket.
  *
  * The exact location passed to `publish` is masked locally; only the masked
- * center is ever emitted to the server.
+ * center is ever emitted. The socket is authenticated, but the broadcast
+ * presence records stay anonymous (no account identity on the wire).
  */
 export function usePresence() {
-  const socketRef = useRef<AppSocket | null>(null);
-  const [connection, setConnection] =
-    useState<ConnectionState>("connecting");
+  const { socket, connection } = useSocket();
   const [selfId, setSelfId] = useState<string | null>(null);
-  const [records, setRecords] = useState<Map<string, PresenceRecord>>(
-    new Map()
-  );
+  const [records, setRecords] = useState<Map<string, PresenceRecord>>(new Map());
   const [selfPublic, setSelfPublic] = useState<LatLng | null>(null);
   const [lastUpdateAt, setLastUpdateAt] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const selfIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const socket = createSocket();
-    socketRef.current = socket;
+    if (!socket) return;
 
-    socket.on("connect", () => setConnection("connected"));
-    socket.on("disconnect", () => setConnection("disconnected"));
-    socket.io.on("reconnect_attempt", () => setConnection("connecting"));
-
-    socket.on("presence:self", ({ publicId }) => {
+    const onSelf = ({ publicId }: { publicId: string }) => {
       selfIdRef.current = publicId;
       setSelfId(publicId);
-    });
-
-    socket.on("presence:init", (incoming) => {
+    };
+    const onInit = (incoming: PresenceRecord[]) => {
       setRecords(new Map(incoming.map((r) => [r.publicId, r])));
-    });
-
-    socket.on("presence:upsert", (record) => {
+    };
+    const onUpsert = (record: PresenceRecord) => {
       setRecords((prev) => {
         const next = new Map(prev);
         next.set(record.publicId, record);
         return next;
       });
-    });
-
-    socket.on("presence:remove", ({ publicId }) => {
+    };
+    const onRemove = ({ publicId }: { publicId: string }) => {
       setRecords((prev) => {
         if (!prev.has(publicId)) return prev;
         const next = new Map(prev);
         next.delete(publicId);
         return next;
       });
-    });
+    };
+    const onNotice = ({ message }: { message: string }) => setNotice(message);
 
-    socket.on("error:notice", ({ message }) => {
-      setNotice(message);
-    });
+    socket.on("presence:self", onSelf);
+    socket.on("presence:init", onInit);
+    socket.on("presence:upsert", onUpsert);
+    socket.on("presence:remove", onRemove);
+    socket.on("error:notice", onNotice);
 
     return () => {
-      socket.removeAllListeners();
-      socket.disconnect();
-      socketRef.current = null;
+      socket.off("presence:self", onSelf);
+      socket.off("presence:init", onInit);
+      socket.off("presence:upsert", onUpsert);
+      socket.off("presence:remove", onRemove);
+      socket.off("error:notice", onNotice);
     };
-  }, []);
+  }, [socket]);
 
-  /** Mask an exact location locally and broadcast the masked center. */
-  const publish = useCallback((exact: LatLng) => {
-    const masked = maskLocation(exact.lat, exact.lng);
-    setSelfPublic(masked);
-    setLastUpdateAt(Date.now());
-    setNotice(null);
-    socketRef.current?.emit("location:update", masked);
-  }, []);
+  const publish = useCallback(
+    (exact: LatLng) => {
+      const masked = maskLocation(exact.lat, exact.lng);
+      setSelfPublic(masked);
+      setLastUpdateAt(Date.now());
+      setNotice(null);
+      socket?.emit("location:update", masked);
+    },
+    [socket]
+  );
 
   const stop = useCallback(() => {
-    socketRef.current?.emit("location:stop");
+    socket?.emit("location:stop");
     setSelfPublic(null);
     setLastUpdateAt(null);
-  }, []);
+  }, [socket]);
 
   const clearNotice = useCallback(() => setNotice(null), []);
 
-  // Other users = every record that is not our own public id.
   const others = useMemo(
     () =>
       Array.from(records.values()).filter(

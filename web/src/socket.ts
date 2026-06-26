@@ -16,9 +16,14 @@ if (import.meta.env.PROD && configured.startsWith("http://")) {
 
 export type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
-export function createSocket(): AppSocket {
+/**
+ * Create an authenticated socket. The JWT is sent in the handshake `auth`
+ * payload; the server rejects connections without a valid token.
+ */
+export function createSocket(token: string): AppSocket {
   return io(configured, {
     transports: ["websocket"],
     autoConnect: true,
+    auth: { token },
   });
 }

@@ -7,14 +7,21 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile.server
     env_file:
+      # IMPORTANT: set a real JWT_SECRET in server/.env.production before deploy
+      # (openssl rand -hex 32). The server refuses to boot without it.
       - ../server/.env.production
     environment:
       NODE_ENV: production
+      # Persisted DB lives on the named volume mounted at /data.
+      DATABASE_PATH: /data/safesips.db
     restart: unless-stopped
     ports:
       - "4000:4000"
     expose:
       - "4000"
+    volumes:
+      # Without this, accounts/reports/check-ins are lost on every redeploy.
+      - safesips-data:/data
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/health"]
       interval: 30s
@@ -45,3 +52,6 @@ services:
   #   depends_on:
   #     - safesips-server
   #     - safesips-web
+
+volumes:
+  safesips-data:

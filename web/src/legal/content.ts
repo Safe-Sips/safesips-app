@@ -3,20 +3,26 @@ Privacy Policy (Summary)
 
 Last updated: June 2026
 
-SafeSips ("we", "us") provides a real-time map that lets you share an approximate location area while keeping your exact position on your device.
+SafeSips ("we", "us") provides a real-time safety map and community features. Using SafeSips requires an account.
+
+Two kinds of location — please read
+• Live presence (the moving circle): your exact GPS position stays on your device. Clients send only a randomized center point within ~50 m of your true location, and other people see only an anonymous ~200 m circle. The circle is never linked to your account identity for other users.
+• Safety reports (pins you publish): when you choose to mark a place as safe or unsafe, you intentionally publish that EXACT point, together with your display name, to all users. This is different from the private presence circle — only report places (a venue, a street), never your home.
 
 What we process
-• Masked location only: clients send a randomized center point within ~50 m of your true location. Exact GPS coordinates are not transmitted to our servers.
-• Anonymous session id: a random public id is assigned per connection so others can see your circle without knowing who you are.
-• Timestamps: when your shared area was last updated and when it expires.
+• Account: email address, a hashed password, and a display name. We verify your email to keep bots and spammers out.
+• Masked presence: a randomized center point + an anonymous per-connection id + timestamps (held in memory only).
+• Safety reports: the exact point you chose, an optional note/tag, your display name, and upvotes.
+• Forum posts, your activity history (used for badges), SOS contacts you add, and check-in records.
 
-What we do not collect
-• Your name, email, phone number, or account (unless you contact us separately).
-• Your exact coordinates on our servers.
-• Persistent location history after you stop sharing or your session expires.
+What we do not do
+• We do not transmit or store your exact presence coordinates on our servers.
+• We do not link your anonymous presence circle to your account for other users.
+• We do not store raw IP addresses for security logs — only salted hashes.
 
 Retention
-• Shared presence records are held in server memory only and are removed when you stop sharing, disconnect, or after a short inactivity timeout (default 60 seconds).
+• Presence records live in server memory only and are removed when you stop sharing, disconnect, or after a short inactivity timeout (default 60 seconds).
+• Account, reports, forum posts, and check-in records persist until you delete them or your account.
 
 Third-party services
 • OpenStreetMap map tiles and Nominatim geocoding may receive address queries or map tile requests from your device. See openstreetmap.org for their policies.

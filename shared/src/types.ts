@@ -50,6 +50,13 @@ export interface LocationUpdatePayload {
 
 /* ----------------------------- Socket events ----------------------------- */
 
+// Note: the socket connection is now authenticated (a JWT is passed in the
+// handshake `auth.token`). The server knows which user owns a connection, but
+// the `publicId` below stays a random per-connection id and is NEVER derived
+// from the user's identity — other clients can never tell who is where.
+
+import type { ReportDTO } from "./dto";
+
 /** Events emitted by the server to clients. */
 export interface ServerToClientEvents {
   /** Sent once on connect: the connecting client's assigned public id. */
@@ -62,6 +69,26 @@ export interface ServerToClientEvents {
   "presence:remove": (data: { publicId: string }) => void;
   /** Server rejected the last action (validation / rate limit). */
   "error:notice": (data: { code: string; message: string }) => void;
+
+  /**
+   * A new safety report was published. Unlike presence, this carries an EXACT
+   * point and the author's display name — a deliberate, user-confirmed publish.
+   */
+  "report:new": (report: ReportDTO) => void;
+  /** A report was removed (deleted by its author or moderated). */
+  "report:removed": (data: { id: string }) => void;
+
+  /**
+   * A scheduled check-in is now due for the connected user. The client should
+   * prompt the user to answer their security question before the deadline.
+   * Pushed only to the owning user's sockets.
+   */
+  "checkin:due": (data: {
+    occurrenceId: string;
+    planId: string;
+    question: string;
+    deadlineAt: number;
+  }) => void;
 }
 
 /** Events emitted by clients to the server. */

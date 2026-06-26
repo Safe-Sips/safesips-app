@@ -1,6 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
 import App from "./App";
+import { AuthProvider } from "./auth/AuthContext";
 import "leaflet/dist/leaflet.css";
 import "./index.css";
 
@@ -9,6 +11,10 @@ if (!root) throw new Error("Root element #root not found in DOM");
 
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
-    <App />
+    <BrowserRouter>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </BrowserRouter>
   </React.StrictMode>
 );

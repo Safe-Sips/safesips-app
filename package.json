@@ -20,6 +20,7 @@
     "mobile": "npm --prefix mobile run start",
     "smoke-test": "node scripts/smoke-test.mjs",
     "uptime-check": "node scripts/uptime-check.mjs",
+    "test": "npm run build:shared && node --import tsx --test server/test/*.test.ts",
     "deploy:compose": "docker compose -f deploy/docker-compose.yml up -d --build"
   },
   "devDependencies": {

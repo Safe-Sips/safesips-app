@@ -1,6 +1,10 @@
 node_modules/
 dist/
 build/
+data/
+*.db
+*.db-shm
+*.db-wal
 .expo/
 .expo-shared/
 web-build/

@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 import http from "node:http";
 import cors from "cors";
-import express from "express";
+import express, {
+  type NextFunction,
+  type Request,
+  type Response,
+} from "express";
 import { Server } from "socket.io";
 import {
   ClientToServerEvents,
@@ -9,12 +13,29 @@ import {
   validateLocationUpdate,
 } from "@safesips/shared";
 import { config } from "./config.js";
+import { db } from "./db.js";
 import { PresenceStore } from "./presenceStore.js";
+import {
+  setIo,
+  trackUserSocket,
+  untrackUserSocket,
+  type SocketData,
+} from "./realtime.js";
+import { verifyToken } from "./auth/tokens.js";
+import { findUserById } from "./repos/users.js";
+import { purgeOldAttempts } from "./auth/throttle.js";
+import { startCheckinScheduler } from "./checkinScheduler.js";
+import { authRouter } from "./routes/auth.js";
+import { reportsRouter } from "./routes/reports.js";
+import { forumRouter } from "./routes/forum.js";
+import { safeHavensRouter } from "./routes/safeHavens.js";
+import { usersRouter } from "./routes/users.js";
+import { sosContactsRouter } from "./routes/sosContacts.js";
+import { checkinsRouter } from "./routes/checkins.js";
+import { waitlistRouter } from "./routes/waitlist.js";
 
-interface SocketData {
-  publicId: string;
-  lastUpdateAt: number;
-}
+// Touch the db import so the connection opens + migrations run at boot.
+void db;
 
 const app = express();
 
@@ -41,6 +62,7 @@ app.use(
     origin: config.corsOrigins,
   })
 );
+app.use(express.json({ limit: "32kb" }));
 
 const store = new PresenceStore(config.presenceTtlMs);
 
@@ -58,6 +80,24 @@ app.get("/health", (_req, res) => {
   }
 });
 
+// REST API.
+app.use("/api/auth", authRouter);
+app.use("/api/reports", reportsRouter);
+app.use("/api/forum", forumRouter);
+app.use("/api/safe-havens", safeHavensRouter);
+app.use("/api/users", usersRouter);
+app.use("/api/sos-contacts", sosContactsRouter);
+app.use("/api/checkins", checkinsRouter);
+app.use("/api/waitlist", waitlistRouter);
+
+// JSON error handler (4 args → Express treats this as the error middleware).
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  // eslint-disable-next-line no-console
+  console.error("Unhandled route error:", err);
+  if (res.headersSent) return;
+  res.status(500).json({ error: "Internal server error." });
+});
+
 const httpServer = http.createServer(app);
 
 const io = new Server<
@@ -70,6 +110,33 @@ const io = new Server<
     origin: config.corsOrigins,
     methods: ["GET", "POST"],
   },
+});
+setIo(io);
+
+// Authenticated handshake: a valid JWT is required to connect at all.
+io.use((socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token as string | undefined;
+    if (!token) {
+      next(new Error("unauthorized"));
+      return;
+    }
+    const verified = verifyToken(token);
+    if (!verified) {
+      next(new Error("unauthorized"));
+      return;
+    }
+    const user = findUserById(verified.userId);
+    if (!user || user.status !== "active") {
+      next(new Error("unauthorized"));
+      return;
+    }
+    // Server-side only. NEVER copied into a presence:* payload.
+    socket.data.userId = verified.userId;
+    next();
+  } catch {
+    next(new Error("unauthorized"));
+  }
 });
 
 const connectionsByIp = new Map<string, number>();
@@ -102,9 +169,14 @@ io.on("connection", (socket) => {
   }
   connectionsByIp.set(ip, activeForIp);
 
+  // Anonymous, per-connection id. Deliberately NOT derived from userId so that
+  // other clients can never tell which account is behind a circle.
   const publicId = randomUUID();
   socket.data.publicId = publicId;
   socket.data.lastUpdateAt = 0;
+
+  // Track the authenticated user's sockets so check-in prompts can reach them.
+  trackUserSocket(socket.data.userId, socket.id);
 
   socket.emit("presence:self", { publicId });
   socket.emit("presence:init", store.active());
@@ -130,6 +202,7 @@ io.on("connection", (socket) => {
     }
 
     try {
+      // Only the masked center is stored/broadcast — never the userId.
       const record = store.upsert(publicId, result.value, now);
       socket.data.lastUpdateAt = now;
       io.emit("presence:upsert", record);
@@ -152,6 +225,7 @@ io.on("connection", (socket) => {
     if (remaining <= 0) connectionsByIp.delete(ip);
     else connectionsByIp.set(ip, remaining);
 
+    untrackUserSocket(socket.data.userId, socket.id);
     removePresence(publicId);
   });
 });
@@ -162,6 +236,7 @@ const sweepTimer = setInterval(() => {
     for (const publicId of expired) {
       io.emit("presence:remove", { publicId });
     }
+    purgeOldAttempts();
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error("Presence sweep failed:", err);
@@ -169,16 +244,19 @@ const sweepTimer = setInterval(() => {
 }, config.sweepIntervalMs);
 sweepTimer.unref?.();
 
+const checkinTimer = startCheckinScheduler();
+
 httpServer.listen(config.port, () => {
   // eslint-disable-next-line no-console
   console.log(
-    `SafeSips presence server listening on :${config.port} ` +
-      `(ttl=${config.presenceTtlMs}ms, rate=${config.minUpdateIntervalMs}ms)`
+    `SafeSips server listening on :${config.port} ` +
+      `(ttl=${config.presenceTtlMs}ms, rate=${config.minUpdateIntervalMs}ms, db=${config.databasePath})`
   );
 });
 
 function shutdown() {
   clearInterval(sweepTimer);
+  clearInterval(checkinTimer);
   io.close();
   httpServer.close(() => process.exit(0));
 }

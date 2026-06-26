@@ -5,11 +5,13 @@ Prioritized next steps after the June 2026 privacy-map prototype. Full context: 
 ## Status
 
 - [x] **Deploy production tooling** — Docker compose, nginx templates, smoke/uptime scripts, CI deploy-check workflow, README deploy section. *Live DNS/TLS at safesips.org still required on the host.*
+- [x] **Accounts & community (SQLite)** — auth + email verification + Turnstile hook, profile history/badges, location reports + upvotes, safe-haven (Overpass) suggestions, check-in + SOS escalation scheduler, spiking first-aid info, community forum.
+- [x] **Waitlist funnel** — name/email/country/interest signup with anti-bot + dedupe (`POST /api/waitlist`).
 - [ ] **Mobile parity** — Port address autocomplete, legal modals, map legend, AsyncStorage warning persistence; EAS internal build
 - [ ] **Map UX upgrades** — Timed sharing (30/60/120 min), bloom styling, clustering, reconnect UX, RO/EN copy, socket integration tests
 - [ ] **Friends link MVP** — Share-with-friends session link (`/join/:code`); viewers see only that user's masked circle
 - [ ] **Scroll site scaffold** — Next.js + GSAP ScrollTrigger + R3F nine-chapter homepage with placeholder pen
-- [ ] **Waitlist funnel** — CTA with name, email, country, interest type; provisional disclaimers
+- [ ] **Waitlist polish** — wire confirmation email + provisional legal disclaimers (signup endpoint already live)
 - [ ] **Lab test plan** — Minimum-claim protocol: one channel, drink panel, controls, pass/fail criteria
 - [ ] **Cartridge prototype** — Single-channel microfluidic cartridge; capillary + color reaction validation
 - [ ] **BLE alert POC** — Mock pen service + calm SafeSips Alert screen; optional trusted-contact notify stub

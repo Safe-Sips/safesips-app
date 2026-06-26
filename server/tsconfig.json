@@ -6,7 +6,9 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "lib": ["ES2021"],
-    "types": ["node"]
+    "types": ["node"],
+    "declaration": false,
+    "declarationMap": false
   },
   "include": ["src"]
 }

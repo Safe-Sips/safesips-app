@@ -1,6 +1,8 @@
-# SafeSips presence API — production image
+# SafeSips API — production image
 FROM node:20-alpine AS builder
 WORKDIR /app
+# better-sqlite3 is a native addon — needs a C/C++ toolchain to compile.
+RUN apk add --no-cache python3 make g++
 COPY package.json package-lock.json ./
 COPY shared/package.json shared/
 COPY server/package.json server/
@@ -18,7 +20,13 @@ COPY --from=builder /app/server/package.json server/
 COPY --from=builder /app/shared/dist shared/dist/
 COPY --from=builder /app/server/dist server/dist/
 COPY --from=builder /app/server/.env.production server/.env.production
-RUN npm ci --workspace=@safesips/server --omit=dev --include-workspace-root
+# Install production deps. better-sqlite3 compiles here too, so add the build
+# toolchain temporarily and drop it afterward to keep the image small.
+RUN apk add --no-cache --virtual .build-deps python3 make g++ \
+  && npm ci --workspace=@safesips/server --omit=dev --include-workspace-root \
+  && apk del .build-deps
+# SQLite data directory (mount a volume here in production — see docker-compose).
+RUN mkdir -p /data
 EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget -qO- http://127.0.0.1:4000/health || exit 1
