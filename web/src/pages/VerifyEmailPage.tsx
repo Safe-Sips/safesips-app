@@ -44,7 +44,6 @@ export default function VerifyEmailPage() {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-brand">
-          <span className="brand-mark" aria-hidden />
           <h1>SafeSips</h1>
         </div>
         <h2 className={status === "error" ? "verify-error" : "verify-ok"}>

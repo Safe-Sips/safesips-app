@@ -14,7 +14,6 @@ export default function NavBar() {
   return (
     <header className="nav">
       <div className="nav-brand">
-        <span className="brand-mark" aria-hidden />
         <span className="nav-title">SafeSips</span>
       </div>
       <nav className="nav-links" aria-label="Primary">

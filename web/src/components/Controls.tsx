@@ -53,7 +53,6 @@ export default function Controls({
     <aside className="panel">
       <header className="panel-header">
         <div className="brand">
-          <span className="brand-mark" aria-hidden />
           <div>
             <h1>SafeSips</h1>
             <p className="tagline">Live safety map</p>

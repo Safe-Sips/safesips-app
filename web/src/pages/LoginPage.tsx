@@ -31,7 +31,6 @@ export default function LoginPage() {
     <div className="auth-page">
       <form className="auth-card" onSubmit={onSubmit}>
         <div className="auth-brand">
-          <span className="brand-mark" aria-hidden />
           <h1>SafeSips</h1>
         </div>
         <p className="auth-tagline">Welcome back. Log in to your safety map.</p>

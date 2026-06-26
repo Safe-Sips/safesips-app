@@ -41,7 +41,6 @@ export default function RegisterPage() {
     <div className="auth-page">
       <form className="auth-card" onSubmit={onSubmit}>
         <div className="auth-brand">
-          <span className="brand-mark" aria-hidden />
           <h1>SafeSips</h1>
         </div>
         <p className="auth-tagline">

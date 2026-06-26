@@ -39,7 +39,6 @@ export default function WaitlistPage() {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-brand">
-          <span className="brand-mark" aria-hidden />
           <h1>SafeSips</h1>
         </div>
         {done ? (

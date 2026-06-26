@@ -10,7 +10,6 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   if (loading) {
     return (
       <div className="boot-screen">
-        <span className="brand-mark" aria-hidden />
         <p>Loading SafeSips…</p>
       </div>
     );
