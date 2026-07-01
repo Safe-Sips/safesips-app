@@ -11,7 +11,7 @@ SINGLE SOURCE OF TRUTH
 How to use this file
 This document consolidates the product idea, final creative direction, technical concept, application, business model, and communication rules discussed across earlier SafeSips conversations. It is designed to prevent the project from drifting between versions.
 
-Project status: Research and prototype concept developed at ICHB Bucharest; not yet a validated commercial safety device. Live privacy map web/mobile prototype implemented June 2026; security, legal, and production-readiness hardening applied June 13, 2026.
+Project status: Research and prototype concept developed at ICHB Bucharest; not yet a validated commercial safety device. Live privacy map web/mobile prototype implemented June 2026; security, legal, and production-readiness hardening applied June 13, 2026. In July 2026 the web app was rebuilt into an account-based safety platform (v2.0): personal accounts with anti-bot protection, safety reports with community upvoting, safe-haven suggestions, spiking first-aid guidance, an hourly check-in with SOS escalation, a waitlist, and a community forum — on SQLite persistence, with the live-map privacy guarantee preserved. See the "SAFESIPS APP v2.0" section at the end of this file.
 Current authorship: David Mathe and Luca Mureșan.
 Primary market: Romania first, with international scalability.
 Proposed company: SafeSips Technologies SRL.
@@ -676,6 +676,12 @@ Production deployment config | CONFIGURED | api.safesips.org (API), safesips.org
 CodeRabbit dev tooling | IMPLEMENTED | Cursor extension + Windows-native CLI; agent can run coderabbit --agent -t uncommitted for automated review loops.
 Web map control panel placement | IMPLEMENTED | Bottom-left on desktop; bottom sheet ≤560 px (June 13, 2026).
 Address autocomplete | IMPLEMENTED | Typeahead on safesips-app web client + safesips-website embedded map; short place/street/city labels (June 13, 2026).
+App v2.0 — account-based safety platform | IMPLEMENTED | July 2026 — accounts, reports+upvotes, safe havens, spiking first-aid, check-in+SOS escalation, waitlist, community forum, engagement badges. SQLite (better-sqlite3) persistence; accounts required; live-map privacy invariant preserved. See the "SAFESIPS APP v2.0" section at the end of this file.
+App persistence & accounts | IMPLEMENTED | July 2026 — SQLite via better-sqlite3; email+password auth (bcrypt), JWT + revocable sessions; email verification; anti-bot (verification + rate limiting + pluggable Cloudflare Turnstile). Real verification emails via SMTP/nodemailer.
+Community reputation | IMPLEMENTED | July 2026 — Reddit-style activity history + engagement badges (bronze/silver/gold = level 1/2/3), computed purely from activity (no stored badge state).
+Safe havens (Overpass) | IMPLEMENTED | July 2026 — marking a place unsafe or "Help near me" surfaces nearby police/hospital/fire/fuel/pharmacy/24-7 via a cached OpenStreetMap Overpass proxy, with a graceful "call 112" fallback.
+Check-in / dead-man's switch | IMPLEMENTED (notify stubbed) | July 2026 — scheduled security-question check-ins with a server-side sweep that escalates a missed check-in to the primary SOS contact even if the app is closed; real SMS/email to the contact is the remaining wiring.
+App design | UPDATED | July 2026 — light "Day Bloom" theme (lavender/navy/hot-pink) with a dark top nav; wordmark without the dot logo.
 
 Important unresolved decisions
 - Final industrial dimensions, battery size, charging method, and sensor architecture.
@@ -851,10 +857,10 @@ Interpretation rules used during consolidation
 - In-app Privacy Policy and Terms summaries are drafting aids; they require qualified legal review before public launch or reliance in litigation.
 Version control
 
-Version: 1.3 — Live map UX polish (autocomplete, panel placement, short address labels)
-Compiled: June 13, 2026 (v1.2 security/legal June 13, 2026; v1.1 implemented prototype June 13, 2026; v1.0 consolidated June 12, 2026)
+Version: 2.0 — Account-based safety platform (accounts, reports+upvotes, safe havens, spiking first-aid, check-in+SOS, waitlist, forum, badges; SQLite persistence). See the "SAFESIPS APP v2.0" section at the end of this file for the full implemented app specification.
+Compiled: July 1, 2026 (v1.3 live-map UX polish June 13, 2026; v1.2 security/legal June 13, 2026; v1.1 implemented prototype June 13, 2026; v1.0 consolidated June 12, 2026)
 Owners: David Mathe and Luca Mureșan
-Recommended update practice: Add dated entries to the decision log whenever product, claims, design, app, pricing, or timeline changes. Record implementation milestones in section 19.
+Recommended update practice: Add dated entries to the decision log whenever product, claims, design, app, pricing, or timeline changes. Record implementation milestones in the decision-log status table and the "SAFESIPS APP v2.0" section.
 
 ============================================================
 SAFESIPS APP: LOCATION SHARING, PRIVACY, AND REAL-TIME MAP
@@ -1114,3 +1120,328 @@ Before launch, SafeSips should determine:
 - What retention and deletion rules apply in each launch market.
 
 These settings should be validated through privacy review, security testing, user research, and legal review before production release.
+
+
+============================================================
+SAFESIPS APP v2.0: ACCOUNT-BASED SAFETY PLATFORM (IMPLEMENTED)
+Community accounts, reports, safe havens, first-aid, check-ins, forum
+Implemented July 2026 — supersedes the original map-only specification above
+============================================================
+
+A0. WHAT CHANGED (SUMMARY)
+
+The original app (v1.x) was a stateless, anonymous, in-memory real-time
+privacy map: no accounts, no database, one anonymous circle per connection.
+v2.0 rebuilds it into a full account-based safety platform while KEEPING the
+core privacy guarantee for live presence. Everything below is implemented and
+verified end-to-end (build + unit tests + browser run).
+
+New capabilities added in v2.0:
+- Personal accounts with anti-bot protection (email verification, rate
+  limiting, and a pluggable Cloudflare Turnstile hook).
+- A profile with a Reddit-style activity history and engagement badges
+  (bronze / silver / gold = level 1 / 2 / 3).
+- Location safety reports that other users can upvote (one vote per user).
+- Safe-haven suggestions: marking a place unsafe (or tapping "Help near me")
+  surfaces nearby police, hospital, fire station, fuel, pharmacy, and 24/7
+  locations on the map.
+- Spiking / drink-contamination first-aid guidance (first effects + what to
+  do first + how to help someone else).
+- An hourly check-in "dead-man's-switch" with a personal security question;
+  a missed check-in escalates to the user's primary SOS contact.
+- A waitlist / newsletter signup.
+- A community safety forum (threads + replies with up/down voting).
+- Real verification emails via SMTP (nodemailer).
+
+Locked product decisions behind this rebuild:
+- Persistence: SQLite (better-sqlite3), file-based, no external database.
+- Accounts are REQUIRED for the whole app; the live map is behind login.
+- The on-the-wire location privacy invariant is preserved (exact presence
+  coordinates never leave the device; the broadcast id is never tied to an
+  account).
+- Anti-bot: built-in (email verification + throttling) now, with a pluggable
+  Cloudflare Turnstile that activates only when its secret is configured.
+- Platform scope: web + server + shared. The Expo mobile app was NOT updated
+  in this pass (still the v1.x map; see A19).
+
+A1. ARCHITECTURE & TECH STACK
+
+Monorepo (npm workspaces): shared / server / web (+ separate Expo mobile,
+out of scope for v2.0).
+- shared (@safesips/shared): wire types, DTOs, location masking, engagement
+  badge logic. Single source of truth for web + server.
+- server (@safesips/server): Node ESM, Express + Socket.io, SQLite. New deps:
+  better-sqlite3 (embedded DB), bcryptjs (hashing), jsonwebtoken (JWT),
+  express-rate-limit (HTTP limits), zod (request validation), nodemailer
+  (email). TypeScript 5.6, tsx for dev.
+- web (@safesips/web): React 18 + Vite + Leaflet/react-leaflet + socket.io.
+  New dep: react-router-dom v7 (client routing).
+
+A2. ACCOUNTS & AUTHENTICATION
+
+- Register (POST /api/auth/register): email + password (min 8) + display name
+  (2-40). Optional captcha token. Creates an unverified account, hashes the
+  password (bcrypt), issues a session token, and sends a verification email.
+  Duplicate email -> 409.
+- Login (POST /api/auth/login): returns a token + user. Unknown emails are
+  compared against a dummy hash to equalize timing (reduces user enumeration).
+- Verify (POST /api/auth/verify): consumes a single-use email token.
+- me / logout / resend-verification: GET /api/auth/me, POST /api/auth/logout
+  (revokes the session), POST /api/auth/resend-verification.
+- Password hashing: bcryptjs, cost factor BCRYPT_ROUNDS (default 11). The same
+  hashing is reused for check-in answers.
+- Tokens: JWT (jsonwebtoken) carrying { sub: userId, jti: sessionId, ev:
+  emailVerified }, valid JWT_TTL_DAYS (default 7). Every token is backed by a
+  revocable row in the "sessions" table, so logout kills the token
+  server-side immediately. The token is sent as an Authorization: Bearer
+  header for REST and in the Socket.io handshake auth for the websocket.
+- Email-verify gate: users can log in immediately, but posting, reporting, and
+  starting a check-in plan require a verified email (voting does NOT).
+
+A3. ANTI-BOT / "ENSURE REAL PEOPLE USE THE APP"
+
+Layered defenses so bots and spammers cannot flood the app:
+1. Email verification is required before a user can create public content.
+2. Auth throttling: a sliding window (auth_attempts table) locks out after
+   AUTH_MAX_FAILS (6) failures per 15 minutes, keyed per email AND per
+   hashed IP; plus a coarse express-rate-limit across all /api/auth routes.
+3. Pluggable Cloudflare Turnstile (privacy-friendly captcha): when
+   TURNSTILE_SECRET is set, register + waitlist verify the token server-side;
+   when unset, captcha is skipped and the built-in defenses apply. A
+   client-claimed "captcha passed" flag is never trusted.
+4. Waitlist is heavily throttled (20 / hour / IP) and deduplicated by email.
+
+A4. PROFILE: HISTORY & ENGAGEMENT BADGES
+
+- Reddit-style activity history: an activity_log records report_created,
+  report_upvoted, thread_created, post_created, and checkin_completed. The
+  profile shows a chronological feed plus counts.
+- Engagement score = weighted sum of contributions: reports x5, upvotes given
+  x1, upvotes received x3, threads x5, posts x2, check-ins completed x2.
+- Badge tiers (thresholds by score): none (Newcomer), bronze (>=10, Level 1),
+  silver (>=50, Level 2), gold (>=200, Level 3).
+- Badges are a PURE FUNCTION of derived counts — no badge state is stored, so
+  the web and server always agree and never drift. Endpoints:
+  GET /api/users/me/stats, GET /api/users/me/activity.
+
+A5. SAFETY REPORTS & COMMUNITY UPVOTING
+
+- Users mark a place safe or unsafe with an optional category tag and note.
+  Reports are stored in the "reports" table and shown on the map as colored
+  markers (unsafe red, safe green).
+- IMPORTANT — two distinct location privacy contracts:
+  (a) Presence circle = passive, masked (~50 m offset), anonymous.
+  (b) Safety report = an INTENTIONAL, user-confirmed publish of the EXACT
+      point, attributed to the author's display name. The report dialog shows
+      an explicit warning distinct from the presence warning ("This publishes
+      the exact location ... only share places, never your home").
+- Upvoting: any logged-in user can upvote a report; ONE vote per user
+  (enforced by a composite primary key report_votes(report_id, user_id)); you
+  cannot upvote your own report. New/removed reports broadcast in real time
+  (socket report:new / report:removed).
+- Endpoints: GET /api/reports?bbox=..., POST /api/reports (verified),
+  POST|DELETE /api/reports/:id/vote, DELETE /api/reports/:id (author only).
+
+A6. SAFE HAVENS ("offer safe havens as surrounding locations")
+
+- When a user marks a spot UNSAFE, the app immediately surfaces nearby help;
+  a standalone "Help near me" button does the same anytime (using current
+  location, falling back to the map center).
+- Server proxies the OpenStreetMap Overpass API
+  (GET /api/safe-havens?lat&lng&radius) for: police, hospital, fire_station,
+  fuel, pharmacy, and any 24/7-open place. Results are de-duplicated, sorted
+  by distance (haversine), capped at 30, and cached in-memory (5-min TTL).
+- The panel lists each place with distance, "open 24/7" flag, a "Call" link
+  (tel:), and a "Directions" link (OpenStreetMap); haven pins also render on
+  the map. If Overpass is unavailable, it degrades gracefully to a "call 112"
+  message and never blocks the unsafe-report flow.
+
+A7. CONTAMINATION / SPIKING FIRST-AID
+
+Static, emergency-forward safety content (web/src/content/firstAid.ts):
+- First effects to watch for (10), including "losing strength in your legs —
+  they feel heavy, weak or won't hold you", trouble moving/controlling your
+  body, sudden dizziness, confusion, strong drowsiness, memory gaps.
+- What to do FIRST (ordered): (1) tell someone you trust right now; (2) get to
+  a safe, well-lit, public place; (3) call 112 if you feel very unwell; (4)
+  stop drinking / protect your drink; (5) arrange safe transport with a
+  trusted person; (6) note what happened.
+- How to help someone else (stay with them; recovery position + call 112 if
+  drowsy/unconscious; tell venue security, keep the drink for testing).
+- Prominent "Call 112" call-to-action and a clear "not medical advice"
+  disclaimer. The page is reachable publicly at /help (logged out) and in-app
+  at /first-aid. NOTE: this copy must be reviewed by a qualified person before
+  public launch.
+
+A8. CHECK-IN SYSTEM + SOS ESCALATION ("dead-man's switch")
+
+For going somewhere unfamiliar:
+- The user creates a plan: interval (default hourly), grace window, a personal
+  security question, and the expected answer (hashed, never stored in plain
+  text). A primary SOS contact is required before a plan can arm.
+- On schedule, the app prompts the user with the question; they must be
+  clear-headed enough to type the correct answer within the grace window.
+- A SERVER-SIDE scheduler (sweeps every ~15 s) drives the occurrence state
+  machine, so escalation happens even if the app is closed:
+    pending -> prompted (push checkin:due to the user) -> answered (correct)
+    prompted -> missed -> escalated (deadline passed with no correct answer)
+  A correct answer schedules the next occurrence; pausing/ending a plan
+  cancels pending occurrences.
+- On escalation, the primary SOS contact is notified to check on the user and
+  the event is recorded in checkin_escalations.
+- Endpoints: GET/POST /api/checkins/plans, POST /api/checkins/plans/:id/pause
+  and /end, GET /api/checkins/active, POST
+  /api/checkins/occurrences/:id/answer, GET /api/checkins/occurrences.
+  SOS contacts: GET/POST /api/sos-contacts, DELETE /api/sos-contacts/:id.
+- STATUS: the notifier is currently a stub — it records the escalation and
+  logs it; wiring it to real SMS/email is the remaining step (the SMTP seam
+  already exists; see A10 and A19).
+
+A9. WAITLIST / NEWSLETTER
+
+- Public signup (POST /api/waitlist): name, email, optional country, optional
+  interest (user / venue / volunteer / press / investor). Deduplicated by
+  email, throttled per IP (hashed), optional captcha. Always returns success
+  (never reveals whether the email already existed).
+
+A10. COMMUNITY SAFETY FORUM
+
+- Threads + replies focused on keeping the community safe. Creating a thread
+  also creates its first post (atomic). Replies bump the thread's activity.
+- Posts support UP/DOWN voting with a net score (upvotes minus downvotes) and
+  per-viewer vote state; one vote per user per post; you cannot vote on your
+  own post. (Location reports, by contrast, are upvote-only.)
+- Endpoints: GET /api/forum/threads (cursor paginated), POST
+  /api/forum/threads (verified), GET /api/forum/threads/:id, POST
+  /api/forum/threads/:id/posts (verified), POST|DELETE
+  /api/forum/posts/:id/vote.
+
+A11. REAL-TIME LAYER & THE PRIVACY INVARIANT
+
+- The Socket.io connection is now AUTHENTICATED: a valid JWT is required in
+  the handshake or the connection is rejected. The server knows which account
+  owns a socket (needed to push check-in prompts), but:
+  - Presence is still masked: the client offsets its exact location by up to
+    50 m and only the masked 200 m center is broadcast.
+  - The broadcast publicId is a fresh random per-connection UUID, NEVER
+    derived from the account — other clients can never tell who is where.
+  - Exact coordinates never touch the database (in-memory presence only);
+    only opt-in reports persist an exact point.
+- Realtime events: presence:* (unchanged), plus report:new / report:removed
+  (to all clients) and checkin:due (only to the owning user's sockets).
+
+A12. EMAIL DELIVERY
+
+- nodemailer SMTP transport (auth/email.ts). When SMTP_* is configured, real
+  verification emails are sent (HTML + text, "Verify my email" button). When
+  unconfigured, the link is logged in development so testing works without a
+  mailbox. Sending never throws — a mail failure will not break registration
+  (the user can resend). Verified working via Gmail SMTP (app password).
+
+A13. DATA MODEL (SQLite)
+
+Opened with PRAGMA journal_mode=WAL, foreign_keys=ON, busy_timeout=5000.
+All primary keys are TEXT UUIDs; timestamps are integer epoch-ms; schema is
+created idempotently and tracked by a schema_version row. Tables:
+- users, email_verifications, sessions, auth_attempts
+- reports, report_votes
+- forum_threads, forum_posts, forum_post_votes
+- activity_log
+- sos_contacts, checkin_plans, checkin_occurrences, checkin_escalations
+- waitlist
+Only "reports" store exact coordinates (by intent); presence is never
+persisted. IPs and email/verify tokens are stored only as salted/sha256
+hashes, never raw.
+
+A14. REST API SURFACE (all under /api)
+
+- auth: register, login, verify, me, logout, resend-verification
+  (+ test-token in dev/CI only).
+- reports: list (bbox), create, vote, unvote, delete.
+- safe-havens: nearby help lookup (Overpass proxy).
+- forum: threads (list/create/detail), posts (create), post vote/unvote.
+- users: me/stats (score + badge), me/activity (history feed).
+- sos-contacts: list, create, delete.
+- checkins: plans (list/create/pause/end), active, occurrence answer,
+  occurrences history.
+- waitlist: public signup.
+Auth levels: most routes require an account; content creation (reports,
+threads, posts, check-in plans) also requires a verified email; waitlist is
+public. Request bodies are validated with zod; JSON body limit 32 kb.
+
+A15. WEB APP STRUCTURE
+
+- Routing (react-router-dom): public routes /login, /register, /verify,
+  /waitlist, /help (public first-aid). Everything else is behind
+  RequireAuth + an AppShell: / (map), /forum, /forum/new, /forum/:id,
+  /checkins, /first-aid, /profile.
+- Auth is held in an AuthProvider (token in localStorage key "safesips.auth";
+  a 401 anywhere logs the user out; the session rehydrates on boot).
+- A single authenticated Socket provider owns the websocket for presence,
+  reports, and check-ins.
+- Pages: Login, Register, VerifyEmail, Waitlist, Map, ForumList, NewThread,
+  ForumThread, Profile, CheckinSetup, FirstAid.
+- Key components: AppShell (+ unverified-email banner + global check-in
+  modal), NavBar, CaptchaWidget, MarkUnsafeDialog, ReportPanel,
+  SafeHavenPanel, BadgeChip, PostItem, ActiveCheckinModal, plus the original
+  Controls / MapView / PrivacyCircle / AddressInput / SensitiveWarning /
+  LegalFooter / LegalModal.
+- Navigation: tabs are Map, Forum, Check-in, First aid. The user's display
+  name (top-right) links to the profile — there is no separate Profile tab.
+- Map behavior: centers on the user on entry (view-only), a "+ Report a
+  place" flow (tap the map or use current location) and a "Help near me"
+  button; safe-haven pins render on the map; reports update live.
+
+A16. DESIGN / THEME
+
+- Current theme is a light "Day Bloom" palette (soft lavender background, navy
+  ink, warm-yellow map-safety accents, hot-pink emphasis/links), while the top
+  navigation bar keeps a dark identity via dedicated --nav-* tokens.
+- color-scheme is set so native form controls (including <select> dropdown
+  popups) render correctly across OSes; dropdown option colors are pinned for
+  readability (an earlier Windows-specific bug where the "Choose a tag" list
+  was unreadable is fixed).
+- The SafeSips wordmark is used without the old dot logo mark.
+- The interface stays calm and safety-focused with clear state changes and
+  large touch targets.
+
+A17. ENVIRONMENT & CONFIGURATION
+
+New server env vars (see server/.env.example / .env.production):
+DATABASE_PATH, JWT_SECRET (REQUIRED in production — the server refuses to boot
+without it), JWT_TTL_DAYS, BCRYPT_ROUNDS, AUTH_MAX_FAILS,
+AUTH_FAIL_WINDOW_MS, EMAIL_TOKEN_TTL_HOURS, WEB_APP_URL, SMTP_HOST/PORT/
+SECURE/USER/PASS, EMAIL_FROM, TURNSTILE_SECRET (optional),
+CHECKIN_SWEEP_INTERVAL_MS, ALLOW_TEST_TOKEN (dev/CI only, force-disabled in
+production). Retained map-era vars: CORS_ORIGINS, PRESENCE_TTL_MS,
+SWEEP_INTERVAL_MS, MIN_UPDATE_INTERVAL_MS, MAX_CONNECTIONS_PER_IP.
+New web env vars: VITE_SERVER_URL (socket + REST), optional VITE_API_URL,
+optional VITE_TURNSTILE_SITEKEY.
+
+A18. DEPLOYMENT, TESTING & VERIFICATION
+
+- Docker: better-sqlite3 is a native addon, so the build toolchain
+  (python3/make/g++) is installed in BOTH the builder and runner stages
+  (removed after install in the runner to keep the image small). A persistent
+  named data volume is mounted at /data (DATABASE_PATH=/data/safesips.db) —
+  without it, accounts/reports/check-ins would be lost on every redeploy.
+- Smoke test (scripts/smoke-test.mjs) is token-aware: it verifies the
+  handshake REJECTS anonymous sockets and, when a dev test token is available,
+  runs an authenticated presence round-trip and confirms the wire carries no
+  account identity.
+- Unit tests (server/test/logic.test.ts, run with `npm test`): badge
+  thresholds, the engagement score formula, one-vote-per-user, and the full
+  check-in state machine (due -> prompted -> answered + reschedule; overdue
+  -> missed/escalated; wrong-answer handling).
+
+A19. KNOWN LIMITATIONS / OPEN ITEMS
+
+- SOS escalation currently only records + logs; wiring real SMS/email to the
+  contact is the remaining step (the SMTP seam already exists).
+- No admin/moderation tooling yet (reports/forum have status columns and
+  author-only delete, but no moderator role).
+- No self-service account deletion endpoint yet (schema cascades are ready for
+  it — needed for GDPR).
+- Mobile (Expo) app was not updated to v2.0 in this pass.
+- First-aid content and the in-app Privacy Policy / Terms remain drafting aids
+  and require qualified human review before public launch.
