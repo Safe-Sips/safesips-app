@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SafeSips — Project Checklist</title>
+<style>
+  :root {
+    --lavender: #B8C5D6;
+    --pink: #FF1493;
+    --navy: #001F3F;
+    --soft-pink: #FFD6EC;
+    --gold: #D4AF37;
+    --bg: #f5f3fb;
+    --card: #ffffff;
+    --ink: #17233a;
+    --muted: #6b7691;
+    --line: #e6e3f0;
+    --done: #2fa36b;
+    --done-bg: #e9f7f0;
+    --crit: #c0392b;
+    --crit-bg: #fdece9;
+    --shadow: 0 6px 24px rgba(0, 31, 63, 0.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1330; --card: #161d3d; --ink: #eef0fa; --muted: #9aa3c4;
+      --line: #27305a; --done-bg: #123024; --crit-bg: #3a1512; --shadow: 0 6px 24px rgba(0,0,0,0.4);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.5; padding: 0 0 80px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 0 20px; }
+  header {
+    background: linear-gradient(135deg, var(--navy), #0a2c52 60%, #3a1147);
+    color: #fff; padding: 34px 0 30px; margin-bottom: 26px;
+    border-bottom: 4px solid var(--pink);
+  }
+  header .wrap { display: flex; flex-direction: column; gap: 6px; }
+  h1 { margin: 0; font-size: 30px; letter-spacing: 0.5px; font-weight: 800; }
+  h1 .dot { color: var(--pink); }
+  .tagline { color: var(--lavender); font-size: 15px; margin: 0; }
+  .sub { color: #cdd6e6; font-size: 13px; margin-top: 8px; }
+  .sub a { color: var(--soft-pink); }
+
+  /* overall progress */
+  .overall {
+    margin-top: 18px; background: rgba(255,255,255,0.09); border-radius: 14px;
+    padding: 16px 18px;
+  }
+  .overall .row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .overall .pct { font-size: 26px; font-weight: 800; color: #fff; }
+  .overall .count { font-size: 13px; color: var(--lavender); }
+  .bar { height: 12px; background: rgba(255,255,255,0.15); border-radius: 8px; overflow: hidden; }
+  .bar > span { display: block; height: 100%; width: 0;
+    background: linear-gradient(90deg, var(--pink), var(--gold));
+    border-radius: 8px; transition: width 0.4s ease; }
+
+  /* start-here callout */
+  .callout {
+    background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--gold);
+    border-radius: 12px; padding: 16px 20px; margin-bottom: 24px; box-shadow: var(--shadow);
+  }
+  .callout h2 { margin: 0 0 10px; font-size: 16px; color: var(--pink); }
+  .callout ol { margin: 0; padding-left: 20px; }
+  .callout li { margin: 5px 0; font-size: 14px; }
+
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; align-items: center; }
+  .toolbar .grow { flex: 1; }
+  button {
+    font: inherit; font-size: 13px; cursor: pointer; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink); padding: 7px 14px; border-radius: 8px;
+  }
+  button:hover { border-color: var(--pink); color: var(--pink); }
+  .saved { font-size: 12px; color: var(--muted); }
+
+  section.track {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    margin-bottom: 16px; box-shadow: var(--shadow); overflow: hidden;
+  }
+  section.track.critical { border-color: var(--crit); }
+  .track-head {
+    display: flex; align-items: center; gap: 12px; padding: 14px 18px; cursor: pointer;
+    user-select: none;
+  }
+  .track-head:hover { background: rgba(255,20,147,0.03); }
+  .track-title { font-weight: 700; font-size: 16px; flex: 1; }
+  .track-title .flag {
+    display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--crit); background: var(--crit-bg);
+    padding: 2px 8px; border-radius: 20px; margin-left: 8px; vertical-align: middle;
+  }
+  .track-mini { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .minibar { width: 90px; height: 7px; background: var(--line); border-radius: 6px; overflow: hidden; display: inline-block; vertical-align: middle; margin-left: 8px; }
+  .minibar > span { display: block; height: 100%; width: 0; background: var(--done); border-radius: 6px; transition: width 0.35s ease; }
+  .chevron { color: var(--muted); transition: transform 0.2s; font-size: 13px; }
+  section.track.collapsed .items { display: none; }
+  section.track.collapsed .chevron { transform: rotate(-90deg); }
+
+  .items { padding: 4px 18px 14px; }
+  label.item {
+    display: flex; align-items: flex-start; gap: 11px; padding: 8px 8px; border-radius: 9px;
+    cursor: pointer; font-size: 14.5px;
+  }
+  label.item:hover { background: rgba(0,31,63,0.03); }
+  @media (prefers-color-scheme: dark) { label.item:hover { background: rgba(255,255,255,0.04); } }
+  label.item input { margin: 0; margin-top: 3px; width: 17px; height: 17px; accent-color: var(--done); cursor: pointer; flex-shrink: 0; }
+  label.item .txt { flex: 1; }
+  label.item.checked .txt { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--done); text-decoration-thickness: 2px; }
+  label.item .tag {
+    display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.4px; padding: 1px 7px; border-radius: 20px; margin-left: 6px;
+    background: var(--crit-bg); color: var(--crit); vertical-align: middle;
+  }
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 30px; }
+  footer a { color: var(--pink); }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>SafeSips<span class="dot"> ·</span> Project Checklist</h1>
+    <p class="tagline">Your best party friend — from research paper to validated product</p>
+    <p class="sub">Derived from <a href="SafeSips_Master_Information.txt">SafeSips_Master_Information.txt</a> (v2.2). Your ticks are saved in this browser. · Updated July 10, 2026</p>
+    <div class="overall">
+      <div class="row">
+        <span class="pct" id="pct">0%</span>
+        <span class="count" id="count">0 / 0 complete</span>
+      </div>
+      <div class="bar"><span id="overallBar"></span></div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="callout">
+    <h2>▶ Start here — recommended next 6 moves</h2>
+    <ol>
+      <li>Freeze the minimum claim &amp; formalize the lab test plan (the paper already has a bench plan).</li>
+      <li>Get ICHB lab access + safety approvals, and source the <strong>safe surrogate</strong> reagents.</li>
+      <li>Run the first cheap bench experiment — the "specificity-separation" test uses only safe compounds.</li>
+      <li>Fix the public <code>&lt;0.2%</code> / <code>&lt;5&nbsp;s</code> claims (label theoretical) &amp; update the stale legal drafts.</li>
+      <li>Knock out the small app fixes — mobile handshake, broken CI, engagement-score bug.</li>
+      <li>Decide whether to host the app (app/api.safesips.org) now or keep it local.</li>
+    </ol>
+  </div>
+
+  <div class="toolbar">
+    <span class="grow saved" id="savedNote">Progress saves automatically to this browser.</span>
+    <button id="expandBtn">Expand all</button>
+    <button id="collapseBtn">Collapse all</button>
+    <button id="resetBtn">Reset ticks</button>
+  </div>
+
+  <div id="tracks"></div>
+
+  <footer>
+    Single source of truth: <a href="SafeSips_Master_Information.txt">SafeSips_Master_Information.txt</a> ·
+    Text version: <a href="TODO.md">TODO.md</a><br />
+    Tracks 1, 2, 4, 5 largely done · Track 3 (detection technology) is the critical path — not yet started.
+  </footer>
+</div>
+
+<script>
+const PLAN = [
+  { id: "brand", title: "1 · Brand & creative foundation", items: [
+    { t: 'Name, tagline ("Your best party friend"), closing line', done: true },
+    { t: "Brand archetype, voice, tone", done: true },
+    { t: "Colour palette (lavender / hot-pink / navy / gold)", done: true },
+    { t: "Typography system (Bebas Neue / Nunito / Playfair)", done: true },
+    { t: '"Night Bloom Lab" visual system & motion language', done: true },
+    { t: "Product look locked (matte-black pen)", done: true },
+    { t: "Final logo / wordmark system", done: false },
+    { t: "Reconcile fonts used on the site (Baloo 2, Fredoka, Lilita One) with the type system", done: false },
+  ]},
+  { id: "science-paper", title: "2 · Science — research (paper)", items: [
+    { t: "Detection concept designed (3 channels: GHB / ketamine / Rohypnol)", done: true },
+    { t: "Revised architecture: SEC clean-up + dual optical–electrochemical detection at ITO electrode", done: true },
+    { t: "Reagent set chosen (ferric hydroxamate / cobalt thiocyanate / electrochemical nitro-reduction)", done: true },
+    { t: "Kinetic + signal-to-noise modelling, projected performance figures", done: true },
+    { t: "Validation/bench plan drafted with safe surrogate compounds", done: true },
+    { t: "Comparison with published platforms", done: true },
+    { t: "Add OTTLE / spectroelectrochemistry references (paper flags this gap)", done: false },
+  ]},
+  { id: "science-lab", title: "3 · Science — prototype & lab validation", critical: true, items: [
+    { t: "Formalize the lab test protocol (controls, concentrations, pass/fail criteria)", done: false },
+    { t: "Obtain institutional/lab access + safety approvals (fume hood, supervision)", done: false },
+    { t: "Verify Romanian/EU law for regulated reagents before purchase", done: false },
+    { t: "Source safe surrogate compounds (sarcosine, L-proline, γ-valerolactone, acetylacetone, nitroaromatic)", done: false },
+    { t: "Bench-test each colour channel: 6 matrices × 8-point 0–200 µM ladder × 3 replicates", done: false },
+    { t: 'Run the "specificity-separation" headline experiment (colour can\'t separate; voltammetry can)', done: false },
+    { t: "Prove SEC value: run spikes with vs. without the size-exclusion column", done: false },
+    { t: "Bring up the optically transparent ITO electrode (ferro/ferricyanide couple)", done: false },
+    { t: "Build agreeing optical + electrochemical calibration curves (≥ Rohypnol channel)", done: false },
+    { t: "Quantify dissolved-oxygen interference + test deoxygenation mitigation", done: false },
+    { t: "Measure real LOD, sensitivity, specificity, matrix CV, false-positive rate (replace modelled figures)", done: false },
+    { t: "Fabricate the microfluidic cartridge (channel geometry, dried reagents)", done: false },
+    { t: "Reagent shelf-life, sealing, contamination & disposal studies", done: false },
+    { t: "Optical sensor + electrochemical readout hardware", done: false },
+    { t: "BLE pen-to-app integration proof of concept", done: false },
+    { t: "Independent-laboratory validation (before any public performance claim)", done: false },
+  ]},
+  { id: "website", title: "4 · Marketing website (safesips.org)", items: [
+    { t: "Static landing live on GitHub Pages", done: true },
+    { t: "Hero, sections, animations, waitlist modal", done: true },
+    { t: "Waitlist backend (Google Apps Script → Sheet + welcome email)", done: true },
+    { t: "Footer legal modal drafts + 112 disclaimer", done: true },
+    { t: "Fix/qualify the <0.2% and <5 s public claims (label theoretical)", done: false, tag: "claims" },
+    { t: "Update legal drafts — they still describe the removed live-map service", done: false },
+    { t: 'Fix the dead "Research Paper" footer link', done: false },
+    { t: "Decide on a single support email (gmail vs support@safesips.app)", done: false },
+    { t: "Merge the two parallel waitlists (site Google Sheet + app SQLite)", done: false },
+  ]},
+  { id: "app", title: "5 · Safety app — v2.0 web", items: [
+    { t: "Accounts, JWT auth, email verification, anti-bot", done: true },
+    { t: "Live privacy map with location masking", done: true },
+    { t: "Safety reports + community upvoting", done: true },
+    { t: "Safe havens (Overpass nearby-help)", done: true },
+    { t: "Spiking first-aid content", done: true },
+    { t: "Check-in / dead-man's-switch + SOS escalation (recording)", done: true },
+    { t: "Community forum + badges", done: true },
+    { t: "SQLite persistence, security hardening, unit + smoke tests", done: true },
+    { t: "Wire real SMS/email for SOS escalation (currently a stub)", done: false, tag: "safety" },
+    { t: "Fix engagement-score bug (downvotes currently raise score)", done: false },
+    { t: "Reconcile 911 vs 112 across the web UI (Romania → 112)", done: false },
+    { t: "Add forum moderation/delete + GDPR account-deletion endpoint", done: false },
+    { t: "Salt the IP/token hashes (currently unsalted SHA-256)", done: false },
+    { t: "Fix the broken CI workflow (wrong safesips-app/ path)", done: false },
+    { t: "Host app + API (app.safesips.org / api.safesips.org)", done: false },
+  ]},
+  { id: "mobile", title: "6 · Mobile app", items: [
+    { t: "v1.x Expo map client (masking, geocoding parity)", done: true },
+    { t: "Restore connectivity — broken against the v2.0 server (no JWT in handshake)", done: false, tag: "broken" },
+    { t: "Bring mobile to v2.0 (login, accounts, reports, forum, legal modals)", done: false },
+    { t: "Mobile address autocomplete + legal UI parity", done: false },
+  ]},
+  { id: "legal", title: "7 · Legal, privacy & compliance", items: [
+    { t: "Draft Privacy Policy / Terms / disclaimers (in-app + site)", done: true },
+    { t: "Qualified counsel review (Romania / EU GDPR, consumer, location-data law)", done: false },
+    { t: "Formal GDPR documentation (consent, retention, deletion, encryption at rest)", done: false },
+    { t: "Device regulatory classification + supportable claims", done: false },
+    { t: "Claims-governance process (what can be said publicly, when)", done: false },
+    { t: "IP protection (brand, design, software, novel technical elements)", done: false },
+  ]},
+  { id: "business", title: "8 · Business, funding & operations", items: [
+    { t: "Business plan 2026–2027 (pricing, unit economics, 3-yr model, funding need)", done: true },
+    { t: "Product family defined (Starter Kit, refills, Venue Pack/Care)", done: true },
+    { t: "Register SafeSips Technologies SRL (activity codes, tax/accounting)", done: false },
+    { t: "Supplier quotations + prototype bill of materials", done: false },
+    { t: "Rebuild the financial model on real costs", done: false },
+    { t: "Secure funding (grants/competitions → angel/pre-seed → strategic partner)", done: false },
+    { t: "Identify partners: independent lab, microfluidics/electronics suppliers, legal/DP adviser", done: false },
+  ]},
+  { id: "gtm", title: "9 · Go-to-market & pilot", items: [
+    { t: "Marketing/content strategy + channel plan drafted", done: true },
+    { t: "User testing (form factor, alert wording, discreetness)", done: false },
+    { t: "Campus ambassadors + 5–10 pilot venues lined up", done: false },
+    { t: "Pilot lot (500–1,000 devices, ≥10,000 cartridges)", done: false },
+    { t: "Controlled pilot with privacy/response protocol", done: false },
+    { t: "Publish validated performance + limits → launch decision (target Sep 2027)", done: false },
+  ]},
+];
+
+const STORAGE_KEY = "safesips.todo.v1";
+let state = {};
+try { state = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch (e) { state = {}; }
+
+// Seed defaults from the "done" flags the first time (or for any id not yet in storage).
+PLAN.forEach((track, ti) => track.items.forEach((it, ii) => {
+  const id = track.id + "." + ii;
+  if (!(id in state)) state[id] = !!it.done;
+}));
+
+function save() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {} }
+
+function render() {
+  const root = document.getElementById("tracks");
+  root.innerHTML = "";
+  PLAN.forEach((track) => {
+    const sec = document.createElement("section");
+    sec.className = "track" + (track.critical ? " critical" : "");
+    sec.dataset.id = track.id;
+
+    const head = document.createElement("div");
+    head.className = "track-head";
+    head.innerHTML =
+      '<span class="track-title">' + track.title +
+        (track.critical ? '<span class="flag">critical · not started</span>' : "") +
+      '</span>' +
+      '<span class="track-mini"><span class="mini-count"></span>' +
+        '<span class="minibar"><span class="mini-fill"></span></span></span>' +
+      '<span class="chevron">▼</span>';
+    head.addEventListener("click", () => { sec.classList.toggle("collapsed"); });
+    sec.appendChild(head);
+
+    const items = document.createElement("div");
+    items.className = "items";
+    track.items.forEach((it, ii) => {
+      const id = track.id + "." + ii;
+      const label = document.createElement("label");
+      label.className = "item" + (state[id] ? " checked" : "");
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = !!state[id];
+      cb.addEventListener("change", () => {
+        state[id] = cb.checked;
+        label.classList.toggle("checked", cb.checked);
+        save();
+        updateProgress();
+      });
+      const txt = document.createElement("span");
+      txt.className = "txt";
+      txt.textContent = it.t;
+      if (it.tag) {
+        const tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = it.tag;
+        txt.appendChild(tag);
+      }
+      label.appendChild(cb);
+      label.appendChild(txt);
+      items.appendChild(label);
+    });
+    sec.appendChild(items);
+    root.appendChild(sec);
+  });
+  updateProgress();
+}
+
+function updateProgress() {
+  let total = 0, done = 0;
+  PLAN.forEach((track) => {
+    let tTotal = 0, tDone = 0;
+    track.items.forEach((it, ii) => {
+      const id = track.id + "." + ii;
+      total++; tTotal++;
+      if (state[id]) { done++; tDone++; }
+    });
+    const sec = document.querySelector('section[data-id="' + track.id + '"]');
+    if (sec) {
+      sec.querySelector(".mini-count").textContent = tDone + "/" + tTotal + " ";
+      sec.querySelector(".mini-fill").style.width = (tTotal ? (tDone / tTotal * 100) : 0) + "%";
+    }
+  });
+  const pct = total ? Math.round(done / total * 100) : 0;
+  document.getElementById("pct").textContent = pct + "%";
+  document.getElementById("count").textContent = done + " / " + total + " complete";
+  document.getElementById("overallBar").style.width = pct + "%";
+}
+
+document.getElementById("expandBtn").addEventListener("click", () =>
+  document.querySelectorAll("section.track").forEach((s) => s.classList.remove("collapsed")));
+document.getElementById("collapseBtn").addEventListener("click", () =>
+  document.querySelectorAll("section.track").forEach((s) => s.classList.add("collapsed")));
+document.getElementById("resetBtn").addEventListener("click", () => {
+  if (!confirm("Reset all ticks back to the default (pre-completed) state?")) return;
+  state = {};
+  PLAN.forEach((track) => track.items.forEach((it, ii) => { state[track.id + "." + ii] = !!it.done; }));
+  save();
+  render();
+});
+
+render();
+</script>
+</body>
+</html>
