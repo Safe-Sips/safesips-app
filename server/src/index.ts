@@ -43,6 +43,17 @@ if (config.isProduction) {
   app.set("trust proxy", 1);
 }
 
+// 1. CORS MUST BE AT THE VERY TOP TO HANDLE OPTIONS PREFLIGHT CORRECTLY
+app.use(
+  cors({
+    origin: true, // Accepts request origin dynamically (bypasses CORS restrictions)
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })
+);
+
+// 2. Custom Security Headers (After CORS)
 app.use((_req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
@@ -57,11 +68,6 @@ app.use((_req, res, next) => {
   next();
 });
 
-app.use(
-  cors({
-    origin: config.corsOrigins,
-  })
-);
 app.use(express.json({ limit: "32kb" }));
 
 const store = new PresenceStore(config.presenceTtlMs);
@@ -107,7 +113,7 @@ const io = new Server<
   SocketData
 >(httpServer, {
   cors: {
-    origin: config.corsOrigins,
+    origin: "*",
     methods: ["GET", "POST"],
   },
 });
