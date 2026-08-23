@@ -421,15 +421,19 @@ body {
     left: 8px;
     right: 8px;
     width: auto;
-    max-height: none;
-    overflow: visible;
+    height: 25dvh;
+    max-height: 25dvh;
+    overflow-y: auto;
     padding: 10px 12px;
+    box-sizing: border-box;
   }
 
   .panel-mobile {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    height: 100%;
+    box-sizing: border-box;
   }
 
   .panel-mobile-top {

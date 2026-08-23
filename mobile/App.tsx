@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
@@ -18,6 +19,7 @@ import { LatLng, PUBLIC_RADIUS_METERS } from "@safesips/shared";
 import { OSM_RASTER_STYLE_JSON } from "./src/mapStyle";
 import { circlePolygon, toFeatureCollection } from "./src/geo";
 import { geocodeAddress } from "./src/geocode";
+import { useClerk } from "@clerk/expo";
 import { usePresence } from "./src/usePresence";
 
 MapLibreGL.setAccessToken(null);
@@ -31,10 +33,10 @@ type Source = { kind: "gps" } | { kind: "address"; address: string } | null;
  *
  * Layout rules:
  * - Map is always the dominant surface (full screen).
- * - Status chip floats on the map; bottom dock is a thin control strip only.
- * - Idle dock ~15–18% max; sharing dock ~10–12% max (scroll only if keyboard open).
+ * - Status chip floats on the map; bottom dock is fixed at 25% of screen height.
  */
-export default function App() {
+export default function App({ sessionToken }: { sessionToken: string }) {
+  const { signOut } = useClerk();
   const {
     connection,
     others,
@@ -43,8 +45,10 @@ export default function App() {
     notice,
     publish,
     stop,
-  } = usePresence();
+  } = usePresence(sessionToken);
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetHeight = Math.round(windowHeight * 0.25);
   const sharing = selfPublic !== null;
 
   const [exact, setExact] = useState<LatLng | null>(null);
@@ -281,6 +285,13 @@ export default function App() {
           <View style={[styles.pillDot, connectionDot(connection)]} />
           <Text style={styles.pillText}>{connectionLabel}</Text>
         </View>
+        <Pressable
+          style={({ pressed }) => [styles.pill, pressed && { opacity: 0.7 }]}
+          onPress={() => void signOut()}
+          accessibilityLabel="Sign out"
+        >
+          <Text style={styles.pillText}>Sign out</Text>
+        </Pressable>
       </View>
 
       <KeyboardAvoidingView
@@ -292,7 +303,7 @@ export default function App() {
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : undefined}
         pointerEvents="box-none"
       >
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { height: sheetHeight }]}>
           {!sharing ? (
             <>
               <Pressable
@@ -462,6 +473,7 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 10,
     gap: 8,
+    justifyContent: "center",
   },
   pill: {
     flexDirection: "row",
