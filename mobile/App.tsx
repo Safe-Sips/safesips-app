@@ -5,11 +5,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  useWindowDimensions,
   View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
@@ -33,9 +31,8 @@ type Source = { kind: "gps" } | { kind: "address"; address: string } | null;
  *
  * Layout rules:
  * - Map is always the dominant surface (full screen).
- * - Bottom sheet sizes to its content and caps at ~38% of the screen.
- * - Idle: brand, share CTA, address. Sharing: compact status + stop/update.
- * - Safe-area + keyboard aware so controls stay usable on real phones.
+ * - Status chip floats on the map; bottom dock is a thin control strip only.
+ * - Idle dock ~15–18% max; sharing dock ~10–12% max (scroll only if keyboard open).
  */
 export default function App() {
   const {
@@ -48,8 +45,7 @@ export default function App() {
     stop,
   } = usePresence();
   const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
-  const sheetMaxHeight = Math.round(windowHeight * 0.38);
+  const sharing = selfPublic !== null;
 
   const [exact, setExact] = useState<LatLng | null>(null);
   const [address, setAddress] = useState("");
@@ -164,7 +160,6 @@ export default function App() {
     lastSource.current = null;
   }, [stop]);
 
-  const sharing = selfPublic !== null;
   const online = connection === "connected";
   const lastUpdateText = useLastUpdateText(lastUpdateAt);
 
@@ -222,7 +217,7 @@ export default function App() {
         logoEnabled={false}
         attributionEnabled={false}
         compassEnabled
-        compassViewPosition={1}
+        compassViewPosition={0}
         compassViewMargins={{ x: 12, y: Math.max(insets.top + 8, 48) }}
       >
         <MapLibreGL.Camera
@@ -272,67 +267,92 @@ export default function App() {
         )}
       </MapLibreGL.MapView>
 
+      <View
+        style={[
+          styles.mapOverlay,
+          { top: Math.max(insets.top + 8, 12), right: 12 },
+        ]}
+        pointerEvents="box-none"
+      >
+        <View
+          style={[styles.pill, connectionPill(connection)]}
+          accessibilityLabel={`Connection ${connectionLabel}`}
+        >
+          <View style={[styles.pillDot, connectionDot(connection)]} />
+          <Text style={styles.pillText}>{connectionLabel}</Text>
+        </View>
+      </View>
+
       <KeyboardAvoidingView
-        style={styles.sheetWrap}
+        style={[
+          styles.dock,
+          { paddingBottom: Math.max(insets.bottom, 6) },
+        ]}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         keyboardVerticalOffset={Platform.OS === "ios" ? 0 : undefined}
         pointerEvents="box-none"
       >
-        <View
-          style={[
-            styles.sheet,
-            {
-              maxHeight: sheetMaxHeight,
-              paddingBottom: Math.max(insets.bottom, 12),
-              marginBottom: 10,
-            },
-          ]}
-        >
-          <View style={styles.handle} accessibilityElementsHidden />
-
-          <ScrollView
-            bounces={false}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.sheetContent}
-          >
-            <View style={styles.headerRow}>
-              <Text style={styles.brand} accessibilityRole="header">
-                SafeSips
-              </Text>
-              <View
-                style={[styles.pill, connectionPill(connection)]}
-                accessibilityLabel={`Connection ${connectionLabel}`}
-              >
-                <View style={[styles.pillDot, connectionDot(connection)]} />
-                <Text style={styles.pillText}>{connectionLabel}</Text>
-              </View>
-            </View>
-
-            {!sharing ? (
+        <View style={styles.sheet}>
+          {!sharing ? (
+            <>
               <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Share my location"
-                style={({ pressed }) => [
-                  styles.primaryBtn,
-                  pressed && styles.pressed,
-                  (!online || busy) && styles.disabled,
-                ]}
-                disabled={!online || busy}
-                onPress={() => guard(() => void runGps())}
-              >
-                {busy ? (
-                  <ActivityIndicator color="#1a1700" />
-                ) : (
-                  <Text style={styles.primaryBtnText}>Share my location</Text>
-                )}
-              </Pressable>
+                  accessibilityRole="button"
+                  accessibilityLabel="Share my location"
+                  style={({ pressed }) => [
+                    styles.primaryBtn,
+                    pressed && styles.pressed,
+                    (!online || busy) && styles.disabled,
+                  ]}
+                  disabled={!online || busy}
+                  onPress={() => guard(() => void runGps())}
+                >
+                  {busy ? (
+                    <ActivityIndicator color="#1a1700" />
+                  ) : (
+                    <Text style={styles.primaryBtnText}>Share my location</Text>
+                  )}
+                </Pressable>
+
+                <View style={styles.addressRow}>
+                  <TextInput
+                    style={styles.input}
+                    value={address}
+                    onChangeText={setAddress}
+                    placeholder="Or enter an address"
+                    placeholderTextColor="#8b90a5"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    maxLength={500}
+                    returnKeyType="go"
+                    editable={online && !busy}
+                    onSubmitEditing={() =>
+                      guard(() => void runAddress(address))
+                    }
+                    accessibilityLabel="Address"
+                  />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Share from address"
+                    style={({ pressed }) => [
+                      styles.goBtn,
+                      pressed && styles.pressed,
+                      (!online || !address.trim() || busy) && styles.disabled,
+                    ]}
+                    disabled={!online || !address.trim() || busy}
+                    onPress={() => guard(() => void runAddress(address))}
+                  >
+                    <Text style={styles.goBtnText}>Go</Text>
+                  </Pressable>
+                </View>
+              </>
             ) : (
               <View style={styles.sharingRow}>
                 <View style={styles.sharingMeta}>
-                  <Text style={styles.sharingTitle}>Sharing nearby area</Text>
-                  <Text style={styles.sharingSub}>
-                    Updated {lastUpdateText} · {others.length} nearby
+                  <Text style={styles.sharingTitle} numberOfLines={1}>
+                    Sharing · {others.length} nearby
+                  </Text>
+                  <Text style={styles.sharingSub} numberOfLines={1}>
+                    Updated {lastUpdateText}
                   </Text>
                 </View>
                 <Pressable
@@ -346,71 +366,31 @@ export default function App() {
                 >
                   <Text style={styles.stopBtnText}>Stop</Text>
                 </Pressable>
-              </View>
-            )}
-
-            {!sharing ? (
-              <View style={styles.addressRow}>
-                <TextInput
-                  style={styles.input}
-                  value={address}
-                  onChangeText={setAddress}
-                  placeholder="Or enter an address"
-                  placeholderTextColor="#8b90a5"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  maxLength={500}
-                  returnKeyType="go"
-                  editable={online && !busy}
-                  onSubmitEditing={() =>
-                    guard(() => void runAddress(address))
-                  }
-                  accessibilityLabel="Address"
-                />
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Share from address"
+                  accessibilityLabel="Update location"
                   style={({ pressed }) => [
-                    styles.goBtn,
+                    styles.updateBtn,
                     pressed && styles.pressed,
-                    (!online || !address.trim() || busy) && styles.disabled,
+                    (!online || busy) && styles.disabled,
                   ]}
-                  disabled={!online || !address.trim() || busy}
-                  onPress={() => guard(() => void runAddress(address))}
+                  disabled={!online || busy}
+                  onPress={onUpdate}
                 >
-                  <Text style={styles.goBtnText}>Go</Text>
+                  {busy ? (
+                    <ActivityIndicator color="#1b2440" size="small" />
+                  ) : (
+                    <Text style={styles.updateBtnText}>Update</Text>
+                  )}
                 </Pressable>
               </View>
-            ) : (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Update location"
-                style={({ pressed }) => [
-                  styles.secondaryBtn,
-                  pressed && styles.pressed,
-                  (!online || busy) && styles.disabled,
-                ]}
-                disabled={!online || busy}
-                onPress={onUpdate}
-              >
-                {busy ? (
-                  <ActivityIndicator color="#1b2440" />
-                ) : (
-                  <Text style={styles.secondaryBtnText}>Update location</Text>
-                )}
-              </Pressable>
             )}
 
             {(error || notice) && (
-              <Text style={styles.error} accessibilityLiveRegion="polite">
+              <Text style={styles.error} numberOfLines={2} accessibilityLiveRegion="polite">
                 {error || notice}
               </Text>
             )}
-
-            <Text style={styles.note}>
-              Exact GPS stays on this phone. Others only see a ~200 m area.
-            </Text>
-          </ScrollView>
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -454,49 +434,34 @@ const styles = StyleSheet.create({
   map: {
     ...StyleSheet.absoluteFillObject,
   },
-  sheetWrap: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: "flex-end",
+  mapOverlay: {
+    position: "absolute",
+    zIndex: 2,
+  },
+  dock: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 2,
   },
   sheet: {
-    marginHorizontal: 12,
+    marginHorizontal: 10,
+    marginBottom: 6,
     backgroundColor: "rgba(255, 255, 255, 0.96)",
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(24, 33, 60, 0.1)",
     shadowColor: "#0e1330",
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 10,
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
     overflow: "hidden",
-  },
-  handle: {
-    alignSelf: "center",
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "rgba(24, 33, 60, 0.18)",
-    marginTop: 10,
-    marginBottom: 4,
-  },
-  sheetContent: {
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 4,
-    gap: 10,
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 2,
-  },
-  brand: {
-    color: "#0e1330",
-    fontSize: 20,
-    fontWeight: "800",
-    letterSpacing: 0.2,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 10,
+    gap: 8,
   },
   pill: {
     flexDirection: "row",
@@ -518,25 +483,25 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     backgroundColor: "#f2bd00",
-    borderRadius: 14,
-    minHeight: 48,
+    borderRadius: 12,
+    minHeight: 42,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
   },
   primaryBtnText: {
     color: "#1a1700",
     fontWeight: "800",
-    fontSize: 16,
+    fontSize: 15,
   },
   sharingRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 8,
     backgroundColor: "rgba(47, 123, 255, 0.08)",
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
   },
   sharingMeta: {
     flex: 1,
@@ -544,24 +509,36 @@ const styles = StyleSheet.create({
   sharingTitle: {
     color: "#1b2440",
     fontWeight: "800",
-    fontSize: 15,
+    fontSize: 14,
   },
   sharingSub: {
     color: "#5d6580",
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: 11,
+    marginTop: 1,
   },
   stopBtn: {
     backgroundColor: "rgba(224, 38, 60, 0.12)",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    minHeight: 40,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    minHeight: 36,
     justifyContent: "center",
   },
   stopBtnText: {
     color: "#e0263c",
     fontWeight: "800",
-    fontSize: 14,
+    fontSize: 13,
+  },
+  updateBtn: {
+    backgroundColor: "rgba(24, 33, 60, 0.06)",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    minHeight: 36,
+    justifyContent: "center",
+  },
+  updateBtnText: {
+    color: "#1b2440",
+    fontWeight: "700",
+    fontSize: 13,
   },
   addressRow: {
     flexDirection: "row",
@@ -569,44 +546,27 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    minHeight: 44,
+    minHeight: 40,
     backgroundColor: "rgba(24, 33, 60, 0.05)",
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: "rgba(24, 33, 60, 0.1)",
     color: "#1b2440",
-    paddingHorizontal: 12,
-    paddingVertical: Platform.OS === "ios" ? 12 : 8,
-    fontSize: 15,
+    paddingHorizontal: 10,
+    paddingVertical: Platform.OS === "ios" ? 10 : 6,
+    fontSize: 14,
   },
   goBtn: {
     backgroundColor: "#0e1330",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    minHeight: 44,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    minHeight: 40,
     justifyContent: "center",
   },
   goBtnText: {
     color: "#f4f4f7",
     fontWeight: "800",
-    fontSize: 14,
-  },
-  secondaryBtn: {
-    backgroundColor: "rgba(24, 33, 60, 0.06)",
-    borderRadius: 12,
-    minHeight: 42,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  secondaryBtnText: {
-    color: "#1b2440",
-    fontWeight: "700",
-    fontSize: 14,
-  },
-  note: {
-    color: "#5d6580",
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 13,
   },
   error: {
     color: "#e0263c",
