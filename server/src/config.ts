@@ -4,10 +4,20 @@ import dotenv from "dotenv";
 
 dotenv.config();
 if (process.env.NODE_ENV === "production") {
-  dotenv.config({ path: ".env.production", override: true });
+  // Prefer platform env (Render/etc). Never override existing vars with empty
+  // placeholders from the committed .env.production template.
+  for (const candidate of [
+    path.resolve(process.cwd(), ".env.production"),
+    path.resolve(process.cwd(), "server/.env.production"),
+  ]) {
+    dotenv.config({ path: candidate, override: false });
+  }
 } else if (!process.env.CLERK_SECRET_KEY) {
   // Local monorepo: reuse the Clerk secret already stored for the web app.
-  dotenv.config({ path: path.resolve(process.cwd(), "../web/.env.local") });
+  dotenv.config({
+    path: path.resolve(process.cwd(), "../web/.env.local"),
+    override: false,
+  });
 }
 
 function intEnv(name: string, fallback: number): number {
@@ -132,3 +142,11 @@ export const config = {
   // NEVER enable in production.
   allowTestToken: boolEnv("ALLOW_TEST_TOKEN") && !isProduction,
 };
+
+if (isProduction && !config.clerkSecretKey) {
+  // eslint-disable-next-line no-console
+  console.error(
+    "[config] CLERK_SECRET_KEY is not set. Browser Clerk sessions will get 401 on /api/auth/me. " +
+      "Set CLERK_SECRET_KEY in the Render Environment (Dashboard → Environment)."
+  );
+}

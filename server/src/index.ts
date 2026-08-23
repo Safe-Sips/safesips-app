@@ -1,3 +1,18 @@
+const app = express();
+
+// Enable trust proxy so rate limiters read X-Forwarded-For headers from Render
+app.set("trust proxy", 1);
+
+// 1. CORS MUST BE AT THE VERY TOP TO HANDLE OPTIONS PREFLIGHT CORRECTLY
+app.use(
+  cors({
+    origin: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })
+);
+
 import { randomUUID } from "node:crypto";
 import http from "node:http";
 import cors from "cors";
