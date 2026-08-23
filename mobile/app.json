@@ -5,10 +5,11 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "safesips",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "softwareKeyboardLayoutMode": "resize",
     "splash": {
-      "backgroundColor": "#0a0a0f"
+      "backgroundColor": "#e6eaf6"
     },
     "ios": {
       "supportsTablet": true,
@@ -17,6 +18,7 @@
       }
     },
     "android": {
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"

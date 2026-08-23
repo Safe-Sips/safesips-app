@@ -56,9 +56,25 @@ export function usePresence() {
     const socket = createSocket();
     socketRef.current = socket;
 
-    socket.on("connect", () => setConnection("connected"));
+    socket.on("connect", () => {
+      setConnection("connected");
+      setNotice(null);
+      // Re-publish immediately on reconnect so presence returns without
+      // waiting for the next heartbeat (~PRESENCE_HEARTBEAT_MS).
+      if (sharingRef.current && maskedRef.current) {
+        emitMasked(maskedRef.current);
+      }
+    });
     socket.on("disconnect", () => setConnection("disconnected"));
     socket.io.on("reconnect_attempt", () => setConnection("connecting"));
+    socket.on("connect_error", (err) => {
+      setConnection("disconnected");
+      setNotice(
+        err.message === "unauthorized"
+          ? "Server rejected the connection."
+          : "Could not reach the SafeSips server."
+      );
+    });
 
     socket.on("presence:self", ({ publicId }) => {
       selfIdRef.current = publicId;
@@ -92,7 +108,7 @@ export function usePresence() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [stopLocal]);
+  }, [stopLocal, emitMasked]);
 
   useEffect(() => {
     const id = setInterval(() => {

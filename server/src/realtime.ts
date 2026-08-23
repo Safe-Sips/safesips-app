@@ -9,7 +9,10 @@ import type {
 export interface SocketData {
   /** Anonymous, per-connection id broadcast in presence records. */
   publicId: string;
-  /** Authenticated owner — NEVER placed into any presence:* payload. */
+  /**
+   * Authenticated owner, or `guest:<socketId>` for mobile/anonymous presence.
+   * NEVER placed into any presence:* payload.
+   */
   userId: string;
   lastUpdateAt: number;
   /** Epoch ms when this socket started sharing; 0 if not sharing. */
