@@ -7,6 +7,7 @@ interface ImportMetaEnv {
   readonly VITE_API_URL?: string;
   /** Optional Cloudflare Turnstile site key (enables the captcha widget). */
   readonly VITE_TURNSTILE_SITEKEY?: string;
+  readonly VITE_CLERK_PUBLISHABLE_KEY: string;
 }
 
 interface ImportMeta {

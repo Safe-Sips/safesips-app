@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import ClerkAuthControls from "../auth/ClerkAuthControls";
 import { useAuth } from "../auth/AuthContext";
 
 const LINKS = [
@@ -49,6 +50,7 @@ export default function NavBar() {
         <button className="btn btn-ghost btn-sm" onClick={() => logout()}>
           Log out
         </button>
+        <ClerkAuthControls />
       </div>
     </header>
   );

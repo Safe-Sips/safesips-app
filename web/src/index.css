@@ -637,6 +637,16 @@ body {
 
 /* ============================== Auth pages ============================== */
 
+.auth-layout {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+.clerk-auth-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .auth-page {
   min-height: 100dvh;
   display: flex;
@@ -644,6 +654,10 @@ body {
   justify-content: center;
   padding: 24px;
   overflow-y: auto;
+}
+.auth-layout > .auth-page {
+  min-height: 0;
+  flex: 1;
 }
 .auth-card {
   width: min(420px, 100%);

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { ApiError } from "../api";
 import { useAuth } from "../auth/AuthContext";
+import PublicNav from "../components/PublicNav";
 
 export default function LoginPage() {
   const { user, login } = useAuth();
@@ -28,6 +29,8 @@ export default function LoginPage() {
   };
 
   return (
+    <div className="auth-layout">
+      <PublicNav />
     <div className="auth-page">
       <form className="auth-card" onSubmit={onSubmit}>
         <div className="auth-brand">
@@ -73,6 +76,7 @@ export default function LoginPage() {
           <Link to="/help">spiking first-aid info</Link>.
         </p>
       </form>
+    </div>
     </div>
   );
 }

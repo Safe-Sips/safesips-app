@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate } from "react-router-dom";
 import { ApiError } from "../api";
 import { useAuth } from "../auth/AuthContext";
 import CaptchaWidget from "../components/CaptchaWidget";
+import PublicNav from "../components/PublicNav";
 
 export default function RegisterPage() {
   const { user, register } = useAuth();
@@ -38,6 +39,8 @@ export default function RegisterPage() {
   };
 
   return (
+    <div className="auth-layout">
+      <PublicNav />
     <div className="auth-page">
       <form className="auth-card" onSubmit={onSubmit}>
         <div className="auth-brand">
@@ -95,6 +98,7 @@ export default function RegisterPage() {
           Already have an account? <Link to="/login">Log in</Link>
         </p>
       </form>
+    </div>
     </div>
   );
 }
