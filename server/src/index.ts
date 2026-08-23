@@ -75,11 +75,14 @@ const activePublicIdByUserId = new Map<string, string>();
 
 app.get("/health", (_req, res) => {
   try {
-    if (config.isProduction) {
-      res.json({ status: "ok" });
-      return;
+    const payload: Record<string, unknown> = {
+      status: "ok",
+      clerkConfigured: Boolean(config.clerkSecretKey),
+    };
+    if (!config.isProduction) {
+      payload.activeUsers = store.active().length;
     }
-    res.json({ status: "ok", activeUsers: store.active().length });
+    res.json(payload);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error("Health check failed:", err);
@@ -120,16 +123,17 @@ const io = new Server<
 });
 setIo(io);
 
-// Authenticated handshake: a Clerk (or legacy) JWT is required to connect.
+// Presence sockets: Clerk/legacy JWT when present; otherwise guest (mobile).
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token as string | undefined;
   if (!token) {
-    next(new Error("unauthorized"));
+    socket.data.userId = `guest:${socket.id}`;
+    next();
     return;
   }
   void resolveAuthFromToken(token)
     .then((resolved) => {
-      if (!resolved) {
+      if (!resolved.ok) {
         next(new Error("unauthorized"));
         return;
       }

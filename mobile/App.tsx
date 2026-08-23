@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Location from "expo-location";
 import MapLibreGL from "@maplibre/maplibre-react-native";
 import { LatLng, PUBLIC_RADIUS_METERS } from "@safesips/shared";
@@ -19,13 +22,21 @@ import { circlePolygon, toFeatureCollection } from "./src/geo";
 import { geocodeAddress } from "./src/geocode";
 import { usePresence } from "./src/usePresence";
 
-// Raster OSM tiles need no token.
 MapLibreGL.setAccessToken(null);
 
-const DEFAULT_CENTER: [number, number] = [26.1025, 44.4268]; // [lng, lat] Bucharest
+const DEFAULT_CENTER: [number, number] = [26.1025, 44.4268];
 
 type Source = { kind: "gps" } | { kind: "address"; address: string } | null;
 
+/**
+ * Mobile map + share controls.
+ *
+ * Layout rules:
+ * - Map is always the dominant surface (full screen).
+ * - Bottom sheet sizes to its content and caps at ~38% of the screen.
+ * - Idle: brand, share CTA, address. Sharing: compact status + stop/update.
+ * - Safe-area + keyboard aware so controls stay usable on real phones.
+ */
 export default function App() {
   const {
     connection,
@@ -36,8 +47,10 @@ export default function App() {
     publish,
     stop,
   } = usePresence();
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetMaxHeight = Math.round(windowHeight * 0.38);
 
-  // Exact location is kept ONLY in local state; it is never emitted.
   const [exact, setExact] = useState<LatLng | null>(null);
   const [address, setAddress] = useState("");
   const [busy, setBusy] = useState(false);
@@ -47,16 +60,14 @@ export default function App() {
   const cameraRef = useRef<any>(null);
 
   useEffect(() => {
-    if (exact) {
-      cameraRef.current?.setCamera({
-        centerCoordinate: [exact.lng, exact.lat],
-        zoomLevel: 15,
-        animationDuration: 600,
-      });
-    }
+    if (!exact) return;
+    cameraRef.current?.setCamera({
+      centerCoordinate: [exact.lng, exact.lat],
+      zoomLevel: 15,
+      animationDuration: 600,
+    });
   }, [exact]);
 
-  // Pulse the circle outline (radar-like blink).
   const [pulseOn, setPulseOn] = useState(true);
   useEffect(() => {
     const id = setInterval(() => setPulseOn((p) => !p), 700);
@@ -77,16 +88,16 @@ export default function App() {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        setError("Location permission denied. Try entering an address.");
+        setError("Location permission denied. Try an address instead.");
         return;
       }
       const pos = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
+        accuracy: Location.Accuracy.Balanced,
       });
       lastSource.current = { kind: "gps" };
       setAndPublish({ lat: pos.coords.latitude, lng: pos.coords.longitude });
     } catch {
-      setError("Could not get your location. Try entering an address.");
+      setError("Could not get GPS. Try entering an address.");
     } finally {
       setBusy(false);
     }
@@ -101,13 +112,13 @@ export default function App() {
       try {
         const result = await geocodeAddress(query);
         if (!result) {
-          setError("No match found for that address.");
+          setError("No match for that address.");
           return;
         }
         lastSource.current = { kind: "address", address: query };
         setAndPublish({ lat: result.lat, lng: result.lng });
       } catch {
-        setError("Address lookup failed. Please try again.");
+        setError("Address lookup failed. Try again.");
       } finally {
         setBusy(false);
       }
@@ -123,10 +134,9 @@ export default function App() {
       }
       Alert.alert(
         "Before you share",
-        "Others will see an approximate 200 m area, not your exact position. " +
-          "Think twice before sharing from a sensitive place such as home, " +
-          "school, work, a shelter, or a medical facility. " +
-          "SafeSips is not an emergency service — call 911 in an emergency.",
+        "Others see an approximate 200 m area — not your exact spot. " +
+          "Avoid sharing from home, school, work, shelters, or medical sites. " +
+          "SafeSips is not an emergency service — call 112 / 911 if needed.",
         [
           { text: "Cancel", style: "cancel" },
           {
@@ -144,8 +154,8 @@ export default function App() {
 
   const onUpdate = useCallback(() => {
     const source = lastSource.current;
-    if (source?.kind === "gps") runGps();
-    else if (source?.kind === "address") runAddress(source.address);
+    if (source?.kind === "gps") void runGps();
+    else if (source?.kind === "address") void runAddress(source.address);
   }, [runGps, runAddress]);
 
   const onStop = useCallback(() => {
@@ -155,21 +165,21 @@ export default function App() {
   }, [stop]);
 
   const sharing = selfPublic !== null;
+  const online = connection === "connected";
+  const lastUpdateText = useLastUpdateText(lastUpdateAt);
 
   const circles = useMemo(() => {
     const features = others.map((r) =>
       circlePolygon({ lat: r.lat, lng: r.lng }, PUBLIC_RADIUS_METERS, r.publicId)
     );
     if (selfPublic) {
-      features.push(
-        circlePolygon(selfPublic, PUBLIC_RADIUS_METERS, "self")
-      );
+      features.push(circlePolygon(selfPublic, PUBLIC_RADIUS_METERS, "self"));
     }
     return toFeatureCollection(features);
   }, [others, selfPublic]);
 
-  const othersDots = useMemo(() => {
-    return {
+  const othersDots = useMemo(
+    () => ({
       type: "FeatureCollection" as const,
       features: others.map((r) => ({
         type: "Feature" as const,
@@ -179,62 +189,74 @@ export default function App() {
           coordinates: [r.lng, r.lat],
         },
       })),
-    };
-  }, [others]);
+    }),
+    [others]
+  );
 
   const selfDot = useMemo(() => {
     if (!exact) return null;
     return {
       type: "Feature" as const,
       properties: {},
-      geometry: { type: "Point" as const, coordinates: [exact.lng, exact.lat] },
+      geometry: {
+        type: "Point" as const,
+        coordinates: [exact.lng, exact.lat],
+      },
     };
   }, [exact]);
 
-  const lastUpdateText = useLastUpdateText(lastUpdateAt);
-  const { height: windowHeight } = useWindowDimensions();
-  const panelHeight = Math.round(windowHeight * 0.1);
+  const connectionLabel =
+    connection === "connected"
+      ? "Online"
+      : connection === "connecting"
+        ? "Connecting…"
+        : "Offline";
 
   return (
     <View style={styles.root}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
 
-      <MapLibreGL.MapView style={styles.map} mapStyle={OSM_RASTER_STYLE_JSON}>
+      <MapLibreGL.MapView
+        style={styles.map}
+        mapStyle={OSM_RASTER_STYLE_JSON}
+        logoEnabled={false}
+        attributionEnabled={false}
+        compassEnabled
+        compassViewPosition={1}
+        compassViewMargins={{ x: 12, y: Math.max(insets.top + 8, 48) }}
+      >
         <MapLibreGL.Camera
           ref={cameraRef}
           defaultSettings={{ centerCoordinate: DEFAULT_CENTER, zoomLevel: 12 }}
         />
 
-        {/* All public privacy circles (self + others). */}
         <MapLibreGL.ShapeSource id="privacy" shape={circles as any}>
           <MapLibreGL.FillLayer
             id="privacy-fill"
-            style={{ fillColor: "#ffd400", fillOpacity: 0.12 }}
+            style={{ fillColor: "#f2bd00", fillOpacity: 0.14 }}
           />
           <MapLibreGL.LineLayer
             id="privacy-line"
             style={{
-              lineColor: "#ffd400",
-              lineWidth: pulseOn ? 3.5 : 2,
-              lineOpacity: pulseOn ? 0.95 : 0.4,
+              lineColor: "#f2bd00",
+              lineWidth: pulseOn ? 3 : 2,
+              lineOpacity: pulseOn ? 0.95 : 0.45,
             }}
           />
         </MapLibreGL.ShapeSource>
 
-        {/* Other users' public (masked) location: light gray dots. */}
         <MapLibreGL.ShapeSource id="othersdots" shape={othersDots as any}>
           <MapLibreGL.CircleLayer
             id="other-dots"
             style={{
               circleColor: "#c5c9d4",
-              circleRadius: 7,
+              circleRadius: 6,
               circleStrokeColor: "#ffffff",
               circleStrokeWidth: 2,
             }}
           />
         </MapLibreGL.ShapeSource>
 
-        {/* This user's exact location: blue dot, only on this device. */}
         {selfDot && (
           <MapLibreGL.ShapeSource id="selfdot" shape={selfDot as any}>
             <MapLibreGL.CircleLayer
@@ -250,102 +272,147 @@ export default function App() {
         )}
       </MapLibreGL.MapView>
 
-      <View style={[styles.panel, { height: panelHeight }]}>
-        <ScrollView
-          style={styles.panelScroll}
-          contentContainerStyle={styles.panelScrollContent}
-          keyboardShouldPersistTaps="handled"
-          nestedScrollEnabled
-          showsVerticalScrollIndicator
-          bounces={false}
+      <KeyboardAvoidingView
+        style={styles.sheetWrap}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : undefined}
+        pointerEvents="box-none"
+      >
+        <View
+          style={[
+            styles.sheet,
+            {
+              maxHeight: sheetMaxHeight,
+              paddingBottom: Math.max(insets.bottom, 12),
+              marginBottom: 10,
+            },
+          ]}
         >
-          <View style={styles.headerRow}>
-            <Text style={styles.brand}>SafeSips</Text>
-            <View style={[styles.pill, pillStyle(connection)]}>
-              <Text style={styles.pillText}>
-                {connection === "connected"
-                  ? "Online"
-                  : connection === "connecting"
-                    ? "Connecting"
-                    : "Offline"}
-              </Text>
-            </View>
-          </View>
+          <View style={styles.handle} accessibilityElementsHidden />
 
-          <Pressable
-            style={({ pressed }) => [
-              styles.primaryBtn,
-              pressed && styles.pressed,
-              connection !== "connected" && styles.disabled,
-            ]}
-            disabled={connection !== "connected" || busy}
-            onPress={() => guard(runGps)}
+          <ScrollView
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.sheetContent}
           >
-            <Text style={styles.primaryBtnText}>Share My Location</Text>
-          </Pressable>
+            <View style={styles.headerRow}>
+              <Text style={styles.brand} accessibilityRole="header">
+                SafeSips
+              </Text>
+              <View
+                style={[styles.pill, connectionPill(connection)]}
+                accessibilityLabel={`Connection ${connectionLabel}`}
+              >
+                <View style={[styles.pillDot, connectionDot(connection)]} />
+                <Text style={styles.pillText}>{connectionLabel}</Text>
+              </View>
+            </View>
 
-          <View style={styles.addressRow}>
-            <TextInput
-              style={styles.input}
-              value={address}
-              onChangeText={setAddress}
-              placeholder="Enter your address"
-              placeholderTextColor="#9aa0ad"
-              autoCapitalize="none"
-              maxLength={500}
-              returnKeyType="go"
-              onSubmitEditing={() => guard(() => runAddress(address))}
-            />
-            <Pressable
-              style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
-              disabled={connection !== "connected" || !address.trim() || busy}
-              onPress={() => guard(() => runAddress(address))}
-            >
-              <Text style={styles.secondaryBtnText}>Go</Text>
-            </Pressable>
-          </View>
-
-          {busy && <ActivityIndicator color="#ffd400" style={{ marginTop: 10 }} />}
-          {error && <Text style={styles.error}>{error}</Text>}
-          {notice && <Text style={styles.error}>{notice}</Text>}
-
-          <View style={styles.statusBox}>
-            <Row label="Sharing status" value={sharing ? "Sharing" : "Not sharing"} />
-            <Row label="Last update" value={lastUpdateText} />
-            <Row label="Others nearby" value={String(others.length)} />
-            {sharing && (
-              <View style={styles.actionRow}>
+            {!sharing ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Share my location"
+                style={({ pressed }) => [
+                  styles.primaryBtn,
+                  pressed && styles.pressed,
+                  (!online || busy) && styles.disabled,
+                ]}
+                disabled={!online || busy}
+                onPress={() => guard(() => void runGps())}
+              >
+                {busy ? (
+                  <ActivityIndicator color="#1a1700" />
+                ) : (
+                  <Text style={styles.primaryBtnText}>Share my location</Text>
+                )}
+              </Pressable>
+            ) : (
+              <View style={styles.sharingRow}>
+                <View style={styles.sharingMeta}>
+                  <Text style={styles.sharingTitle}>Sharing nearby area</Text>
+                  <Text style={styles.sharingSub}>
+                    Updated {lastUpdateText} · {others.length} nearby
+                  </Text>
+                </View>
                 <Pressable
-                  style={({ pressed }) => [styles.ghostBtn, pressed && styles.pressed]}
-                  onPress={onUpdate}
-                >
-                  <Text style={styles.ghostBtnText}>Update</Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [styles.dangerBtn, pressed && styles.pressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Stop sharing"
+                  style={({ pressed }) => [
+                    styles.stopBtn,
+                    pressed && styles.pressed,
+                  ]}
                   onPress={onStop}
                 >
-                  <Text style={styles.dangerBtnText}>Stop sharing</Text>
+                  <Text style={styles.stopBtnText}>Stop</Text>
                 </Pressable>
               </View>
             )}
-          </View>
 
-          <Text style={styles.note}>
-            Your precise location stays private. Others see only an approximate
-            200 m area. Not an emergency service — call 911 in an emergency.
-          </Text>
-        </ScrollView>
-      </View>
-    </View>
-  );
-}
+            {!sharing ? (
+              <View style={styles.addressRow}>
+                <TextInput
+                  style={styles.input}
+                  value={address}
+                  onChangeText={setAddress}
+                  placeholder="Or enter an address"
+                  placeholderTextColor="#8b90a5"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  maxLength={500}
+                  returnKeyType="go"
+                  editable={online && !busy}
+                  onSubmitEditing={() =>
+                    guard(() => void runAddress(address))
+                  }
+                  accessibilityLabel="Address"
+                />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Share from address"
+                  style={({ pressed }) => [
+                    styles.goBtn,
+                    pressed && styles.pressed,
+                    (!online || !address.trim() || busy) && styles.disabled,
+                  ]}
+                  disabled={!online || !address.trim() || busy}
+                  onPress={() => guard(() => void runAddress(address))}
+                >
+                  <Text style={styles.goBtnText}>Go</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Update location"
+                style={({ pressed }) => [
+                  styles.secondaryBtn,
+                  pressed && styles.pressed,
+                  (!online || busy) && styles.disabled,
+                ]}
+                disabled={!online || busy}
+                onPress={onUpdate}
+              >
+                {busy ? (
+                  <ActivityIndicator color="#1b2440" />
+                ) : (
+                  <Text style={styles.secondaryBtnText}>Update location</Text>
+                )}
+              </Pressable>
+            )}
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue}>{value}</Text>
+            {(error || notice) && (
+              <Text style={styles.error} accessibilityLiveRegion="polite">
+                {error || notice}
+              </Text>
+            )}
+
+            <Text style={styles.note}>
+              Exact GPS stays on this phone. Others only see a ~200 m area.
+            </Text>
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -360,104 +427,192 @@ function useLastUpdateText(timestamp: number | null): string {
   if (timestamp == null) return "—";
   const s = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
   if (s < 60) return `${s}s ago`;
-  return `${Math.floor(s / 60)}m ${s % 60}s ago`;
+  return `${Math.floor(s / 60)}m ago`;
 }
 
-function pillStyle(connection: string) {
-  if (connection === "connected") return { backgroundColor: "rgba(46,213,115,0.16)" };
-  if (connection === "connecting") return { backgroundColor: "rgba(255,212,0,0.16)" };
-  return { backgroundColor: "rgba(255,77,94,0.16)" };
+function connectionPill(connection: string) {
+  if (connection === "connected") {
+    return { backgroundColor: "rgba(31, 157, 84, 0.14)" };
+  }
+  if (connection === "connecting") {
+    return { backgroundColor: "rgba(242, 189, 0, 0.18)" };
+  }
+  return { backgroundColor: "rgba(224, 38, 60, 0.14)" };
+}
+
+function connectionDot(connection: string) {
+  if (connection === "connected") return { backgroundColor: "#1f9d54" };
+  if (connection === "connecting") return { backgroundColor: "#f2bd00" };
+  return { backgroundColor: "#e0263c" };
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#0a0a0f" },
-  map: { flex: 1 },
-  panel: {
-    position: "absolute",
-    left: 12,
-    right: 12,
-    bottom: 24,
-    backgroundColor: "rgba(18,18,26,0.95)",
-    borderRadius: 16,
+  root: {
+    flex: 1,
+    backgroundColor: "#e6eaf6",
+  },
+  map: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  sheetWrap: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    marginHorizontal: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.96)",
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(24, 33, 60, 0.1)",
+    shadowColor: "#0e1330",
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
     overflow: "hidden",
   },
-  panelScroll: {
-    flex: 1,
+  handle: {
+    alignSelf: "center",
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(24, 33, 60, 0.18)",
+    marginTop: 10,
+    marginBottom: 4,
   },
-  panelScrollContent: {
-    padding: 16,
+  sheetContent: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 4,
+    gap: 10,
   },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 12,
+    marginBottom: 2,
   },
-  brand: { color: "#f4f4f7", fontSize: 20, fontWeight: "800", letterSpacing: 0.5 },
-  pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
-  pillText: { color: "#f4f4f7", fontSize: 11, fontWeight: "700" },
-  primaryBtn: {
-    backgroundColor: "#ffd400",
-    borderRadius: 12,
-    paddingVertical: 14,
+  brand: {
+    color: "#0e1330",
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: 0.2,
+  },
+  pill: {
+    flexDirection: "row",
     alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
   },
-  primaryBtnText: { color: "#1a1700", fontWeight: "800", fontSize: 15 },
-  addressRow: { flexDirection: "row", gap: 8, marginTop: 12 },
+  pillDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  pillText: {
+    color: "#1b2440",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  primaryBtn: {
+    backgroundColor: "#f2bd00",
+    borderRadius: 14,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  primaryBtnText: {
+    color: "#1a1700",
+    fontWeight: "800",
+    fontSize: 16,
+  },
+  sharingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "rgba(47, 123, 255, 0.08)",
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  sharingMeta: {
+    flex: 1,
+  },
+  sharingTitle: {
+    color: "#1b2440",
+    fontWeight: "800",
+    fontSize: 15,
+  },
+  sharingSub: {
+    color: "#5d6580",
+    fontSize: 12,
+    marginTop: 2,
+  },
+  stopBtn: {
+    backgroundColor: "rgba(224, 38, 60, 0.12)",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    minHeight: 40,
+    justifyContent: "center",
+  },
+  stopBtnText: {
+    color: "#e0263c",
+    fontWeight: "800",
+    fontSize: 14,
+  },
+  addressRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
   input: {
     flex: 1,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    minHeight: 44,
+    backgroundColor: "rgba(24, 33, 60, 0.05)",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    color: "#f4f4f7",
+    borderColor: "rgba(24, 33, 60, 0.1)",
+    color: "#1b2440",
     paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingVertical: Platform.OS === "ios" ? 12 : 8,
+    fontSize: 15,
+  },
+  goBtn: {
+    backgroundColor: "#0e1330",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    minHeight: 44,
+    justifyContent: "center",
+  },
+  goBtnText: {
+    color: "#f4f4f7",
+    fontWeight: "800",
     fontSize: 14,
   },
   secondaryBtn: {
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(24, 33, 60, 0.06)",
     borderRadius: 12,
-    paddingHorizontal: 18,
+    minHeight: 42,
+    alignItems: "center",
     justifyContent: "center",
   },
-  secondaryBtnText: { color: "#f4f4f7", fontWeight: "700" },
-  statusBox: {
-    marginTop: 14,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+  secondaryBtnText: {
+    color: "#1b2440",
+    fontWeight: "700",
+    fontSize: 14,
   },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 4,
+  note: {
+    color: "#5d6580",
+    fontSize: 12,
+    lineHeight: 17,
   },
-  rowLabel: { color: "#9aa0ad", fontSize: 13 },
-  rowValue: { color: "#f4f4f7", fontSize: 13, fontWeight: "700" },
-  actionRow: { flexDirection: "row", gap: 8, marginTop: 10 },
-  ghostBtn: {
-    flex: 1,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderRadius: 10,
-    paddingVertical: 11,
-    alignItems: "center",
+  error: {
+    color: "#e0263c",
+    fontSize: 13,
+    fontWeight: "600",
   },
-  ghostBtnText: { color: "#f4f4f7", fontWeight: "700" },
-  dangerBtn: {
-    flex: 1,
-    backgroundColor: "rgba(255,77,94,0.16)",
-    borderRadius: 10,
-    paddingVertical: 11,
-    alignItems: "center",
-  },
-  dangerBtnText: { color: "#ff4d5e", fontWeight: "700" },
-  note: { color: "#9aa0ad", fontSize: 12, lineHeight: 18, marginTop: 12 },
-  error: { color: "#ff4d5e", fontSize: 13, marginTop: 10 },
-  pressed: { opacity: 0.7 },
-  disabled: { opacity: 0.5 },
+  pressed: { opacity: 0.75 },
+  disabled: { opacity: 0.45 },
 });
