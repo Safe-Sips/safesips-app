@@ -21,8 +21,7 @@ import {
   untrackUserSocket,
   type SocketData,
 } from "./realtime.js";
-import { verifyToken } from "./auth/tokens.js";
-import { findUserById } from "./repos/users.js";
+import { resolveAuthFromToken } from "./auth/clerk.js";
 import { purgeOldAttempts } from "./auth/throttle.js";
 import { startCheckinScheduler } from "./checkinScheduler.js";
 import { authRouter } from "./routes/auth.js";
@@ -122,30 +121,24 @@ const io = new Server<
 });
 setIo(io);
 
-// Authenticated handshake: a valid JWT is required to connect at all.
+// Authenticated handshake: a Clerk (or legacy) JWT is required to connect.
 io.use((socket, next) => {
-  try {
-    const token = socket.handshake.auth?.token as string | undefined;
-    if (!token) {
-      next(new Error("unauthorized"));
-      return;
-    }
-    const verified = verifyToken(token);
-    if (!verified) {
-      next(new Error("unauthorized"));
-      return;
-    }
-    const user = findUserById(verified.userId);
-    if (!user || user.status !== "active") {
-      next(new Error("unauthorized"));
-      return;
-    }
-    // Server-side only. NEVER copied into a presence:* payload.
-    socket.data.userId = verified.userId;
-    next();
-  } catch {
+  const token = socket.handshake.auth?.token as string | undefined;
+  if (!token) {
     next(new Error("unauthorized"));
+    return;
   }
+  void resolveAuthFromToken(token)
+    .then((resolved) => {
+      if (!resolved) {
+        next(new Error("unauthorized"));
+        return;
+      }
+      // Server-side only. NEVER copied into a presence:* payload.
+      socket.data.userId = resolved.userId;
+      next();
+    })
+    .catch(() => next(new Error("unauthorized")));
 });
 
 const connectionsByIp = new Map<string, number>();

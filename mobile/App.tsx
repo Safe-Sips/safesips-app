@@ -3,9 +3,11 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
@@ -166,6 +168,20 @@ export default function App() {
     return toFeatureCollection(features);
   }, [others, selfPublic]);
 
+  const othersDots = useMemo(() => {
+    return {
+      type: "FeatureCollection" as const,
+      features: others.map((r) => ({
+        type: "Feature" as const,
+        properties: { id: r.publicId },
+        geometry: {
+          type: "Point" as const,
+          coordinates: [r.lng, r.lat],
+        },
+      })),
+    };
+  }, [others]);
+
   const selfDot = useMemo(() => {
     if (!exact) return null;
     return {
@@ -176,6 +192,8 @@ export default function App() {
   }, [exact]);
 
   const lastUpdateText = useLastUpdateText(lastUpdateAt);
+  const { height: windowHeight } = useWindowDimensions();
+  const panelHeight = Math.round(windowHeight * 0.1);
 
   return (
     <View style={styles.root}>
@@ -203,6 +221,19 @@ export default function App() {
           />
         </MapLibreGL.ShapeSource>
 
+        {/* Other users' public (masked) location: light gray dots. */}
+        <MapLibreGL.ShapeSource id="othersdots" shape={othersDots as any}>
+          <MapLibreGL.CircleLayer
+            id="other-dots"
+            style={{
+              circleColor: "#c5c9d4",
+              circleRadius: 7,
+              circleStrokeColor: "#ffffff",
+              circleStrokeWidth: 2,
+            }}
+          />
+        </MapLibreGL.ShapeSource>
+
         {/* This user's exact location: blue dot, only on this device. */}
         {selfDot && (
           <MapLibreGL.ShapeSource id="selfdot" shape={selfDot as any}>
@@ -219,83 +250,92 @@ export default function App() {
         )}
       </MapLibreGL.MapView>
 
-      <View style={styles.panel}>
-        <View style={styles.headerRow}>
-          <Text style={styles.brand}>SafeSips</Text>
-          <View style={[styles.pill, pillStyle(connection)]}>
-            <Text style={styles.pillText}>
-              {connection === "connected"
-                ? "Online"
-                : connection === "connecting"
-                  ? "Connecting"
-                  : "Offline"}
-            </Text>
-          </View>
-        </View>
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.primaryBtn,
-            pressed && styles.pressed,
-            connection !== "connected" && styles.disabled,
-          ]}
-          disabled={connection !== "connected" || busy}
-          onPress={() => guard(runGps)}
+      <View style={[styles.panel, { height: panelHeight }]}>
+        <ScrollView
+          style={styles.panelScroll}
+          contentContainerStyle={styles.panelScrollContent}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          showsVerticalScrollIndicator
+          bounces={false}
         >
-          <Text style={styles.primaryBtnText}>Share My Location</Text>
-        </Pressable>
-
-        <View style={styles.addressRow}>
-          <TextInput
-            style={styles.input}
-            value={address}
-            onChangeText={setAddress}
-            placeholder="Enter your address"
-            placeholderTextColor="#9aa0ad"
-            autoCapitalize="none"
-            maxLength={500}
-            returnKeyType="go"
-            onSubmitEditing={() => guard(() => runAddress(address))}
-          />
-          <Pressable
-            style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
-            disabled={connection !== "connected" || !address.trim() || busy}
-            onPress={() => guard(() => runAddress(address))}
-          >
-            <Text style={styles.secondaryBtnText}>Go</Text>
-          </Pressable>
-        </View>
-
-        {busy && <ActivityIndicator color="#ffd400" style={{ marginTop: 10 }} />}
-        {error && <Text style={styles.error}>{error}</Text>}
-        {notice && <Text style={styles.error}>{notice}</Text>}
-
-        <View style={styles.statusBox}>
-          <Row label="Sharing status" value={sharing ? "Sharing" : "Not sharing"} />
-          <Row label="Last update" value={lastUpdateText} />
-          <Row label="Others nearby" value={String(others.length)} />
-          {sharing && (
-            <View style={styles.actionRow}>
-              <Pressable
-                style={({ pressed }) => [styles.ghostBtn, pressed && styles.pressed]}
-                onPress={onUpdate}
-              >
-                <Text style={styles.ghostBtnText}>Update</Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.dangerBtn, pressed && styles.pressed]}
-                onPress={onStop}
-              >
-                <Text style={styles.dangerBtnText}>Stop sharing</Text>
-              </Pressable>
+          <View style={styles.headerRow}>
+            <Text style={styles.brand}>SafeSips</Text>
+            <View style={[styles.pill, pillStyle(connection)]}>
+              <Text style={styles.pillText}>
+                {connection === "connected"
+                  ? "Online"
+                  : connection === "connecting"
+                    ? "Connecting"
+                    : "Offline"}
+              </Text>
             </View>
-          )}
-        </View>
+          </View>
 
-        <Text style={styles.note}>
-          Your precise location stays private. Others see only an approximate
-          200 m area. Not an emergency service — call 911 in an emergency.
-        </Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.primaryBtn,
+              pressed && styles.pressed,
+              connection !== "connected" && styles.disabled,
+            ]}
+            disabled={connection !== "connected" || busy}
+            onPress={() => guard(runGps)}
+          >
+            <Text style={styles.primaryBtnText}>Share My Location</Text>
+          </Pressable>
+
+          <View style={styles.addressRow}>
+            <TextInput
+              style={styles.input}
+              value={address}
+              onChangeText={setAddress}
+              placeholder="Enter your address"
+              placeholderTextColor="#9aa0ad"
+              autoCapitalize="none"
+              maxLength={500}
+              returnKeyType="go"
+              onSubmitEditing={() => guard(() => runAddress(address))}
+            />
+            <Pressable
+              style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
+              disabled={connection !== "connected" || !address.trim() || busy}
+              onPress={() => guard(() => runAddress(address))}
+            >
+              <Text style={styles.secondaryBtnText}>Go</Text>
+            </Pressable>
+          </View>
+
+          {busy && <ActivityIndicator color="#ffd400" style={{ marginTop: 10 }} />}
+          {error && <Text style={styles.error}>{error}</Text>}
+          {notice && <Text style={styles.error}>{notice}</Text>}
+
+          <View style={styles.statusBox}>
+            <Row label="Sharing status" value={sharing ? "Sharing" : "Not sharing"} />
+            <Row label="Last update" value={lastUpdateText} />
+            <Row label="Others nearby" value={String(others.length)} />
+            {sharing && (
+              <View style={styles.actionRow}>
+                <Pressable
+                  style={({ pressed }) => [styles.ghostBtn, pressed && styles.pressed]}
+                  onPress={onUpdate}
+                >
+                  <Text style={styles.ghostBtnText}>Update</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.dangerBtn, pressed && styles.pressed]}
+                  onPress={onStop}
+                >
+                  <Text style={styles.dangerBtnText}>Stop sharing</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+
+          <Text style={styles.note}>
+            Your precise location stays private. Others see only an approximate
+            200 m area. Not an emergency service — call 911 in an emergency.
+          </Text>
+        </ScrollView>
       </View>
     </View>
   );
@@ -341,6 +381,12 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden",
+  },
+  panelScroll: {
+    flex: 1,
+  },
+  panelScrollContent: {
     padding: 16,
   },
   headerRow: {

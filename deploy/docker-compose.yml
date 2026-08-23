@@ -7,8 +7,8 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile.server
     env_file:
-      # IMPORTANT: set a real JWT_SECRET in server/.env.production before deploy
-      # (openssl rand -hex 32). The server refuses to boot without it.
+      # IMPORTANT: set JWT_SECRET and CLERK_SECRET_KEY in server/.env.production
+      # before deploy. Browser sign-in is Clerk-only.
       - ../server/.env.production
     environment:
       NODE_ENV: production

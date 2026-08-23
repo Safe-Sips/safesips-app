@@ -667,6 +667,13 @@ body {
   padding: 26px;
   box-shadow: 0 24px 64px rgba(24, 33, 60, 0.16);
 }
+.clerk-card {
+  width: min(480px, 100%);
+}
+.clerk-card .cl-rootBox {
+  width: 100%;
+  margin: 0 auto;
+}
 .auth-brand {
   display: flex;
   align-items: center;

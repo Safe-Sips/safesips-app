@@ -138,7 +138,7 @@ export default function Controls({
           <span className="legend-swatch swatch-yellow" /> Public 200&nbsp;m area
         </span>
         <span className="legend-item">
-          <span className="legend-swatch swatch-yellow-dim" /> Other users sharing
+          <span className="legend-swatch swatch-gray" /> Other people sharing
         </span>
       </div>
     </aside>

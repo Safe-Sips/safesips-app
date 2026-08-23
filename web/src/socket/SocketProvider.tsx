@@ -1,3 +1,4 @@
+import { useAuth as useClerkAuth } from "@clerk/react";
 import {
   createContext,
   useContext,
@@ -22,21 +23,21 @@ const SocketContext = createContext<SocketContextValue>({
 });
 
 /**
- * Owns the single authenticated Socket.io connection for the app. Mounted
- * inside the authenticated shell, so a token always exists. Presence, reports,
- * and check-in consumers share this one socket.
+ * Owns the single authenticated Socket.io connection. Mounted inside the
+ * authenticated shell after Clerk sign-in.
  */
 export function SocketProvider({ children }: { children: ReactNode }) {
-  const { token, logout } = useAuth();
+  const { isSignedIn, getToken } = useClerkAuth();
+  const { logout } = useAuth();
   const [socket, setSocket] = useState<AppSocket | null>(null);
   const [connection, setConnection] = useState<ConnectionState>("connecting");
 
   useEffect(() => {
-    if (!token) {
+    if (!isSignedIn) {
       setSocket(null);
       return;
     }
-    const s = createSocket(token);
+    const s = createSocket(() => getToken());
     setSocket(s);
     setConnection("connecting");
 
@@ -46,7 +47,6 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     const onConnectError = (err: Error) => {
       setConnection("disconnected");
       if (err.message === "unauthorized") {
-        // Token expired or revoked — drop the session.
         void logout();
       }
     };
@@ -64,7 +64,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       s.disconnect();
       setSocket(null);
     };
-  }, [token, logout]);
+  }, [isSignedIn, getToken, logout]);
 
   const value = useMemo<SocketContextValue>(
     () => ({ socket, connection }),

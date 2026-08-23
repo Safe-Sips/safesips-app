@@ -1,4 +1,9 @@
 import {
+  useAuth as useClerkAuth,
+  useClerk,
+  useUser,
+} from "@clerk/react";
+import {
   createContext,
   useCallback,
   useContext,
@@ -7,17 +12,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { AuthResponse, RegisterInput, UserDTO } from "@safesips/shared";
-import { api, setAuthToken, setUnauthorizedHandler } from "../api";
-
-const TOKEN_KEY = "safesips.auth";
+import type { UserDTO } from "@safesips/shared";
+import { api, setTokenGetter, setUnauthorizedHandler } from "../api";
 
 interface AuthContextValue {
   user: UserDTO | null;
-  token: string | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<AuthResponse>;
-  register: (input: RegisterInput) => Promise<AuthResponse>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -25,101 +25,65 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(() =>
-    localStorage.getItem(TOKEN_KEY)
-  );
+  const { isLoaded, isSignedIn, getToken } = useClerkAuth();
+  const { signOut } = useClerk();
+  const { user: clerkUser } = useUser();
   const [user, setUser] = useState<UserDTO | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [syncing, setSyncing] = useState(true);
 
-  const clearLocal = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
-    setAuthToken(null);
-    setToken(null);
-    setUser(null);
-  }, []);
-
-  // Apply the token to the API client immediately when it changes.
   useEffect(() => {
-    setAuthToken(token);
-  }, [token]);
-
-  // A 401 anywhere means the session is gone — drop local auth.
-  useEffect(() => {
-    setUnauthorizedHandler(() => clearLocal());
-    return () => setUnauthorizedHandler(null);
-  }, [clearLocal]);
-
-  // On boot, rehydrate the user from a stored token.
-  useEffect(() => {
+    if (!isLoaded) return;
+    if (!isSignedIn) {
+      setTokenGetter(null);
+      setUser(null);
+      setSyncing(false);
+      return;
+    }
+    setTokenGetter(() => getToken());
+    setSyncing(true);
     let active = true;
-    (async () => {
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-      setAuthToken(token);
+    void (async () => {
       try {
-        const { user } = await api.me();
-        if (active) setUser(user);
+        const { user: appUser } = await api.me();
+        if (active) setUser(appUser);
       } catch {
-        if (active) clearLocal();
+        if (active) setUser(null);
       } finally {
-        if (active) setLoading(false);
+        if (active) setSyncing(false);
       }
     })();
     return () => {
       active = false;
     };
-    // Run once on mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded, isSignedIn, getToken, clerkUser?.id]);
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      setUser(null);
+    });
+    return () => setUnauthorizedHandler(null);
   }, []);
-
-  const applyAuth = useCallback((res: AuthResponse) => {
-    localStorage.setItem(TOKEN_KEY, res.token);
-    setAuthToken(res.token);
-    setToken(res.token);
-    setUser(res.user);
-  }, []);
-
-  const login = useCallback(
-    async (email: string, password: string) => {
-      const res = await api.login({ email, password });
-      applyAuth(res);
-      return res;
-    },
-    [applyAuth]
-  );
-
-  const register = useCallback(
-    async (input: RegisterInput) => {
-      const res = await api.register(input);
-      applyAuth(res);
-      return res;
-    },
-    [applyAuth]
-  );
 
   const logout = useCallback(async () => {
-    try {
-      await api.logout();
-    } catch {
-      // ignore network errors on logout
-    }
-    clearLocal();
-  }, [clearLocal]);
+    setUser(null);
+    setTokenGetter(null);
+    await signOut({ redirectUrl: "/login" });
+  }, [signOut]);
 
   const refresh = useCallback(async () => {
     try {
-      const { user } = await api.me();
-      setUser(user);
+      const { user: appUser } = await api.me();
+      setUser(appUser);
     } catch {
       // leave current state
     }
   }, []);
 
+  const loading = !isLoaded || (isSignedIn && syncing);
+
   const value = useMemo<AuthContextValue>(
-    () => ({ user, token, loading, login, register, logout, refresh }),
-    [user, token, loading, login, register, logout, refresh]
+    () => ({ user, loading, logout, refresh }),
+    [user, loading, logout, refresh]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

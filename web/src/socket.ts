@@ -1,4 +1,4 @@
-import { io, Socket } from "socket.io-client";
+import { io, type Socket } from "socket.io-client";
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
@@ -17,13 +17,17 @@ if (import.meta.env.PROD && configured.startsWith("http://")) {
 export type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
 /**
- * Create an authenticated socket. The JWT is sent in the handshake `auth`
- * payload; the server rejects connections without a valid token.
+ * Create an authenticated socket. The Clerk JWT is refreshed on each
+ * handshake so reconnects still succeed after the short-lived token expires.
  */
-export function createSocket(token: string): AppSocket {
+export function createSocket(
+  getToken: () => Promise<string | null>
+): AppSocket {
   return io(configured, {
     transports: ["websocket"],
     autoConnect: true,
-    auth: { token },
+    auth: (cb: (data: { token?: string }) => void) => {
+      void getToken().then((token) => cb({ token: token ?? undefined }));
+    },
   });
 }

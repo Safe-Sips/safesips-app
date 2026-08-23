@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
-import { findUserById, type UserRow } from "../repos/users.js";
-import { verifyToken } from "./tokens.js";
+import type { UserRow } from "../repos/users.js";
+import { resolveAuthFromToken } from "./clerk.js";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -24,29 +24,37 @@ export function clientIp(req: Request): string {
   return req.ip ?? req.socket.remoteAddress ?? "0.0.0.0";
 }
 
-/** Reject the request unless it carries a valid token for an active user. */
-export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+/** Reject the request unless it carries a valid Clerk or legacy token. */
+export function requireAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
   const token = bearer(req);
   if (!token) {
     res.status(401).json({ error: "Authentication required.", code: "no_token" });
     return;
   }
-  const verified = verifyToken(token);
-  if (!verified) {
-    res.status(401).json({ error: "Invalid or expired session.", code: "bad_token" });
-    return;
-  }
-  const user = findUserById(verified.userId);
-  if (!user || user.status !== "active") {
-    res.status(401).json({ error: "Account unavailable.", code: "no_user" });
-    return;
-  }
-  req.auth = { userId: user.id, sessionId: verified.sessionId, user };
-  next();
+  void resolveAuthFromToken(token)
+    .then((resolved) => {
+      if (!resolved) {
+        res
+          .status(401)
+          .json({ error: "Invalid or expired session.", code: "bad_token" });
+        return;
+      }
+      req.auth = resolved;
+      next();
+    })
+    .catch(next);
 }
 
 /** Must run after requireAuth. Blocks unverified accounts from creating content. */
-export function requireVerified(req: Request, res: Response, next: NextFunction): void {
+export function requireVerified(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
   if (!req.auth) {
     res.status(401).json({ error: "Authentication required.", code: "no_token" });
     return;

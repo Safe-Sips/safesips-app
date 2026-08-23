@@ -1,9 +1,13 @@
 import { randomBytes } from "node:crypto";
+import path from "node:path";
 import dotenv from "dotenv";
 
 dotenv.config();
 if (process.env.NODE_ENV === "production") {
   dotenv.config({ path: ".env.production", override: true });
+} else if (!process.env.CLERK_SECRET_KEY) {
+  // Local monorepo: reuse the Clerk secret already stored for the web app.
+  dotenv.config({ path: path.resolve(process.cwd(), "../web/.env.local") });
 }
 
 function intEnv(name: string, fallback: number): number {
@@ -87,6 +91,9 @@ export const config = {
 
   // Persistence.
   databasePath: strEnv("DATABASE_PATH", "./data/safesips.db"),
+
+  // Clerk. Required for browser sessions; local JWT remains for tests/smoke.
+  clerkSecretKey: process.env.CLERK_SECRET_KEY?.trim() || null,
 
   // Auth.
   jwtSecret: resolveJwtSecret(),

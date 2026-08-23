@@ -156,6 +156,26 @@ export default function MapView({
         <PrivacyCircle key={record.publicId} center={[record.lat, record.lng]} />
       ))}
 
+      {/* Other users' public (masked) location: a light gray dot. */}
+      {others.map((record) => (
+        <CircleMarker
+          key={`${record.publicId}-dot`}
+          center={[record.lat, record.lng]}
+          radius={7}
+          pathOptions={{
+            className: "other-dot",
+            color: "#ffffff",
+            weight: 2,
+            fillColor: "#c5c9d4",
+            fillOpacity: 1,
+          }}
+        >
+          <Tooltip direction="top" offset={[0, -8]}>
+            Someone sharing nearby
+          </Tooltip>
+        </CircleMarker>
+      ))}
+
       {/* This user's own public privacy circle. */}
       {selfPublic && (
         <PrivacyCircle center={[selfPublic.lat, selfPublic.lng]} isSelf />

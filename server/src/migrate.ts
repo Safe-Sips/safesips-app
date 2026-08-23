@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 /**
  * Full schema, created idempotently with CREATE TABLE/INDEX IF NOT EXISTS.
@@ -206,6 +206,15 @@ export function runMigrations(db: Database.Database): void {
       );
     } else if (row.version !== SCHEMA_VERSION) {
       db.prepare("UPDATE schema_version SET version = ?").run(SCHEMA_VERSION);
+    }
+    const userCols = db
+      .prepare(`PRAGMA table_info(users)`)
+      .all() as Array<{ name: string }>;
+    if (!userCols.some((c) => c.name === "clerk_id")) {
+      db.exec(`ALTER TABLE users ADD COLUMN clerk_id TEXT`);
+      db.exec(
+        `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_clerk_id ON users(clerk_id)`
+      );
     }
   });
   apply();

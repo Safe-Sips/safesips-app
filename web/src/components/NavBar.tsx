@@ -10,7 +10,7 @@ const LINKS = [
 ];
 
 export default function NavBar() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   return (
     <header className="nav">
       <div className="nav-brand">
@@ -47,9 +47,6 @@ export default function NavBar() {
             )}
           </NavLink>
         )}
-        <button className="btn btn-ghost btn-sm" onClick={() => logout()}>
-          Log out
-        </button>
         <ClerkAuthControls />
       </div>
     </header>

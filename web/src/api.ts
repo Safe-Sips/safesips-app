@@ -1,13 +1,10 @@
 import type {
   ActivityDTO,
-  AuthResponse,
   CheckinAnswerResult,
   CheckinOccurrenceDTO,
   CheckinPlanInput,
-  LoginInput,
   PlanDTO,
   PostDTO,
-  RegisterInput,
   ReportDTO,
   ReportInput,
   SafeHavenDTO,
@@ -27,10 +24,17 @@ const API_BASE = (
 ).replace(/\/+$/, "");
 
 let authToken: string | null = null;
+type TokenGetter = () => Promise<string | null>;
+let tokenGetter: TokenGetter | null = null;
 let unauthorizedHandler: (() => void) | null = null;
 
 export function setAuthToken(token: string | null): void {
   authToken = token;
+}
+
+/** Clerk (or other) async token source. Preferred over a static token. */
+export function setTokenGetter(fn: TokenGetter | null): void {
+  tokenGetter = fn;
 }
 
 /** Register a callback fired whenever the API returns 401 (token invalid). */
@@ -57,7 +61,8 @@ interface RequestOptions {
 async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {};
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
-  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+  const token = tokenGetter ? await tokenGetter() : authToken;
+  if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(`${API_BASE}${path}`, {
     method: opts.method ?? (opts.body !== undefined ? "POST" : "GET"),
@@ -111,12 +116,6 @@ export const api = {
   base: API_BASE,
 
   // Auth
-  register: (input: RegisterInput) =>
-    request<AuthResponse>("/api/auth/register", { body: input }),
-  login: (input: LoginInput) =>
-    request<AuthResponse>("/api/auth/login", { body: input }),
-  verify: (token: string) =>
-    request<{ ok: true }>("/api/auth/verify", { body: { token } }),
   me: () => request<{ user: UserDTO }>("/api/auth/me"),
   logout: () => request<{ ok: true }>("/api/auth/logout", { method: "POST" }),
   resendVerification: () =>
