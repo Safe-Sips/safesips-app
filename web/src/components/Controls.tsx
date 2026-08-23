@@ -18,6 +18,22 @@ interface ControlsProps {
   onStop: () => void;
 }
 
+function useIsMobile(breakpoint = 560): boolean {
+  const [mobile, setMobile] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia(`(max-width: ${breakpoint}px)`).matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${breakpoint}px)`);
+    const onChange = () => setMobile(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [breakpoint]);
+  return mobile;
+}
+
 function useTimeSince(timestamp: number | null): string {
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -48,6 +64,66 @@ export default function Controls({
   onStop,
 }: ControlsProps) {
   const timeSince = useTimeSince(lastUpdateAt);
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return (
+      <aside className="panel panel-mobile">
+        <div className="panel-mobile-top">
+          <span
+            className={`status-pill status-${connection}`}
+            title={`Connection: ${connection}`}
+          >
+            {connection === "connected"
+              ? "Online"
+              : connection === "connecting"
+                ? "Connecting…"
+                : "Offline"}
+          </span>
+        </div>
+
+        {!sharing ? (
+          <>
+            <button
+              className="btn btn-primary btn-block"
+              onClick={onShareGps}
+              disabled={connection !== "connected"}
+            >
+              Share My Location
+            </button>
+            <AddressInput
+              disabled={connection !== "connected"}
+              onSubmitAddress={onSubmitAddress}
+              onPickSuggestion={onPickAddress}
+            />
+          </>
+        ) : (
+          <div className="panel-mobile-sharing">
+            <div className="panel-mobile-sharing-meta">
+              <strong>
+                <span className="dot-live" /> Sharing
+              </strong>
+              <span>
+                {timeSince} · {othersCount} nearby
+              </span>
+            </div>
+            <div className="panel-mobile-sharing-actions">
+              <button className="btn btn-ghost btn-sm" onClick={onUpdate}>
+                Update
+              </button>
+              <button className="btn btn-danger btn-sm" onClick={onStop}>
+                Stop
+              </button>
+            </div>
+          </div>
+        )}
+
+        {geoStatus && <p className="hint">{geoStatus}</p>}
+        {geoError && <p className="error">{geoError}</p>}
+        {notice && <p className="error">{notice}</p>}
+      </aside>
+    );
+  }
 
   return (
     <aside className="panel">
