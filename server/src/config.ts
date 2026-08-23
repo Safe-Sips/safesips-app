@@ -78,8 +78,9 @@ export const config = {
   corsOrigins,
   isProduction,
 
-  // Real-time presence (existing behavior).
-  presenceTtlMs: intEnv("PRESENCE_TTL_MS", 60_000),
+  // Real-time presence.
+  presenceTtlMs: intEnv("PRESENCE_TTL_MS", 90_000),
+  shareMaxDurationMs: intEnv("SHARE_MAX_DURATION_MS", 24 * 60 * 60 * 1000),
   sweepIntervalMs: intEnv("SWEEP_INTERVAL_MS", 5_000),
   minUpdateIntervalMs: intEnv("MIN_UPDATE_INTERVAL_MS", 2_000),
   maxConnectionsPerIp: intEnv("MAX_CONNECTIONS_PER_IP", 20),

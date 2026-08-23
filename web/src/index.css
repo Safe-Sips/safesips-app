@@ -329,6 +329,10 @@ body {
   background: rgba(255, 212, 0, 0.25);
   border: 1px solid var(--yellow);
 }
+.swatch-yellow-dim {
+  background: rgba(255, 212, 0, 0.12);
+  border: 1px dashed var(--yellow);
+}
 
 /* ------------------------------- Modal ---------------------------------- */
 

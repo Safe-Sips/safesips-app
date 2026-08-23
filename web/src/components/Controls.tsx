@@ -106,7 +106,7 @@ export default function Controls({
           <span className="sharing-value">{timeSince}</span>
         </div>
         <div className="sharing-row">
-          <span className="sharing-label">Others nearby</span>
+          <span className="sharing-label">Others sharing</span>
           <span className="sharing-value">{othersCount}</span>
         </div>
 
@@ -119,6 +119,9 @@ export default function Controls({
               Stop sharing
             </button>
           </div>
+        )}
+        {sharing && (
+          <p className="hint">Auto-stops after 24 hours.</p>
         )}
       </div>
 
@@ -133,6 +136,9 @@ export default function Controls({
         </span>
         <span className="legend-item">
           <span className="legend-swatch swatch-yellow" /> Public 200&nbsp;m area
+        </span>
+        <span className="legend-item">
+          <span className="legend-swatch swatch-yellow-dim" /> Other users sharing
         </span>
       </div>
     </aside>

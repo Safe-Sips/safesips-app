@@ -12,6 +12,8 @@ export interface SocketData {
   /** Authenticated owner — NEVER placed into any presence:* payload. */
   userId: string;
   lastUpdateAt: number;
+  /** Epoch ms when this socket started sharing; 0 if not sharing. */
+  shareStartedAt: number;
 }
 
 type IO = Server<

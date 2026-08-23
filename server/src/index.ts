@@ -72,6 +72,9 @@ app.use(express.json({ limit: "32kb" }));
 
 const store = new PresenceStore(config.presenceTtlMs);
 
+/** One active presence circle per authenticated user (latest socket wins). */
+const activePublicIdByUserId = new Map<string, string>();
+
 app.get("/health", (_req, res) => {
   try {
     if (config.isProduction) {
@@ -151,10 +154,13 @@ function clientIp(socket: { handshake: { address: string } }): string {
   return socket.handshake.address;
 }
 
-function removePresence(publicId: string): void {
+function removePresence(publicId: string, userId?: string): void {
   try {
     if (store.remove(publicId)) {
       io.emit("presence:remove", { publicId });
+    }
+    if (userId && activePublicIdByUserId.get(userId) === publicId) {
+      activePublicIdByUserId.delete(userId);
     }
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -180,6 +186,7 @@ io.on("connection", (socket) => {
   const publicId = randomUUID();
   socket.data.publicId = publicId;
   socket.data.lastUpdateAt = 0;
+  socket.data.shareStartedAt = 0;
 
   // Track the authenticated user's sockets so check-in prompts can reach them.
   trackUserSocket(socket.data.userId, socket.id);
@@ -198,6 +205,20 @@ io.on("connection", (socket) => {
       return;
     }
 
+    if (socket.data.shareStartedAt === 0) {
+      socket.data.shareStartedAt = now;
+    } else if (
+      now - socket.data.shareStartedAt >= config.shareMaxDurationMs
+    ) {
+      removePresence(publicId, socket.data.userId);
+      socket.data.shareStartedAt = 0;
+      socket.emit("error:notice", {
+        code: "share_expired",
+        message: "Location sharing stopped after 24 hours.",
+      });
+      return;
+    }
+
     const result = validateLocationUpdate(payload);
     if (!result.ok || !result.value) {
       socket.emit("error:notice", {
@@ -208,7 +229,13 @@ io.on("connection", (socket) => {
     }
 
     try {
-      // Only the masked center is stored/broadcast — never the userId.
+      const userId = socket.data.userId;
+      const prevPublicId = activePublicIdByUserId.get(userId);
+      if (prevPublicId && prevPublicId !== publicId) {
+        removePresence(prevPublicId, userId);
+      }
+      activePublicIdByUserId.set(userId, publicId);
+
       const record = store.upsert(publicId, result.value, now);
       socket.data.lastUpdateAt = now;
       io.emit("presence:upsert", record);
@@ -223,7 +250,8 @@ io.on("connection", (socket) => {
   });
 
   socket.on("location:stop", () => {
-    removePresence(publicId);
+    socket.data.shareStartedAt = 0;
+    removePresence(publicId, socket.data.userId);
   });
 
   socket.on("disconnect", () => {
@@ -232,7 +260,7 @@ io.on("connection", (socket) => {
     else connectionsByIp.set(ip, remaining);
 
     untrackUserSocket(socket.data.userId, socket.id);
-    removePresence(publicId);
+    removePresence(publicId, socket.data.userId);
   });
 });
 

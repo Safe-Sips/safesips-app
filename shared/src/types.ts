@@ -12,6 +12,12 @@ export const PUBLIC_RADIUS_METERS = 200;
 /** Maximum random offset applied to the exact location, in meters. */
 export const MASK_RADIUS_METERS = 50;
 
+/** How often a sharing client re-publishes to keep its presence alive (ms). */
+export const PRESENCE_HEARTBEAT_MS = 45_000;
+
+/** Maximum continuous sharing duration before auto-stop (ms). */
+export const SHARE_MAX_DURATION_MS = 24 * 60 * 60 * 1000;
+
 export type SharingStatus = "active" | "inactive";
 
 /** A simple latitude/longitude pair. */

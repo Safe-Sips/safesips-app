@@ -194,6 +194,15 @@ export default function MapPage() {
     setGeoError(null);
   }, [stop]);
 
+  // Sync local exact coords when sharing auto-stops (24 h limit / server expiry).
+  useEffect(() => {
+    if (state.selfPublic === null && exact !== null) {
+      setExact(null);
+      lastSource.current = null;
+      setGeoStatus(null);
+    }
+  }, [state.selfPublic, exact]);
+
   /* ------------------------------- reports -------------------------------- */
 
   const loadReports = useCallback(async (bounds: LatLngBounds) => {
