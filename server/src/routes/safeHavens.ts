@@ -1,25 +1,49 @@
+import dns from "node:dns";
 import { Router } from "express";
 import { z } from "zod";
 import type { SafeHavenDTO, SafeHavenKind } from "@safesips/shared";
 import { asyncHandler, parseQuery } from "../http.js";
 import { requireAuth } from "../auth/middleware.js";
 
+// Render and other cloud hosts often have broken/slow IPv6; undici then
+// surfaces a bare "fetch failed" with no HTTP status. Prefer IPv4.
+dns.setDefaultResultOrder("ipv4first");
+
 export const safeHavensRouter = Router();
 safeHavensRouter.use(requireAuth);
 
 /** Public Overpass mirrors — cloud hosts are often rate-limited on the primary. */
 const OVERPASS_ENDPOINTS = [
-  "https://overpass-api.de/api/interpreter",
   "https://lz4.overpass-api.de/api/interpreter",
   "https://z.overpass-api.de/api/interpreter",
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
 ];
+
+const NOMINATIM_SEARCH = "https://nominatim.openstreetmap.org/search";
+const PHOTON_SEARCH = "https://photon.komoot.io/api/";
+
 const USER_AGENT =
   "SafeSips/1.0 (privacy-preserving safety map; contact: support@safesips.app)";
 const CACHE_TTL_MS = 5 * 60_000;
 const MAX_RESULTS = 30;
 const DEFAULT_RADIUS = 1500;
 const MAX_RADIUS = 5000;
-const OVERPASS_TIMEOUT_MS = 18_000;
+const OVERPASS_TIMEOUT_MS = 12_000;
+const FALLBACK_TIMEOUT_MS = 10_000;
+const RETRIES_PER_MIRROR = 1;
+/** Nominatim usage policy: max 1 request/second. */
+const NOMINATIM_GAP_MS = 1_100;
+
+const AMENITY_KINDS: SafeHavenKind[] = [
+  "police",
+  "hospital",
+  "fire_station",
+  "fuel",
+  "pharmacy",
+];
 
 interface CacheEntry {
   at: number;
@@ -58,6 +82,30 @@ function amenityToKind(amenity: string | undefined): SafeHavenKind {
   }
 }
 
+/** Flatten undici's nested `cause` so Render logs show DNS/TLS/reset reasons. */
+function formatFetchError(err: unknown, label: string): string {
+  const parts: string[] = [label];
+  let cur: unknown = err;
+  let depth = 0;
+  while (cur && depth < 5) {
+    if (cur instanceof Error) {
+      parts.push(cur.message);
+      const code = (cur as NodeJS.ErrnoException).code;
+      if (code) parts.push(`code=${code}`);
+      cur = (cur as Error & { cause?: unknown }).cause;
+    } else {
+      parts.push(String(cur));
+      break;
+    }
+    depth += 1;
+  }
+  return parts.join(" | ");
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 interface OverpassElement {
   type: string;
   id: number;
@@ -71,7 +119,7 @@ function buildOverpassQl(lat: number, lng: number, radius: number): string {
   // nwr = nodes + ways + relations (hospitals/police are often areas, not nodes).
   // `out center` gives coordinates for ways/relations.
   return (
-    `[out:json][timeout:15];` +
+    `[out:json][timeout:10];` +
     `(` +
     `nwr["amenity"~"^(police|hospital|fire_station|fuel|pharmacy)$"](around:${radius},${lat},${lng});` +
     `node["opening_hours"="24/7"](around:${radius},${lat},${lng});` +
@@ -123,7 +171,10 @@ function parseOverpassElements(
       isOpen24_7: openingHours === "24/7",
     });
   }
-  // Prefer known amenity kinds, then nearer places.
+  return rankAndCap(havens);
+}
+
+function rankAndCap(havens: SafeHavenDTO[]): SafeHavenDTO[] {
   havens.sort((a, b) => {
     const ak = a.kind === "other" ? 1 : 0;
     const bk = b.kind === "other" ? 1 : 0;
@@ -131,6 +182,19 @@ function parseOverpassElements(
     return a.distanceMeters - b.distanceMeters;
   });
   return havens.slice(0, MAX_RESULTS);
+}
+
+function mergeHavens(batches: SafeHavenDTO[][]): SafeHavenDTO[] {
+  const seen = new Set<string>();
+  const out: SafeHavenDTO[] = [];
+  for (const batch of batches) {
+    for (const h of batch) {
+      if (seen.has(h.id)) continue;
+      seen.add(h.id);
+      out.push(h);
+    }
+  }
+  return rankAndCap(out);
 }
 
 async function fetchFromEndpoint(
@@ -164,7 +228,7 @@ async function fetchFromEndpoint(
   return json.elements ?? [];
 }
 
-async function fetchHavens(
+async function fetchOverpass(
   lat: number,
   lng: number,
   radius: number
@@ -173,16 +237,265 @@ async function fetchHavens(
   const errors: string[] = [];
 
   for (const endpoint of OVERPASS_ENDPOINTS) {
-    try {
-      const elements = await fetchFromEndpoint(endpoint, ql);
-      return parseOverpassElements(elements, lat, lng);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      errors.push(msg);
+    for (let attempt = 0; attempt <= RETRIES_PER_MIRROR; attempt++) {
+      try {
+        const elements = await fetchFromEndpoint(endpoint, ql);
+        // eslint-disable-next-line no-console
+        console.info(`Safe havens: Overpass OK via ${endpoint}`);
+        return parseOverpassElements(elements, lat, lng);
+      } catch (err) {
+        const msg = formatFetchError(
+          err,
+          `${endpoint} attempt=${attempt + 1}`
+        );
+        errors.push(msg);
+        if (attempt < RETRIES_PER_MIRROR) {
+          await sleep(250);
+        }
+      }
     }
   }
 
   throw new Error(errors.join("; ") || "overpass unavailable");
+}
+
+/** Degrees delta for a meter radius (approx). */
+function radiusToViewbox(
+  lat: number,
+  lng: number,
+  radius: number
+): { left: number; top: number; right: number; bottom: number } {
+  const dLat = radius / 111_320;
+  const cos = Math.max(0.2, Math.cos((lat * Math.PI) / 180));
+  const dLng = radius / (111_320 * cos);
+  return {
+    left: lng - dLng,
+    top: lat + dLat,
+    right: lng + dLng,
+    bottom: lat - dLat,
+  };
+}
+
+interface NominatimResult {
+  place_id: number;
+  osm_type?: string;
+  osm_id?: number;
+  lat: string;
+  lon: string;
+  display_name?: string;
+  name?: string;
+  class?: string;
+  type?: string;
+}
+
+async function fetchNominatimAmenity(
+  kind: SafeHavenKind,
+  lat: number,
+  lng: number,
+  radius: number
+): Promise<SafeHavenDTO[]> {
+  const box = radiusToViewbox(lat, lng, radius);
+  const url = new URL(NOMINATIM_SEARCH);
+  url.searchParams.set("amenity", kind);
+  url.searchParams.set("format", "jsonv2");
+  url.searchParams.set("limit", "8");
+  url.searchParams.set(
+    "viewbox",
+    `${box.left},${box.top},${box.right},${box.bottom}`
+  );
+  url.searchParams.set("bounded", "1");
+  url.searchParams.set("addressdetails", "0");
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      "User-Agent": USER_AGENT,
+      Accept: "application/json",
+    },
+    signal: AbortSignal.timeout(FALLBACK_TIMEOUT_MS),
+  });
+  if (!res.ok) {
+    throw new Error(`nominatim ${res.status} for ${kind}`);
+  }
+  const json = (await res.json()) as NominatimResult[];
+  if (!Array.isArray(json)) return [];
+
+  const havens: SafeHavenDTO[] = [];
+  for (const item of json) {
+    const elat = Number(item.lat);
+    const elng = Number(item.lon);
+    if (!Number.isFinite(elat) || !Number.isFinite(elng)) continue;
+    const dist = Math.round(haversine(lat, lng, elat, elng));
+    if (dist > radius) continue;
+    const osmType = item.osm_type ?? "node";
+    const osmId = item.osm_id ?? item.place_id;
+    havens.push({
+      id: `nominatim/${osmType}/${osmId}`,
+      kind,
+      name: item.name ?? item.display_name?.split(",")[0]?.trim() ?? null,
+      lat: elat,
+      lng: elng,
+      distanceMeters: dist,
+      phone: null,
+      openingHours: null,
+      isOpen24_7: false,
+    });
+  }
+  return havens;
+}
+
+async function fetchNominatimFallback(
+  lat: number,
+  lng: number,
+  radius: number
+): Promise<SafeHavenDTO[]> {
+  const batches: SafeHavenDTO[][] = [];
+  const errors: string[] = [];
+
+  for (let i = 0; i < AMENITY_KINDS.length; i++) {
+    const kind = AMENITY_KINDS[i]!;
+    if (i > 0) await sleep(NOMINATIM_GAP_MS);
+    try {
+      batches.push(await fetchNominatimAmenity(kind, lat, lng, radius));
+    } catch (err) {
+      errors.push(formatFetchError(err, `nominatim/${kind}`));
+    }
+  }
+
+  const merged = mergeHavens(batches);
+  if (merged.length === 0 && errors.length > 0) {
+    throw new Error(errors.join("; ") || "nominatim unavailable");
+  }
+  // eslint-disable-next-line no-console
+  console.info(
+    `Safe havens: Nominatim fallback returned ${merged.length} (errors=${errors.length})`
+  );
+  return merged;
+}
+
+interface PhotonFeature {
+  geometry?: { coordinates?: [number, number] };
+  properties?: {
+    osm_type?: string;
+    osm_id?: number;
+    name?: string;
+    osm_key?: string;
+    osm_value?: string;
+  };
+}
+
+async function fetchPhotonFallback(
+  lat: number,
+  lng: number,
+  radius: number
+): Promise<SafeHavenDTO[]> {
+  const batches: SafeHavenDTO[][] = [];
+  const errors: string[] = [];
+
+  for (const kind of AMENITY_KINDS) {
+    try {
+      const url = new URL(PHOTON_SEARCH);
+      url.searchParams.set("q", kind.replace("_", " "));
+      url.searchParams.set("lat", String(lat));
+      url.searchParams.set("lon", String(lng));
+      url.searchParams.set("limit", "8");
+      url.searchParams.set("osm_tag", `amenity:${kind}`);
+
+      const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          "User-Agent": USER_AGENT,
+          Accept: "application/json",
+        },
+        signal: AbortSignal.timeout(FALLBACK_TIMEOUT_MS),
+      });
+      if (!res.ok) {
+        throw new Error(`photon ${res.status} for ${kind}`);
+      }
+      const json = (await res.json()) as { features?: PhotonFeature[] };
+      const features = json.features ?? [];
+      const havens: SafeHavenDTO[] = [];
+      for (const f of features) {
+        const coords = f.geometry?.coordinates;
+        if (!coords || coords.length < 2) continue;
+        const [elng, elat] = coords;
+        if (elat == null || elng == null) continue;
+        const dist = Math.round(haversine(lat, lng, elat, elng));
+        if (dist > radius) continue;
+        const props = f.properties ?? {};
+        const osmType = (props.osm_type ?? "N").toLowerCase();
+        const typeName =
+          osmType === "w" || osmType === "way"
+            ? "way"
+            : osmType === "r" || osmType === "relation"
+              ? "relation"
+              : "node";
+        const osmId = props.osm_id ?? Math.round(elat * 1e6 + elng * 1e6);
+        havens.push({
+          id: `photon/${typeName}/${osmId}`,
+          kind,
+          name: props.name ?? null,
+          lat: elat,
+          lng: elng,
+          distanceMeters: dist,
+          phone: null,
+          openingHours: null,
+          isOpen24_7: false,
+        });
+      }
+      batches.push(havens);
+    } catch (err) {
+      errors.push(formatFetchError(err, `photon/${kind}`));
+    }
+  }
+
+  const merged = mergeHavens(batches);
+  if (merged.length === 0 && errors.length > 0) {
+    throw new Error(errors.join("; ") || "photon unavailable");
+  }
+  // eslint-disable-next-line no-console
+  console.info(
+    `Safe havens: Photon fallback returned ${merged.length} (errors=${errors.length})`
+  );
+  return merged;
+}
+
+async function fetchHavens(
+  lat: number,
+  lng: number,
+  radius: number
+): Promise<SafeHavenDTO[]> {
+  try {
+    return await fetchOverpass(lat, lng, radius);
+  } catch (overpassErr) {
+    // eslint-disable-next-line no-console
+    console.error(
+      "Safe havens Overpass exhausted:",
+      formatFetchError(overpassErr, "overpass")
+    );
+  }
+
+  // Prefer Nominatim (usage-policy friendly, sequential). Photon next — free, no key.
+  const fallbackErrors: string[] = [];
+
+  try {
+    const nominatim = await fetchNominatimFallback(lat, lng, radius);
+    if (nominatim.length > 0) return nominatim;
+  } catch (err) {
+    fallbackErrors.push(formatFetchError(err, "nominatim"));
+  }
+
+  try {
+    const photon = await fetchPhotonFallback(lat, lng, radius);
+    if (photon.length > 0) return photon;
+  } catch (err) {
+    fallbackErrors.push(formatFetchError(err, "photon"));
+  }
+
+  throw new Error(
+    fallbackErrors.join("; ") ||
+      "All POI sources unreachable (Overpass, Nominatim, Photon)"
+  );
 }
 
 safeHavensRouter.get(
@@ -204,8 +517,11 @@ safeHavensRouter.get(
       res.json({ havens: data, cached: false });
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error("Safe havens Overpass failed:", err);
-      // Never block the unsafe-report flow on Overpass being down.
+      console.error(
+        "Safe havens all sources failed:",
+        formatFetchError(err, "safe-havens")
+      );
+      // Never block the unsafe-report flow on POI providers being down.
       res.json({
         havens: hit?.data ?? [],
         error: "Couldn't load nearby help right now. In an emergency call 112.",
