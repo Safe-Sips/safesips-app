@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
-import type { AddressSuggestion } from "../geocode";
 import type { ConnectionState } from "../hooks/usePresence";
-import AddressInput from "./AddressInput";
 
 interface ControlsProps {
   connection: ConnectionState;
@@ -12,8 +10,6 @@ interface ControlsProps {
   lastUpdateAt: number | null;
   othersCount: number;
   onShareGps: () => void;
-  onSubmitAddress: (address: string) => void;
-  onPickAddress: (suggestion: AddressSuggestion) => void;
   onUpdate: () => void;
   onStop: () => void;
   onOpenPrivacy: () => void;
@@ -60,8 +56,6 @@ export default function Controls({
   lastUpdateAt,
   othersCount,
   onShareGps,
-  onSubmitAddress,
-  onPickAddress,
   onUpdate,
   onStop,
   onOpenPrivacy,
@@ -87,20 +81,13 @@ export default function Controls({
         </div>
 
         {!sharing ? (
-          <>
-            <button
-              className="btn btn-primary btn-block"
-              onClick={onShareGps}
-              disabled={connection !== "connected"}
-            >
-              Share My Location
-            </button>
-            <AddressInput
-              disabled={connection !== "connected"}
-              onSubmitAddress={onSubmitAddress}
-              onPickSuggestion={onPickAddress}
-            />
-          </>
+          <button
+            className="btn btn-primary btn-block"
+            onClick={onShareGps}
+            disabled={connection !== "connected"}
+          >
+            Share My Location
+          </button>
         ) : (
           <div className="panel-mobile-sharing">
             <div className="panel-mobile-sharing-meta">
@@ -173,12 +160,6 @@ export default function Controls({
       >
         Share My Location
       </button>
-
-      <AddressInput
-        disabled={connection !== "connected"}
-        onSubmitAddress={onSubmitAddress}
-        onPickSuggestion={onPickAddress}
-      />
 
       {geoStatus && <p className="hint">{geoStatus}</p>}
       {geoError && <p className="error">{geoError}</p>}

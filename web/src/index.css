@@ -374,6 +374,12 @@ body {
   margin-top: 8px;
 }
 
+/* Mark-unsafe / report-location: keep desktop modal; shrink on mobile. */
+.mark-unsafe-card {
+  max-height: min(80dvh, 560px);
+  overflow-y: auto;
+}
+
 /* ------------------------- Map circle animations ------------------------ */
 
 .privacy-circle {
@@ -421,8 +427,8 @@ body {
     left: 8px;
     right: 8px;
     width: auto;
-    height: 32dvh;
-    max-height: 32dvh;
+    height: auto;
+    max-height: 28dvh;
     overflow-y: auto;
     padding: 10px 12px;
     box-sizing: border-box;
@@ -432,12 +438,10 @@ body {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    height: 100%;
     box-sizing: border-box;
   }
 
   .panel-mobile-legal {
-    margin-top: auto;
     padding-top: 4px;
   }
 
@@ -482,10 +486,6 @@ body {
     display: flex;
     gap: 6px;
     flex-shrink: 0;
-  }
-
-  .panel-mobile .address-form {
-    margin-top: 0;
   }
 
   .panel-mobile .btn-block {
@@ -1507,14 +1507,40 @@ select option {
   .report-panel,
   .haven-panel {
     top: auto;
-    /* Sit above the mobile control dock (32dvh) so results stay readable. */
-    bottom: calc(32dvh + 16px);
+    /* Sit above the mobile control dock (~content-sized, max 28dvh). */
+    bottom: calc(28dvh + 16px);
     left: 12px;
     right: 12px;
     width: auto;
-    max-height: calc(68dvh - 24px);
+    max-height: calc(72dvh - 24px);
     z-index: 1300;
   }
+
+  /* Report-location dialog: match share-panel scale (~28–36dvh), scroll inside. */
+  .mark-unsafe-backdrop {
+    align-items: flex-end;
+    padding: 8px;
+  }
+  .mark-unsafe-card {
+    width: 100%;
+    height: auto;
+    max-height: 36dvh;
+    overflow-y: auto;
+    padding: 14px 14px 12px;
+    box-sizing: border-box;
+  }
+  .mark-unsafe-card h2 {
+    font-size: 17px;
+    margin-bottom: 8px;
+  }
+  .mark-unsafe-card .report-warning {
+    margin-bottom: 8px;
+    padding: 8px 10px;
+  }
+  .mark-unsafe-card textarea {
+    min-height: 2.8em;
+  }
+
   .stat-grid {
     grid-template-columns: repeat(2, 1fr);
   }

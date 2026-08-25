@@ -5,7 +5,6 @@ import { api, ApiError } from "../api";
 import { useAuth } from "../auth/AuthContext";
 import { useSocket } from "../socket/SocketProvider";
 import { usePresence } from "../hooks/usePresence";
-import { geocodeAddress, type AddressSuggestion } from "../geocode";
 import Controls from "../components/Controls";
 import MapView, { type FocusPoint } from "../components/MapView";
 import SensitiveWarning from "../components/SensitiveWarning";
@@ -18,9 +17,7 @@ import { PRIVACY_POLICY, TERMS_OF_SERVICE } from "../legal/content";
 
 const ACK_KEY = "safesips.sensitiveAck";
 
-type PendingAction =
-  | { kind: "gps" }
-  | { kind: "address"; address: string; lat?: number; lng?: number };
+type PendingAction = { kind: "gps" };
 type LegalDoc = "privacy" | "terms" | null;
 
 export default function MapPage() {
@@ -102,66 +99,24 @@ export default function MapPage() {
         setGeoStatus(null);
         setGeoError(
           err.code === err.PERMISSION_DENIED
-            ? "Location permission denied. Try entering an address instead."
-            : "Could not get your location. Try entering an address instead."
+            ? "Location permission denied. Enable location access to share."
+            : "Could not get your location. Check permissions and try again."
         );
       },
       { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 }
     );
   }, [setExactAndPublish]);
 
-  const runAddress = useCallback(
-    async (address: string) => {
-      setGeoError(null);
-      setGeoStatus("Looking up address…");
-      try {
-        const result = await geocodeAddress(address);
-        setGeoStatus(null);
-        if (!result) {
-          setGeoError("No match found for that address.");
-          return;
-        }
-        lastSource.current = { kind: "address", address: result.displayName };
-        setExactAndPublish({ lat: result.lat, lng: result.lng });
-      } catch {
-        setGeoStatus(null);
-        setGeoError("Address lookup failed. Please try again.");
-      }
-    },
-    [setExactAndPublish]
-  );
-
-  const runPickedAddress = useCallback(
-    (suggestion: AddressSuggestion) => {
-      clearNotice();
-      if (!acked) {
-        setPending({
-          kind: "address",
-          address: suggestion.displayName,
-          lat: suggestion.lat,
-          lng: suggestion.lng,
-        });
-        return;
-      }
-      setGeoError(null);
-      setGeoStatus(null);
-      lastSource.current = { kind: "address", address: suggestion.displayName };
-      setExactAndPublish({ lat: suggestion.lat, lng: suggestion.lng });
-    },
-    [acked, clearNotice, setExactAndPublish]
-  );
-
   const guarded = useCallback(
     (action: PendingAction) => {
       clearNotice();
       if (acked) {
-        if (action.kind === "gps") runGps();
-        else runAddress(action.address);
+        runGps();
       } else {
         setPending(action);
       }
     },
-    [acked, clearNotice, runGps, runAddress]
+    [acked, clearNotice, runGps]
   );
 
   const confirmWarning = useCallback(() => {
@@ -170,21 +125,11 @@ export default function MapPage() {
     const action = pending;
     setPending(null);
     if (action?.kind === "gps") runGps();
-    else if (action?.kind === "address") {
-      if (action.lat != null && action.lng != null) {
-        lastSource.current = { kind: "address", address: action.address };
-        setExactAndPublish({ lat: action.lat, lng: action.lng });
-      } else {
-        runAddress(action.address);
-      }
-    }
-  }, [pending, runGps, runAddress, setExactAndPublish]);
+  }, [pending, runGps]);
 
   const onUpdate = useCallback(() => {
-    const source = lastSource.current;
-    if (source?.kind === "gps") runGps();
-    else if (source?.kind === "address") runAddress(source.address);
-  }, [runGps, runAddress]);
+    if (lastSource.current?.kind === "gps") runGps();
+  }, [runGps]);
 
   const onStop = useCallback(() => {
     stop();
@@ -347,8 +292,6 @@ export default function MapPage() {
         lastUpdateAt={state.lastUpdateAt}
         othersCount={state.others.length}
         onShareGps={() => guarded({ kind: "gps" })}
-        onSubmitAddress={(address) => guarded({ kind: "address", address })}
-        onPickAddress={runPickedAddress}
         onUpdate={onUpdate}
         onStop={onStop}
         onOpenPrivacy={() => setLegalDoc("privacy")}

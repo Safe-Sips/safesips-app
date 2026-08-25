@@ -38,8 +38,8 @@ export default function MarkUnsafeDialog({
   const categories = safety === "unsafe" ? UNSAFE_CATEGORIES : SAFE_CATEGORIES;
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true">
-      <div className="modal-card">
+    <div className="modal-backdrop mark-unsafe-backdrop" role="dialog" aria-modal="true">
+      <div className="modal-card mark-unsafe-card">
         <h2>Report this spot</h2>
 
         {/* This warning is DISTINCT from the presence sensitive-location notice. */}
