@@ -1512,8 +1512,18 @@ select option {
     left: 12px;
     right: 12px;
     width: auto;
-    max-height: calc(72dvh - 24px);
     z-index: 1300;
+  }
+
+  /* Match share (~28dvh) / mark-unsafe (~36dvh); list scrolls inside. */
+  .haven-panel {
+    max-height: 36dvh;
+    overflow-y: auto;
+  }
+
+  .report-panel {
+    max-height: 36dvh;
+    overflow-y: auto;
   }
 
   /* Report-location dialog: match share-panel scale (~28–36dvh), scroll inside. */
