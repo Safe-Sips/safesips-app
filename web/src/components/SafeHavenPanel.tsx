@@ -58,7 +58,7 @@ export default function SafeHavenPanel({
         🚨 Call 112
       </a>
 
-      {error && <p className="hint">{error}</p>}
+      {error && <p className="error">{error}</p>}
       {!havens && !error && <p className="muted">Finding the closest help…</p>}
       {havens && havens.length === 0 && !error && (
         <p className="muted">

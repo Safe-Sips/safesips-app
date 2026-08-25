@@ -16,6 +16,8 @@ interface ControlsProps {
   onPickAddress: (suggestion: AddressSuggestion) => void;
   onUpdate: () => void;
   onStop: () => void;
+  onOpenPrivacy: () => void;
+  onOpenTerms: () => void;
 }
 
 function useIsMobile(breakpoint = 560): boolean {
@@ -62,6 +64,8 @@ export default function Controls({
   onPickAddress,
   onUpdate,
   onStop,
+  onOpenPrivacy,
+  onOpenTerms,
 }: ControlsProps) {
   const timeSince = useTimeSince(lastUpdateAt);
   const isMobile = useIsMobile();
@@ -121,6 +125,22 @@ export default function Controls({
         {geoStatus && <p className="hint">{geoStatus}</p>}
         {geoError && <p className="error">{geoError}</p>}
         {notice && <p className="error">{notice}</p>}
+
+        <div className="panel-mobile-legal" aria-label="Legal and safety information">
+          <p className="legal-emergency">
+            SafeSips is <strong>not</strong> an emergency service. Call{" "}
+            <strong>911</strong> (or your local emergency number) in an emergency.
+          </p>
+          <p className="legal-links">
+            <button type="button" className="legal-link" onClick={onOpenPrivacy}>
+              Privacy Policy
+            </button>
+            <span aria-hidden> · </span>
+            <button type="button" className="legal-link" onClick={onOpenTerms}>
+              Terms of Service
+            </button>
+          </p>
+        </div>
       </aside>
     );
   }

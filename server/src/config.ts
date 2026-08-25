@@ -12,12 +12,20 @@ if (process.env.NODE_ENV === "production") {
   ]) {
     dotenv.config({ path: candidate, override: false });
   }
-} else if (!process.env.CLERK_SECRET_KEY) {
-  // Local monorepo: reuse the Clerk secret already stored for the web app.
+} else {
+  // Local monorepo: reuse Clerk keys already stored for the web app.
   dotenv.config({
     path: path.resolve(process.cwd(), "../web/.env.local"),
     override: false,
   });
+  // @clerk/express expects CLERK_PUBLISHABLE_KEY; web stores VITE_*.
+  if (
+    !process.env.CLERK_PUBLISHABLE_KEY?.trim() &&
+    process.env.VITE_CLERK_PUBLISHABLE_KEY?.trim()
+  ) {
+    process.env.CLERK_PUBLISHABLE_KEY =
+      process.env.VITE_CLERK_PUBLISHABLE_KEY.trim();
+  }
 }
 
 function intEnv(name: string, fallback: number): number {

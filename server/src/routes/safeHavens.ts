@@ -7,13 +7,19 @@ import { requireAuth } from "../auth/middleware.js";
 export const safeHavensRouter = Router();
 safeHavensRouter.use(requireAuth);
 
-const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+/** Public Overpass mirrors — cloud hosts are often rate-limited on the primary. */
+const OVERPASS_ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://lz4.overpass-api.de/api/interpreter",
+  "https://z.overpass-api.de/api/interpreter",
+];
 const USER_AGENT =
   "SafeSips/1.0 (privacy-preserving safety map; contact: support@safesips.app)";
 const CACHE_TTL_MS = 5 * 60_000;
 const MAX_RESULTS = 30;
 const DEFAULT_RADIUS = 1500;
 const MAX_RADIUS = 5000;
+const OVERPASS_TIMEOUT_MS = 18_000;
 
 interface CacheEntry {
   at: number;
@@ -61,35 +67,27 @@ interface OverpassElement {
   tags?: Record<string, string>;
 }
 
-async function fetchHavens(
-  lat: number,
-  lng: number,
-  radius: number
-): Promise<SafeHavenDTO[]> {
-  const ql =
-    `[out:json][timeout:20];` +
+function buildOverpassQl(lat: number, lng: number, radius: number): string {
+  // nwr = nodes + ways + relations (hospitals/police are often areas, not nodes).
+  // `out center` gives coordinates for ways/relations.
+  return (
+    `[out:json][timeout:15];` +
     `(` +
-    `node["amenity"~"^(police|hospital|fire_station|fuel|pharmacy)$"](around:${radius},${lat},${lng});` +
+    `nwr["amenity"~"^(police|hospital|fire_station|fuel|pharmacy)$"](around:${radius},${lat},${lng});` +
     `node["opening_hours"="24/7"](around:${radius},${lat},${lng});` +
     `);` +
-    `out body ${MAX_RESULTS * 3};`;
+    `out center ${MAX_RESULTS * 4};`
+  );
+}
 
-  const res = await fetch(OVERPASS_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": USER_AGENT,
-      Accept: "application/json",
-    },
-    body: new URLSearchParams({ data: ql }),
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!res.ok) throw new Error(`overpass ${res.status}`);
-  const json = (await res.json()) as { elements?: OverpassElement[] };
-
+function parseOverpassElements(
+  elements: OverpassElement[],
+  lat: number,
+  lng: number
+): SafeHavenDTO[] {
   const seen = new Set<string>();
   const havens: SafeHavenDTO[] = [];
-  for (const el of json.elements ?? []) {
+  for (const el of elements) {
     const elat = el.lat ?? el.center?.lat;
     const elng = el.lon ?? el.center?.lon;
     if (elat == null || elng == null) continue;
@@ -98,9 +96,24 @@ async function fetchHavens(
     seen.add(id);
     const tags = el.tags ?? {};
     const openingHours = tags.opening_hours ?? null;
+    const kind = amenityToKind(tags.amenity);
+    // Drop 24/7 noise that isn't a useful safe haven (toilets, recycling, etc.).
+    if (kind === "other") {
+      const junk = tags.amenity;
+      if (
+        !tags.name ||
+        junk === "toilets" ||
+        junk === "recycling" ||
+        junk === "waste_basket" ||
+        junk === "bench" ||
+        junk === "atm"
+      ) {
+        continue;
+      }
+    }
     havens.push({
       id,
-      kind: amenityToKind(tags.amenity),
+      kind,
       name: tags.name ?? null,
       lat: elat,
       lng: elng,
@@ -110,8 +123,66 @@ async function fetchHavens(
       isOpen24_7: openingHours === "24/7",
     });
   }
-  havens.sort((a, b) => a.distanceMeters - b.distanceMeters);
+  // Prefer known amenity kinds, then nearer places.
+  havens.sort((a, b) => {
+    const ak = a.kind === "other" ? 1 : 0;
+    const bk = b.kind === "other" ? 1 : 0;
+    if (ak !== bk) return ak - bk;
+    return a.distanceMeters - b.distanceMeters;
+  });
   return havens.slice(0, MAX_RESULTS);
+}
+
+async function fetchFromEndpoint(
+  endpoint: string,
+  ql: string
+): Promise<OverpassElement[]> {
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "User-Agent": USER_AGENT,
+      Accept: "application/json",
+    },
+    body: new URLSearchParams({ data: ql }),
+    signal: AbortSignal.timeout(OVERPASS_TIMEOUT_MS),
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`overpass ${res.status} from ${endpoint}`);
+  }
+  // Some mirrors return XML/HTML error bodies with a misleading status.
+  if (!text || text.trimStart().startsWith("<")) {
+    throw new Error(`overpass non-json from ${endpoint}`);
+  }
+  let json: { elements?: OverpassElement[] };
+  try {
+    json = JSON.parse(text) as { elements?: OverpassElement[] };
+  } catch {
+    throw new Error(`overpass bad-json from ${endpoint}`);
+  }
+  return json.elements ?? [];
+}
+
+async function fetchHavens(
+  lat: number,
+  lng: number,
+  radius: number
+): Promise<SafeHavenDTO[]> {
+  const ql = buildOverpassQl(lat, lng, radius);
+  const errors: string[] = [];
+
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    try {
+      const elements = await fetchFromEndpoint(endpoint, ql);
+      return parseOverpassElements(elements, lat, lng);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(msg);
+    }
+  }
+
+  throw new Error(errors.join("; ") || "overpass unavailable");
 }
 
 safeHavensRouter.get(
@@ -131,7 +202,9 @@ safeHavensRouter.get(
       const data = await fetchHavens(q.lat, q.lng, radius);
       cache.set(key, { at: now, data });
       res.json({ havens: data, cached: false });
-    } catch {
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("Safe havens Overpass failed:", err);
       // Never block the unsafe-report flow on Overpass being down.
       res.json({
         havens: hit?.data ?? [],

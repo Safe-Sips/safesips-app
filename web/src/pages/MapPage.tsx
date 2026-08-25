@@ -302,20 +302,22 @@ export default function MapPage() {
 
   // Show nearby help (pharmacies, police, hospital, fuel, 24/7) anytime —
   // independent of reporting a place unsafe. Falls back to the map center if
-  // location permission is unavailable.
+  // location permission is unavailable (never no-ops).
   const findHelpNearMe = useCallback(() => {
-    const useMapCenter = () => {
+    const fallbackPoint = (): LatLng => {
       const center = boundsRef.current?.getCenter();
-      if (center) setHavenPoint({ lat: center.lat, lng: center.lng });
+      if (center) return { lat: center.lat, lng: center.lng };
+      // Map default (Bucharest) — same as MapView — so the panel always opens.
+      return { lat: 44.4268, lng: 26.1025 };
     };
     if (!("geolocation" in navigator)) {
-      useMapCenter();
+      setHavenPoint(fallbackPoint());
       return;
     }
     navigator.geolocation.getCurrentPosition(
       (pos) =>
         setHavenPoint({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => useMapCenter(),
+      () => setHavenPoint(fallbackPoint()),
       { enableHighAccuracy: true, timeout: 8_000, maximumAge: 60_000 }
     );
   }, []);
@@ -349,6 +351,8 @@ export default function MapPage() {
         onPickAddress={runPickedAddress}
         onUpdate={onUpdate}
         onStop={onStop}
+        onOpenPrivacy={() => setLegalDoc("privacy")}
+        onOpenTerms={() => setLegalDoc("terms")}
       />
 
       {/* Report-a-place + find-help controls, or the report-mode banner. */}
