@@ -212,10 +212,10 @@ export function runMigrations(db: Database.Database): void {
       .all() as Array<{ name: string }>;
     if (!userCols.some((c) => c.name === "clerk_id")) {
       db.exec(`ALTER TABLE users ADD COLUMN clerk_id TEXT`);
-      db.exec(
-        `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_clerk_id ON users(clerk_id)`
-      );
     }
+    db.exec(
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_clerk_id ON users(clerk_id)`
+    );
   });
   apply();
 }

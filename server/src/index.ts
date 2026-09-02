@@ -21,7 +21,6 @@ import {
   untrackUserSocket,
   type SocketData,
 } from "./realtime.js";
-import { clerkMiddleware } from "@clerk/express";
 import { resolveAuthFromToken } from "./auth/clerk.js";
 import { purgeOldAttempts } from "./auth/throttle.js";
 import { startCheckinScheduler } from "./checkinScheduler.js";
@@ -68,9 +67,6 @@ app.use((_req, res, next) => {
 });
 
 app.use(express.json({ limit: "32kb" }));
-if (config.clerkSecretKey) {
-  app.use(clerkMiddleware());
-}
 
 const store = new PresenceStore(config.presenceTtlMs);
 

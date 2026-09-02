@@ -17,9 +17,9 @@ export interface UserRow {
 
 const insertUser = db.prepare(
   `INSERT INTO users
-     (id, email, email_norm, password_hash, display_name, email_verified, status, created_at, updated_at)
+     (id, email, email_norm, password_hash, display_name, email_verified, status, clerk_id, created_at, updated_at)
    VALUES
-     (@id, @email, @email_norm, @password_hash, @display_name, @email_verified, @status, @created_at, @updated_at)`
+     (@id, @email, @email_norm, @password_hash, @display_name, @email_verified, @status, @clerk_id, @created_at, @updated_at)`
 );
 const selectByEmail = db.prepare(`SELECT * FROM users WHERE email_norm = ?`);
 const selectById = db.prepare(`SELECT * FROM users WHERE id = ?`);
@@ -85,18 +85,7 @@ export function upsertUserFromClerk(params: {
     created_at: now,
     updated_at: now,
   };
-  insertUser.run({
-    ...row,
-    clerk_id: row.clerk_id,
-  });
-  // clerk_id may not be in the original INSERT — set it after insert.
-  updateClerkId.run(
-    params.clerkId,
-    row.email_verified,
-    row.display_name,
-    now,
-    row.id
-  );
+  insertUser.run(row);
   return findUserById(row.id)!;
 }
 

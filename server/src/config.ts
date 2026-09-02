@@ -18,14 +18,15 @@ if (process.env.NODE_ENV === "production") {
     path: path.resolve(process.cwd(), "../web/.env.local"),
     override: false,
   });
-  // @clerk/express expects CLERK_PUBLISHABLE_KEY; web stores VITE_*.
-  if (
-    !process.env.CLERK_PUBLISHABLE_KEY?.trim() &&
-    process.env.VITE_CLERK_PUBLISHABLE_KEY?.trim()
-  ) {
-    process.env.CLERK_PUBLISHABLE_KEY =
-      process.env.VITE_CLERK_PUBLISHABLE_KEY.trim();
-  }
+}
+
+// Web stores VITE_CLERK_PUBLISHABLE_KEY; Clerk SDKs look for CLERK_PUBLISHABLE_KEY.
+if (
+  !process.env.CLERK_PUBLISHABLE_KEY?.trim() &&
+  process.env.VITE_CLERK_PUBLISHABLE_KEY?.trim()
+) {
+  process.env.CLERK_PUBLISHABLE_KEY =
+    process.env.VITE_CLERK_PUBLISHABLE_KEY.trim();
 }
 
 function intEnv(name: string, fallback: number): number {
