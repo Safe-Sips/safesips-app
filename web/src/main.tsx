@@ -26,7 +26,7 @@ ReactDOM.createRoot(root).render(
       appearance={{
         variables: {
           colorPrimary: "#d6117e",
-          colorText: "#1b2440",
+          colorForeground: "#1b2440",
           colorBackground: "#ffffff",
           borderRadius: "14px",
           fontFamily: "Nunito, system-ui, sans-serif",
