@@ -9,9 +9,10 @@ const SERVER_URL =
 
 export type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
-export function createSocket(): AppSocket {
+export function createSocket(token: string): AppSocket {
   return io(SERVER_URL, {
     transports: ["websocket"],
     autoConnect: true,
+    auth: { token },
   });
 }

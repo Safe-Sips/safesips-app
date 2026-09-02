@@ -18,7 +18,21 @@ if (!root) throw new Error("Root element #root not found in DOM");
 
 ReactDOM.createRoot(root).render(
   <React.StrictMode>
-    <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/login">
+    <ClerkProvider
+      publishableKey={PUBLISHABLE_KEY}
+      afterSignOutUrl="/login"
+      signInUrl="/login"
+      signUpUrl="/register"
+      appearance={{
+        variables: {
+          colorPrimary: "#d6117e",
+          colorText: "#1b2440",
+          colorBackground: "#ffffff",
+          borderRadius: "14px",
+          fontFamily: "Nunito, system-ui, sans-serif",
+        },
+      }}
+    >
       <BrowserRouter>
         <AuthProvider>
           <App />

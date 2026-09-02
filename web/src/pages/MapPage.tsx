@@ -20,13 +20,20 @@ const ACK_KEY = "safesips.sensitiveAck";
 type PendingAction = { kind: "gps" };
 type LegalDoc = "privacy" | "terms" | null;
 
+// Survives MapPage unmount so leaving the Map tab does not drop the private
+// blue-dot / last GPS source. Presence heartbeats live in PresenceProvider.
+const shareSession: { exact: LatLng | null; source: PendingAction | null } = {
+  exact: null,
+  source: null,
+};
+
 export default function MapPage() {
   const { user } = useAuth();
   const { socket } = useSocket();
   const { state, publish, stop, clearNotice } = usePresence();
 
-  // Exact location lives ONLY in local state; it is never emitted.
-  const [exact, setExact] = useState<LatLng | null>(null);
+  // Exact location lives ONLY on this device; it is never emitted.
+  const [exact, setExact] = useState<LatLng | null>(() => shareSession.exact);
   const [geoStatus, setGeoStatus] = useState<string | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
 
@@ -56,7 +63,7 @@ export default function MapPage() {
     () => localStorage.getItem(ACK_KEY) === "1"
   );
   const [pending, setPending] = useState<PendingAction | null>(null);
-  const lastSource = useRef<PendingAction | null>(null);
+  const lastSource = useRef<PendingAction | null>(shareSession.source);
 
   // Reports + safe havens.
   const [reports, setReports] = useState<ReportDTO[]>([]);
@@ -76,6 +83,7 @@ export default function MapPage() {
 
   const setExactAndPublish = useCallback(
     (location: LatLng) => {
+      shareSession.exact = location;
       setExact(location);
       publish(location);
     },
@@ -93,6 +101,7 @@ export default function MapPage() {
       (pos) => {
         setGeoStatus(null);
         lastSource.current = { kind: "gps" };
+        shareSession.source = lastSource.current;
         setExactAndPublish({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       },
       (err) => {
@@ -133,6 +142,8 @@ export default function MapPage() {
 
   const onStop = useCallback(() => {
     stop();
+    shareSession.exact = null;
+    shareSession.source = null;
     setExact(null);
     lastSource.current = null;
     setGeoStatus(null);
@@ -142,6 +153,8 @@ export default function MapPage() {
   // Sync local exact coords when sharing auto-stops (24 h limit / server expiry).
   useEffect(() => {
     if (state.selfPublic === null && exact !== null) {
+      shareSession.exact = null;
+      shareSession.source = null;
       setExact(null);
       lastSource.current = null;
       setGeoStatus(null);

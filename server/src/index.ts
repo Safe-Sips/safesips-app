@@ -21,6 +21,7 @@ import {
   untrackUserSocket,
   type SocketData,
 } from "./realtime.js";
+import { clerkMiddleware } from "@clerk/express";
 import { resolveAuthFromToken } from "./auth/clerk.js";
 import { purgeOldAttempts } from "./auth/throttle.js";
 import { startCheckinScheduler } from "./checkinScheduler.js";
@@ -67,6 +68,9 @@ app.use((_req, res, next) => {
 });
 
 app.use(express.json({ limit: "32kb" }));
+if (config.clerkSecretKey) {
+  app.use(clerkMiddleware());
+}
 
 const store = new PresenceStore(config.presenceTtlMs);
 
@@ -123,12 +127,11 @@ const io = new Server<
 });
 setIo(io);
 
-// Presence sockets: Clerk/legacy JWT when present; otherwise guest (mobile).
+// Authenticated handshake: a valid Clerk (or smoke-test) token is required.
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token as string | undefined;
   if (!token) {
-    socket.data.userId = `guest:${socket.id}`;
-    next();
+    next(new Error("unauthorized"));
     return;
   }
   void resolveAuthFromToken(token)

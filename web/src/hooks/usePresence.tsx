@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   LatLng,
   maskLocation,
@@ -26,14 +35,27 @@ function activeRecords(map: Map<string, PresenceRecord>): PresenceRecord[] {
   return Array.from(map.values()).filter((r) => r.expiresAt > now);
 }
 
+export interface PresenceApi {
+  state: PresenceState;
+  publish: (exact: LatLng, remask?: boolean) => void;
+  stop: () => void;
+  clearNotice: () => void;
+}
+
+const PresenceContext = createContext<PresenceApi | null>(null);
+
 /**
  * Presence state on top of the shared authenticated socket.
  *
  * The exact location passed to `publish` is masked locally; only the masked
  * center is ever emitted. While sharing, a heartbeat keeps the record visible
  * to all connected users. Sharing auto-stops after 24 hours.
+ *
+ * Must live above page routes (see PresenceProvider) so leaving the map tab
+ * does not tear down heartbeats. Presence is removed when the socket
+ * disconnects (app close / sign-out).
  */
-export function usePresence() {
+function usePresenceController(): PresenceApi {
   const { socket, connection } = useSocket();
   const [selfId, setSelfId] = useState<string | null>(null);
   const [records, setRecords] = useState<Map<string, PresenceRecord>>(new Map());
@@ -99,11 +121,20 @@ export function usePresence() {
       if (code === "share_expired") stopLocal();
     };
 
+    const onConnect = () => {
+      // Re-publish immediately on reconnect so presence returns without
+      // waiting for the next heartbeat.
+      if (sharingRef.current && maskedRef.current) {
+        emitMasked(maskedRef.current);
+      }
+    };
+
     socket.on("presence:self", onSelf);
     socket.on("presence:init", onInit);
     socket.on("presence:upsert", onUpsert);
     socket.on("presence:remove", onRemove);
     socket.on("error:notice", onNotice);
+    socket.on("connect", onConnect);
 
     return () => {
       socket.off("presence:self", onSelf);
@@ -111,8 +142,9 @@ export function usePresence() {
       socket.off("presence:upsert", onUpsert);
       socket.off("presence:remove", onRemove);
       socket.off("error:notice", onNotice);
+      socket.off("connect", onConnect);
     };
-  }, [socket, stopLocal]);
+  }, [socket, stopLocal, emitMasked]);
 
   // Drop stale records so other users disappear when their TTL expires.
   useEffect(() => {
@@ -183,4 +215,20 @@ export function usePresence() {
   };
 
   return { state, publish, stop, clearNotice };
+}
+
+/** Owns sharing/heartbeats for the whole authenticated session. */
+export function PresenceProvider({ children }: { children: ReactNode }) {
+  const value = usePresenceController();
+  return (
+    <PresenceContext.Provider value={value}>{children}</PresenceContext.Provider>
+  );
+}
+
+export function usePresence(): PresenceApi {
+  const ctx = useContext(PresenceContext);
+  if (!ctx) {
+    throw new Error("usePresence must be used within PresenceProvider");
+  }
+  return ctx;
 }

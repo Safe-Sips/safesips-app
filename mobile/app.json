@@ -12,12 +12,14 @@
       "backgroundColor": "#e6eaf6"
     },
     "ios": {
+      "bundleIdentifier": "app.safesips.mobile",
       "supportsTablet": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "SafeSips uses your location only to create a private, approximate 200 m area. Your exact position stays on your device."
       }
     },
     "android": {
+      "package": "app.safesips.mobile",
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "ACCESS_FINE_LOCATION",
@@ -25,6 +27,8 @@
       ]
     },
     "plugins": [
+      "expo-secure-store",
+      "@clerk/expo",
       [
         "expo-location",
         {

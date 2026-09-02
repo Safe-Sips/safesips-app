@@ -21,7 +21,7 @@ function activeRecords(map: Map<string, PresenceRecord>): PresenceRecord[] {
  * center is emitted. While sharing, a heartbeat keeps presence visible to all
  * connected users. Sharing auto-stops after 24 hours.
  */
-export function usePresence() {
+export function usePresence(token: string | null) {
   const socketRef = useRef<AppSocket | null>(null);
   const selfIdRef = useRef<string | null>(null);
   const maskedRef = useRef<LatLng | null>(null);
@@ -53,7 +53,11 @@ export function usePresence() {
   }, []);
 
   useEffect(() => {
-    const socket = createSocket();
+    if (!token) {
+      setConnection("disconnected");
+      return;
+    }
+    const socket = createSocket(token);
     socketRef.current = socket;
 
     socket.on("connect", () => {
@@ -108,7 +112,7 @@ export function usePresence() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [stopLocal, emitMasked]);
+  }, [stopLocal, emitMasked, token]);
 
   useEffect(() => {
     const id = setInterval(() => {

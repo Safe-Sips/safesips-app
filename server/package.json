@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@clerk/backend": "^3.16.10",
+    "@clerk/express": "^2.1.61",
     "@safesips/shared": "*",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.11.1",

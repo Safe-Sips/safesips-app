@@ -1,5 +1,6 @@
 import { Outlet } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { PresenceProvider } from "../hooks/usePresence";
 import { SocketProvider } from "../socket/SocketProvider";
 import ActiveCheckinModal from "./ActiveCheckinModal";
 import NavBar from "./NavBar";
@@ -25,14 +26,16 @@ function VerifyBanner() {
 export default function AppShell() {
   return (
     <SocketProvider>
-      <div className="shell">
-        <NavBar />
-        <VerifyBanner />
-        <main className="shell-main">
-          <Outlet />
-        </main>
-        <ActiveCheckinModal />
-      </div>
+      <PresenceProvider>
+        <div className="shell">
+          <NavBar />
+          <VerifyBanner />
+          <main className="shell-main">
+            <Outlet />
+          </main>
+          <ActiveCheckinModal />
+        </div>
+      </PresenceProvider>
     </SocketProvider>
   );
 }

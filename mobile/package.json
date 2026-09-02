@@ -12,11 +12,16 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@clerk/expo": "^4.5.2",
     "@maplibre/maplibre-react-native": "^10.0.0",
     "@safesips/shared": "file:../shared",
     "expo": "~52.0.0",
+    "expo-auth-session": "~6.0.3",
+    "expo-crypto": "~14.0.2",
     "expo-location": "~18.0.0",
+    "expo-secure-store": "~14.0.1",
     "expo-status-bar": "~2.0.0",
+    "expo-web-browser": "~14.0.2",
     "react": "18.3.1",
     "react-native": "0.76.3",
     "react-native-safe-area-context": "^4.12.0",

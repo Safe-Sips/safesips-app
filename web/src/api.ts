@@ -117,11 +117,6 @@ export const api = {
 
   // Auth
   me: () => request<{ user: UserDTO }>("/api/auth/me"),
-  logout: () => request<{ ok: true }>("/api/auth/logout", { method: "POST" }),
-  resendVerification: () =>
-    request<{ ok: true; verifyUrl?: string }>("/api/auth/resend-verification", {
-      method: "POST",
-    }),
 
   // Reports
   listReports: (bbox?: string) =>

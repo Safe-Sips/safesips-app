@@ -116,19 +116,24 @@ export async function resolveAuthFromToken(
       user: clerkResult.user,
     };
   }
-  // Only fall through to legacy JWT when Clerk isn't configured or the token
-  // clearly isn't a Clerk session (verify failed). Prefer Clerk error codes.
-  if (clerkResult.code === "clerk_not_configured") {
+  // Legacy app JWTs: only when Clerk is unset, or smoke tests mint a test token.
+  if (
+    clerkResult.code === "clerk_not_configured" ||
+    config.allowTestToken
+  ) {
     const legacy = verifyToken(token);
-    if (!legacy) return clerkResult;
-    const user = findUserById(legacy.userId);
-    if (!user || user.status !== "active") return { ok: false, code: "bad_token" };
-    return {
-      ok: true,
-      userId: user.id,
-      sessionId: legacy.sessionId,
-      user,
-    };
+    if (legacy) {
+      const user = findUserById(legacy.userId);
+      if (user && user.status === "active") {
+        return {
+          ok: true,
+          userId: user.id,
+          sessionId: legacy.sessionId,
+          user,
+        };
+      }
+    }
+    if (clerkResult.code === "clerk_not_configured") return clerkResult;
   }
 
   return clerkResult;

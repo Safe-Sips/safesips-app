@@ -2,13 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
-  useWindowDimensions,
   View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
@@ -18,7 +14,6 @@ import MapLibreGL from "@maplibre/maplibre-react-native";
 import { LatLng, PUBLIC_RADIUS_METERS } from "@safesips/shared";
 import { OSM_RASTER_STYLE_JSON } from "./src/mapStyle";
 import { circlePolygon, toFeatureCollection } from "./src/geo";
-import { geocodeAddress } from "./src/geocode";
 import { useClerk } from "@clerk/expo";
 import { usePresence } from "./src/usePresence";
 
@@ -26,14 +21,12 @@ MapLibreGL.setAccessToken(null);
 
 const DEFAULT_CENTER: [number, number] = [26.1025, 44.4268];
 
-type Source = { kind: "gps" } | { kind: "address"; address: string } | null;
-
 /**
  * Mobile map + share controls.
  *
  * Layout rules:
  * - Map is always the dominant surface (full screen).
- * - Status chip floats on the map; bottom dock is fixed at 25% of screen height.
+ * - Status chip floats on the map; bottom dock hugs share + status content.
  */
 export default function App({ sessionToken }: { sessionToken: string }) {
   const { signOut } = useClerk();
@@ -47,16 +40,13 @@ export default function App({ sessionToken }: { sessionToken: string }) {
     stop,
   } = usePresence(sessionToken);
   const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
-  const sheetHeight = Math.round(windowHeight * 0.25);
   const sharing = selfPublic !== null;
 
   const [exact, setExact] = useState<LatLng | null>(null);
-  const [address, setAddress] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [acked, setAcked] = useState(false);
-  const lastSource = useRef<Source>(null);
+  const lastSource = useRef<"gps" | null>(null);
   const cameraRef = useRef<any>(null);
 
   useEffect(() => {
@@ -88,43 +78,20 @@ export default function App({ sessionToken }: { sessionToken: string }) {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        setError("Location permission denied. Try an address instead.");
+        setError("Location permission denied. Enable location access to share.");
         return;
       }
       const pos = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
-      lastSource.current = { kind: "gps" };
+      lastSource.current = "gps";
       setAndPublish({ lat: pos.coords.latitude, lng: pos.coords.longitude });
     } catch {
-      setError("Could not get GPS. Try entering an address.");
+      setError("Could not get GPS. Check permissions and try again.");
     } finally {
       setBusy(false);
     }
   }, [setAndPublish]);
-
-  const runAddress = useCallback(
-    async (value: string) => {
-      const query = value.trim();
-      if (!query) return;
-      setError(null);
-      setBusy(true);
-      try {
-        const result = await geocodeAddress(query);
-        if (!result) {
-          setError("No match for that address.");
-          return;
-        }
-        lastSource.current = { kind: "address", address: query };
-        setAndPublish({ lat: result.lat, lng: result.lng });
-      } catch {
-        setError("Address lookup failed. Try again.");
-      } finally {
-        setBusy(false);
-      }
-    },
-    [setAndPublish]
-  );
 
   const guard = useCallback(
     (action: () => void) => {
@@ -153,10 +120,8 @@ export default function App({ sessionToken }: { sessionToken: string }) {
   );
 
   const onUpdate = useCallback(() => {
-    const source = lastSource.current;
-    if (source?.kind === "gps") void runGps();
-    else if (source?.kind === "address") void runAddress(source.address);
-  }, [runGps, runAddress]);
+    if (lastSource.current === "gps") void runGps();
+  }, [runGps]);
 
   const onStop = useCallback(() => {
     stop();
@@ -294,116 +259,80 @@ export default function App({ sessionToken }: { sessionToken: string }) {
         </Pressable>
       </View>
 
-      <KeyboardAvoidingView
+      <View
         style={[
           styles.dock,
           { paddingBottom: Math.max(insets.bottom, 6) },
         ]}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : undefined}
         pointerEvents="box-none"
       >
-        <View style={[styles.sheet, { height: sheetHeight }]}>
+        <View style={styles.sheet}>
           {!sharing ? (
-            <>
-              <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Share my location"
-                  style={({ pressed }) => [
-                    styles.primaryBtn,
-                    pressed && styles.pressed,
-                    (!online || busy) && styles.disabled,
-                  ]}
-                  disabled={!online || busy}
-                  onPress={() => guard(() => void runGps())}
-                >
-                  {busy ? (
-                    <ActivityIndicator color="#1a1700" />
-                  ) : (
-                    <Text style={styles.primaryBtnText}>Share my location</Text>
-                  )}
-                </Pressable>
-
-                <View style={styles.addressRow}>
-                  <TextInput
-                    style={styles.input}
-                    value={address}
-                    onChangeText={setAddress}
-                    placeholder="Or enter an address"
-                    placeholderTextColor="#8b90a5"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    maxLength={500}
-                    returnKeyType="go"
-                    editable={online && !busy}
-                    onSubmitEditing={() =>
-                      guard(() => void runAddress(address))
-                    }
-                    accessibilityLabel="Address"
-                  />
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel="Share from address"
-                    style={({ pressed }) => [
-                      styles.goBtn,
-                      pressed && styles.pressed,
-                      (!online || !address.trim() || busy) && styles.disabled,
-                    ]}
-                    disabled={!online || !address.trim() || busy}
-                    onPress={() => guard(() => void runAddress(address))}
-                  >
-                    <Text style={styles.goBtnText}>Go</Text>
-                  </Pressable>
-                </View>
-              </>
-            ) : (
-              <View style={styles.sharingRow}>
-                <View style={styles.sharingMeta}>
-                  <Text style={styles.sharingTitle} numberOfLines={1}>
-                    Sharing · {others.length} nearby
-                  </Text>
-                  <Text style={styles.sharingSub} numberOfLines={1}>
-                    Updated {lastUpdateText}
-                  </Text>
-                </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Stop sharing"
-                  style={({ pressed }) => [
-                    styles.stopBtn,
-                    pressed && styles.pressed,
-                  ]}
-                  onPress={onStop}
-                >
-                  <Text style={styles.stopBtnText}>Stop</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Update location"
-                  style={({ pressed }) => [
-                    styles.updateBtn,
-                    pressed && styles.pressed,
-                    (!online || busy) && styles.disabled,
-                  ]}
-                  disabled={!online || busy}
-                  onPress={onUpdate}
-                >
-                  {busy ? (
-                    <ActivityIndicator color="#1b2440" size="small" />
-                  ) : (
-                    <Text style={styles.updateBtnText}>Update</Text>
-                  )}
-                </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Share my location"
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                pressed && styles.pressed,
+                (!online || busy) && styles.disabled,
+              ]}
+              disabled={!online || busy}
+              onPress={() => guard(() => void runGps())}
+            >
+              {busy ? (
+                <ActivityIndicator color="#1a1700" />
+              ) : (
+                <Text style={styles.primaryBtnText}>Share my location</Text>
+              )}
+            </Pressable>
+          ) : (
+            <View style={styles.sharingRow}>
+              <View style={styles.sharingMeta}>
+                <Text style={styles.sharingTitle} numberOfLines={1}>
+                  Sharing · {others.length} nearby
+                </Text>
+                <Text style={styles.sharingSub} numberOfLines={1}>
+                  Updated {lastUpdateText}
+                </Text>
               </View>
-            )}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Stop sharing"
+                style={({ pressed }) => [
+                  styles.stopBtn,
+                  pressed && styles.pressed,
+                ]}
+                onPress={onStop}
+              >
+                <Text style={styles.stopBtnText}>Stop</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Update location"
+                style={({ pressed }) => [
+                  styles.updateBtn,
+                  pressed && styles.pressed,
+                  (!online || busy) && styles.disabled,
+                ]}
+                disabled={!online || busy}
+                onPress={onUpdate}
+              >
+                {busy ? (
+                  <ActivityIndicator color="#1b2440" size="small" />
+                ) : (
+                  <Text style={styles.updateBtnText}>Update</Text>
+                )}
+              </Pressable>
+            </View>
+          )}
 
-            {(error || notice) && (
-              <Text style={styles.error} numberOfLines={2} accessibilityLiveRegion="polite">
-                {error || notice}
-              </Text>
-            )}
+          {(error || notice) && (
+            <Text style={styles.error} numberOfLines={2} accessibilityLiveRegion="polite">
+              {error || notice}
+            </Text>
+          )}
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </View>
   );
 }
@@ -448,6 +377,9 @@ const styles = StyleSheet.create({
   mapOverlay: {
     position: "absolute",
     zIndex: 2,
+    flexDirection: "row",
+    gap: 8,
+    alignItems: "center",
   },
   dock: {
     position: "absolute",
@@ -473,7 +405,6 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     paddingBottom: 10,
     gap: 8,
-    justifyContent: "center",
   },
   pill: {
     flexDirection: "row",
@@ -550,34 +481,6 @@ const styles = StyleSheet.create({
   updateBtnText: {
     color: "#1b2440",
     fontWeight: "700",
-    fontSize: 13,
-  },
-  addressRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  input: {
-    flex: 1,
-    minHeight: 40,
-    backgroundColor: "rgba(24, 33, 60, 0.05)",
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "rgba(24, 33, 60, 0.1)",
-    color: "#1b2440",
-    paddingHorizontal: 10,
-    paddingVertical: Platform.OS === "ios" ? 10 : 6,
-    fontSize: 14,
-  },
-  goBtn: {
-    backgroundColor: "#0e1330",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    minHeight: 40,
-    justifyContent: "center",
-  },
-  goBtnText: {
-    color: "#f4f4f7",
-    fontWeight: "800",
     fontSize: 13,
   },
   error: {
