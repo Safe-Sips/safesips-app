@@ -6,8 +6,8 @@ export default function LoginPage() {
 
   if (!isLoaded) {
     return (
-      <div className="boot-screen">
-        <p>Loading SafeSips…</p>
+      <div className="auth-page">
+        <p className="auth-loading">Loading…</p>
       </div>
     );
   }

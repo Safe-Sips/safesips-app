@@ -732,6 +732,11 @@ body {
 .auth-page .cl-rootBox {
   margin: 0 auto;
 }
+.auth-loading {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
 .auth-card {
   width: min(420px, 100%);
   background: var(--panel);
