@@ -716,11 +716,6 @@ body {
 
 /* ============================== Auth pages ============================== */
 
-.auth-layout {
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-}
 .clerk-auth-controls {
   display: flex;
   align-items: center;
@@ -734,9 +729,8 @@ body {
   padding: 24px;
   overflow-y: auto;
 }
-.auth-layout > .auth-page {
-  min-height: 0;
-  flex: 1;
+.auth-page .cl-rootBox {
+  margin: 0 auto;
 }
 .auth-card {
   width: min(420px, 100%);
@@ -745,13 +739,6 @@ body {
   border-radius: var(--radius);
   padding: 26px;
   box-shadow: 0 24px 64px rgba(24, 33, 60, 0.16);
-}
-.clerk-card {
-  width: min(480px, 100%);
-}
-.clerk-card .cl-rootBox {
-  width: 100%;
-  margin: 0 auto;
 }
 .auth-brand {
   display: flex;
@@ -774,16 +761,8 @@ body {
   color: var(--muted);
   margin: 12px 0 0;
 }
-.auth-alt a,
-.auth-emergency a {
+.auth-alt a {
   color: var(--accent);
-}
-.auth-emergency {
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid var(--panel-border);
-  font-size: 13px;
-  color: var(--muted);
 }
 .verify-ok {
   color: #1f9d54;
