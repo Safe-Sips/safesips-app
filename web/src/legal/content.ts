@@ -1,3 +1,5 @@
+import { EMERGENCY_NUMBER } from "../content/firstAid";
+
 export const PRIVACY_POLICY = `
 Privacy Policy (Summary)
 
@@ -49,7 +51,7 @@ Last updated: June 2026
 By using SafeSips you agree to these terms.
 
 Not an emergency service
-• SafeSips is NOT a substitute for emergency services (e.g., 911). In an emergency, contact local emergency services immediately.
+• SafeSips is NOT a substitute for emergency services (e.g., ${EMERGENCY_NUMBER}). In an emergency, contact local emergency services immediately.
 
 No professional advice
 • SafeSips does not provide medical, legal, security, or safety advice. Location masking reduces precision but does not guarantee anonymity or safety.
@@ -82,5 +84,4 @@ Contact
 This summary is not legal advice. Consult qualified counsel before relying on it for compliance or litigation purposes.
 `.trim();
 
-export const EMERGENCY_DISCLAIMER =
-  "SafeSips is not an emergency service. Call 911 (or your local emergency number) in an emergency.";
+export const EMERGENCY_DISCLAIMER = `SafeSips is not an emergency service. Call ${EMERGENCY_NUMBER} (or your local emergency number) in an emergency.`;
