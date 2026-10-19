@@ -150,3 +150,53 @@ test("wrong check-in answer is rejected but stays answerable", () => {
   const good = checkins.answerOccurrence(user.id, "occ-wrong", "secret");
   assert.ok(good && good.correct, "correct answer still accepted afterwards");
 });
+
+test("presence: live mode expires after the TTL", async () => {
+  const { PresenceStore } = await import("../src/presenceStore.js");
+  const store = new PresenceStore(300_000);
+  const rec = store.upsert("a", { lat: 1, lng: 2 }, 1_000);
+  assert.equal(rec.expiresAt, 301_000);
+  assert.equal(store.active(300_999).length, 1);
+  assert.deepEqual(store.sweepExpired(301_000), ["a"]);
+});
+
+test("presence: 'share for' hold keeps the circle until the chosen time", async () => {
+  const { PresenceStore } = await import("../src/presenceStore.js");
+  const store = new PresenceStore(300_000);
+  const hour = 60 * 60 * 1000;
+  store.upsert("b", { lat: 1, lng: 2 }, 0, hour);
+  // No heartbeats for 59 minutes (phone locked): still visible.
+  assert.equal(store.active(hour - 60_000).length, 1);
+  assert.ok(store.get("b", hour - 1));
+  // Ends exactly on time, not TTL later.
+  assert.deepEqual(store.sweepExpired(hour), ["b"]);
+});
+
+test("location validation accepts, clamps and drops holdMs", () => {
+  const max = shared.SHARE_MAX_DURATION_MS;
+  assert.deepEqual(shared.validateLocationUpdate({ lat: 1, lng: 2 }).value, {
+    lat: 1,
+    lng: 2,
+  });
+  assert.deepEqual(
+    shared.validateLocationUpdate({ lat: 1, lng: 2, holdMs: 3_600_000 }).value,
+    { lat: 1, lng: 2, holdMs: 3_600_000 }
+  );
+  assert.equal(
+    shared.validateLocationUpdate({ lat: 1, lng: 2, holdMs: max * 10 }).value
+      ?.holdMs,
+    max
+  );
+  for (const bad of [-5, 0, "1h", Number.NaN, null]) {
+    assert.equal(
+      shared.validateLocationUpdate({ lat: 1, lng: 2, holdMs: bad }).value
+        ?.holdMs,
+      undefined
+    );
+  }
+  // Unknown fields are still discarded.
+  assert.deepEqual(
+    shared.validateLocationUpdate({ lat: 1, lng: 2, exactLat: 9 }).value,
+    { lat: 1, lng: 2 }
+  );
+});

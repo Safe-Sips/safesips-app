@@ -15,15 +15,26 @@ export class PresenceStore {
 
   constructor(private readonly ttlMs: number) {}
 
-  /** Create or update a record from a masked center. Returns the record. */
-  upsert(publicId: string, center: LatLng, now = Date.now()): PresenceRecord {
+  /**
+   * Create or update a record from a masked center. Returns the record.
+   *
+   * Live mode (`holdMs` = 0): the record stays visible for the TTL after this
+   * update. "Share for 1 hour" etc.: it stays for exactly `holdMs`, so it
+   * survives the phone locking or the app closing and ends on time.
+   */
+  upsert(
+    publicId: string,
+    center: LatLng,
+    now = Date.now(),
+    holdMs = 0
+  ): PresenceRecord {
     const record: PresenceRecord = {
       publicId,
       lat: center.lat,
       lng: center.lng,
       radiusMeters: PUBLIC_RADIUS_METERS,
       updatedAt: now,
-      expiresAt: now + this.ttlMs,
+      expiresAt: now + (holdMs > 0 ? holdMs : this.ttlMs),
       status: "active",
     };
     this.records.set(publicId, record);
@@ -36,6 +47,12 @@ export class PresenceStore {
 
   has(publicId: string): boolean {
     return this.records.has(publicId);
+  }
+
+  /** The record for an id if it exists and has not expired yet. */
+  get(publicId: string, now = Date.now()): PresenceRecord | undefined {
+    const record = this.records.get(publicId);
+    return record && record.expiresAt > now ? record : undefined;
   }
 
   /** All currently non-expired records. */

@@ -95,7 +95,7 @@ Key server settings (`server/.env`):
 
 - `PORT` (default 4000)
 - `CORS_ORIGINS` - comma-separated allowed origins (e.g. `http://localhost:5173`)
-- `PRESENCE_TTL_MS` - inactivity timeout before a circle is removed (default 60000)
+- `PRESENCE_TTL_MS` - in live mode, how long a circle stays after the last update (default 300000 = 5 min). Circles shared "for 1 hour" etc. stay for the chosen time instead.
 - `SWEEP_INTERVAL_MS` - how often expired records are purged (default 5000)
 - `MIN_UPDATE_INTERVAL_MS` - per-socket rate limit (default 2000)
 - `NODE_ENV=production` - enables `trust proxy` for HTTPS/WSS termination
@@ -206,7 +206,10 @@ Notes:
 4. Open the browser Network/WS frames: confirm payloads contain only the masked
    `lat`/`lng`, never the exact position.
 5. Click **Stop sharing** in tab A - the circle disappears from tab B instantly.
-6. Share again, then close tab A without stopping. After `PRESENCE_TTL_MS`
-   (default 60s) the circle is removed from tab B by the server sweep.
+6. Share again with "Share for: While the app is open", then close tab A
+   without stopping. After `PRESENCE_TTL_MS` (default 5 min) the circle is
+   removed from tab B by the server sweep. With "Share for: 1 hour" the circle
+   stays for the full hour instead. Reopening tab A shows "Sharing" again with
+   a Stop button.
 7. Repeat across web + mobile to confirm both clients interoperate on the same
    server.

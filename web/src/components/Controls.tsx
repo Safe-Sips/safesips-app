@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { SHARE_DURATION_OPTIONS_MS } from "@safesips/shared";
 import type { ConnectionState } from "../hooks/usePresence";
 
 interface ControlsProps {
@@ -8,6 +9,11 @@ interface ControlsProps {
   geoError: string | null;
   notice: string | null;
   lastUpdateAt: number | null;
+  /** Epoch ms when a timed share ends; null for live mode / not sharing. */
+  sharedUntil: number | null;
+  /** Selected "share for" duration; 0 = only while the app is open. */
+  durationMs: number;
+  onDurationChange: (ms: number) => void;
   othersCount: number;
   onShareGps: () => void;
   onUpdate: () => void;
@@ -47,6 +53,51 @@ function useTimeSince(timestamp: number | null): string {
   return `${minutes}m ${seconds % 60}s ago`;
 }
 
+function durationLabel(ms: number): string {
+  if (ms <= 0) return "While the app is open";
+  const hours = ms / (60 * 60 * 1000);
+  return hours === 1 ? "1 hour" : `${hours} hours`;
+}
+
+function clockTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function DurationPicker({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (ms: number) => void;
+}) {
+  const options: number[] = [...SHARE_DURATION_OPTIONS_MS];
+  if (!options.includes(value)) options.push(value);
+  return (
+    <label className="field share-duration">
+      <span>Share for</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(Number.parseInt(e.target.value, 10))}
+      >
+        {options.map((ms) => (
+          <option key={ms} value={ms}>
+            {durationLabel(ms)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function sharingHint(sharedUntil: number | null): string {
+  return sharedUntil
+    ? `Stays on the map until ${clockTime(sharedUntil)}, even if your phone locks or you close the app. Tap Stop to end it sooner.`
+    : "Live: your circle disappears a few minutes after you leave the app. Auto-stops after 24 hours.";
+}
+
 export default function Controls({
   connection,
   sharing,
@@ -54,6 +105,9 @@ export default function Controls({
   geoError,
   notice,
   lastUpdateAt,
+  sharedUntil,
+  durationMs,
+  onDurationChange,
   othersCount,
   onShareGps,
   onUpdate,
@@ -80,6 +134,8 @@ export default function Controls({
           </span>
         </div>
 
+        <DurationPicker value={durationMs} onChange={onDurationChange} />
+
         {!sharing ? (
           <button
             className="btn btn-primary btn-block"
@@ -95,7 +151,8 @@ export default function Controls({
                 <span className="dot-live" /> Sharing
               </strong>
               <span>
-                {timeSince} · {othersCount} nearby
+                {sharedUntil ? `until ${clockTime(sharedUntil)}` : timeSince} ·{" "}
+                {othersCount} nearby
               </span>
             </div>
             <div className="panel-mobile-sharing-actions">
@@ -109,6 +166,7 @@ export default function Controls({
           </div>
         )}
 
+        {sharing && <p className="hint">{sharingHint(sharedUntil)}</p>}
         {geoStatus && <p className="hint">{geoStatus}</p>}
         {geoError && <p className="error">{geoError}</p>}
         {notice && <p className="error">{notice}</p>}
@@ -153,6 +211,8 @@ export default function Controls({
         </span>
       </header>
 
+      <DurationPicker value={durationMs} onChange={onDurationChange} />
+
       <button
         className="btn btn-primary btn-block"
         onClick={onShareGps}
@@ -182,6 +242,12 @@ export default function Controls({
           <span className="sharing-label">Last update</span>
           <span className="sharing-value">{timeSince}</span>
         </div>
+        {sharing && sharedUntil && (
+          <div className="sharing-row">
+            <span className="sharing-label">Sharing until</span>
+            <span className="sharing-value">{clockTime(sharedUntil)}</span>
+          </div>
+        )}
         <div className="sharing-row">
           <span className="sharing-label">Others sharing</span>
           <span className="sharing-value">{othersCount}</span>
@@ -197,9 +263,7 @@ export default function Controls({
             </button>
           </div>
         )}
-        {sharing && (
-          <p className="hint">Auto-stops after 24 hours.</p>
-        )}
+        {sharing && <p className="hint">{sharingHint(sharedUntil)}</p>}
       </div>
 
       <p className="privacy-note">

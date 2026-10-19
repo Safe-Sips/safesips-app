@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  DEFAULT_SHARE_DURATION_MS,
   LatLng,
   maskLocation,
   PRESENCE_HEARTBEAT_MS,
@@ -19,6 +20,11 @@ import { useSocket, type ConnectionState } from "../socket/SocketProvider";
 
 export type { ConnectionState } from "../socket/SocketProvider";
 
+const DURATION_KEY = "safesips.shareDurationMs";
+
+/** Minimum gap between two emits we trigger ourselves (server limit is 2 s). */
+const MIN_EMIT_GAP_MS = 3_000;
+
 export interface PresenceState {
   connection: ConnectionState;
   selfId: string | null;
@@ -27,6 +33,13 @@ export interface PresenceState {
   /** This client's own masked public center, if currently sharing. */
   selfPublic: LatLng | null;
   lastUpdateAt: number | null;
+  /**
+   * Epoch ms when the current share ends on its own ("share for 1 hour").
+   * null in live mode or when not sharing.
+   */
+  sharedUntil: number | null;
+  /** Selected "share for" duration in ms; 0 = live (only while app is open). */
+  durationMs: number;
   notice: string | null;
 }
 
@@ -35,11 +48,26 @@ function activeRecords(map: Map<string, PresenceRecord>): PresenceRecord[] {
   return Array.from(map.values()).filter((r) => r.expiresAt > now);
 }
 
+function readStoredDuration(): number {
+  try {
+    const raw = localStorage.getItem(DURATION_KEY);
+    if (raw == null) return DEFAULT_SHARE_DURATION_MS;
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isFinite(parsed) && parsed >= 0
+      ? Math.min(parsed, SHARE_MAX_DURATION_MS)
+      : DEFAULT_SHARE_DURATION_MS;
+  } catch {
+    return DEFAULT_SHARE_DURATION_MS;
+  }
+}
+
 export interface PresenceApi {
   state: PresenceState;
   publish: (exact: LatLng, remask?: boolean) => void;
   stop: () => void;
   clearNotice: () => void;
+  /** Change the "share for" duration. If already sharing, restarts the timer. */
+  setDurationMs: (ms: number) => void;
 }
 
 const PresenceContext = createContext<PresenceApi | null>(null);
@@ -48,12 +76,16 @@ const PresenceContext = createContext<PresenceApi | null>(null);
  * Presence state on top of the shared authenticated socket.
  *
  * The exact location passed to `publish` is masked locally; only the masked
- * center is ever emitted. While sharing, a heartbeat keeps the record visible
- * to all connected users. Sharing auto-stops after 24 hours.
+ * center is ever emitted.
+ *
+ * Two modes:
+ *  - Live (duration 0): heartbeats keep the circle visible; if they stop
+ *    (phone locked, tab closed) the server drops it after its grace period.
+ *  - Share for N hours: every update also tells the server how long to keep
+ *    the circle, so it stays up even while the phone sleeps, then ends on time.
  *
  * Must live above page routes (see PresenceProvider) so leaving the map tab
- * does not tear down heartbeats. Presence is removed when the socket
- * disconnects (app close / sign-out).
+ * does not tear down heartbeats. Signing out removes the circle immediately.
  */
 function usePresenceController(): PresenceApi {
   const { socket, connection } = useSocket();
@@ -61,29 +93,62 @@ function usePresenceController(): PresenceApi {
   const [records, setRecords] = useState<Map<string, PresenceRecord>>(new Map());
   const [selfPublic, setSelfPublic] = useState<LatLng | null>(null);
   const [lastUpdateAt, setLastUpdateAt] = useState<number | null>(null);
+  const [sharedUntil, setSharedUntil] = useState<number | null>(null);
+  const [durationMs, setDurationState] = useState<number>(readStoredDuration);
   const [notice, setNotice] = useState<string | null>(null);
   const selfIdRef = useRef<string | null>(null);
   const maskedRef = useRef<LatLng | null>(null);
   const shareStartedAtRef = useRef<number | null>(null);
   const sharingRef = useRef(false);
+  const holdUntilRef = useRef<number | null>(null);
+  const durationRef = useRef(durationMs);
+  const lastEmitRef = useRef(0);
 
   const stopLocal = useCallback(() => {
     sharingRef.current = false;
     maskedRef.current = null;
     shareStartedAtRef.current = null;
+    holdUntilRef.current = null;
     setSelfPublic(null);
     setLastUpdateAt(null);
+    setSharedUntil(null);
   }, []);
 
   const emitMasked = useCallback(
     (masked: LatLng) => {
+      const now = Date.now();
+      const holdUntil = holdUntilRef.current;
       setSelfPublic(masked);
-      setLastUpdateAt(Date.now());
+      setLastUpdateAt(now);
       setNotice(null);
-      socket?.emit("location:update", masked);
+      lastEmitRef.current = now;
+      if (holdUntil) {
+        socket?.emit("location:update", {
+          ...masked,
+          holdMs: Math.max(1, holdUntil - now),
+        });
+      } else {
+        socket?.emit("location:update", masked);
+      }
     },
     [socket]
   );
+
+  const stop = useCallback(() => {
+    socket?.emit("location:stop");
+    stopLocal();
+  }, [socket, stopLocal]);
+
+  /** True (and stops locally) if a timed share has run out. */
+  const endIfExpired = useCallback((): boolean => {
+    const holdUntil = holdUntilRef.current;
+    if (sharingRef.current && holdUntil && Date.now() >= holdUntil) {
+      stop();
+      setNotice("Location sharing ended (the time you chose is up).");
+      return true;
+    }
+    return false;
+  }, [stop]);
 
   useEffect(() => {
     if (!socket) return;
@@ -109,6 +174,40 @@ function usePresenceController(): PresenceApi {
         next.delete(publicId);
         return next;
       });
+      // Our own timed share was expired by the server.
+      if (
+        publicId === selfIdRef.current &&
+        holdUntilRef.current &&
+        Date.now() >= holdUntilRef.current - 5_000
+      ) {
+        stopLocal();
+        setNotice("Location sharing ended (the time you chose is up).");
+      }
+    };
+    const onResume = (data: {
+      publicId: string;
+      lat: number;
+      lng: number;
+      holdRemainingMs: number;
+    }) => {
+      // That circle is ours, not "someone nearby".
+      setRecords((prev) => {
+        if (!prev.has(data.publicId)) return prev;
+        const next = new Map(prev);
+        next.delete(data.publicId);
+        return next;
+      });
+      // Same page reconnecting: onConnect already re-published.
+      if (sharingRef.current) return;
+      const now = Date.now();
+      maskedRef.current = { lat: data.lat, lng: data.lng };
+      sharingRef.current = true;
+      shareStartedAtRef.current = now;
+      holdUntilRef.current =
+        data.holdRemainingMs > 0 ? now + data.holdRemainingMs : null;
+      setSharedUntil(holdUntilRef.current);
+      // Re-publish from this connection so the server moves the circle here.
+      emitMasked(maskedRef.current);
     };
     const onNotice = ({
       code,
@@ -124,7 +223,7 @@ function usePresenceController(): PresenceApi {
     const onConnect = () => {
       // Re-publish immediately on reconnect so presence returns without
       // waiting for the next heartbeat.
-      if (sharingRef.current && maskedRef.current) {
+      if (sharingRef.current && maskedRef.current && !endIfExpired()) {
         emitMasked(maskedRef.current);
       }
     };
@@ -133,6 +232,7 @@ function usePresenceController(): PresenceApi {
     socket.on("presence:init", onInit);
     socket.on("presence:upsert", onUpsert);
     socket.on("presence:remove", onRemove);
+    socket.on("presence:resume", onResume);
     socket.on("error:notice", onNotice);
     socket.on("connect", onConnect);
 
@@ -141,10 +241,11 @@ function usePresenceController(): PresenceApi {
       socket.off("presence:init", onInit);
       socket.off("presence:upsert", onUpsert);
       socket.off("presence:remove", onRemove);
+      socket.off("presence:resume", onResume);
       socket.off("error:notice", onNotice);
       socket.off("connect", onConnect);
     };
-  }, [socket, stopLocal, emitMasked]);
+  }, [socket, stopLocal, emitMasked, endIfExpired]);
 
   // Drop stale records so other users disappear when their TTL expires.
   useEffect(() => {
@@ -165,19 +266,40 @@ function usePresenceController(): PresenceApi {
           ? maskLocation(exact.lat, exact.lng)
           : maskedRef.current;
       maskedRef.current = masked;
-      if (!shareStartedAtRef.current) shareStartedAtRef.current = Date.now();
+      if (!sharingRef.current) {
+        // Starting a new share: start the clock for the chosen duration.
+        const now = Date.now();
+        shareStartedAtRef.current = now;
+        holdUntilRef.current =
+          durationRef.current > 0 ? now + durationRef.current : null;
+        setSharedUntil(holdUntilRef.current);
+      }
       sharingRef.current = true;
       emitMasked(masked);
     },
     [emitMasked]
   );
 
-  const stop = useCallback(() => {
-    socket?.emit("location:stop");
-    stopLocal();
-  }, [socket, stopLocal]);
+  const setDurationMs = useCallback(
+    (ms: number) => {
+      const value = Math.max(0, Math.min(ms, SHARE_MAX_DURATION_MS));
+      durationRef.current = value;
+      setDurationState(value);
+      try {
+        localStorage.setItem(DURATION_KEY, String(value));
+      } catch {
+        /* storage unavailable: keep in memory only */
+      }
+      if (sharingRef.current && maskedRef.current) {
+        holdUntilRef.current = value > 0 ? Date.now() + value : null;
+        setSharedUntil(holdUntilRef.current);
+        emitMasked(maskedRef.current);
+      }
+    },
+    [emitMasked]
+  );
 
-  // Heartbeat: keep this user's presence visible to everyone while sharing.
+  // Heartbeat: keep this user's presence fresh while sharing.
   useEffect(() => {
     if (!sharingRef.current || !maskedRef.current) return;
     const id = window.setInterval(() => {
@@ -190,10 +312,35 @@ function usePresenceController(): PresenceApi {
         setNotice("Location sharing stopped after 24 hours.");
         return;
       }
+      if (endIfExpired()) return;
       emitMasked(maskedRef.current);
     }, PRESENCE_HEARTBEAT_MS);
     return () => window.clearInterval(id);
-  }, [selfPublic, emitMasked, stop]);
+  }, [selfPublic, emitMasked, stop, endIfExpired]);
+
+  // End a timed share exactly on time while the page is open.
+  useEffect(() => {
+    if (!sharedUntil) return;
+    const id = window.setTimeout(
+      () => endIfExpired(),
+      Math.max(0, sharedUntil - Date.now()) + 250
+    );
+    return () => window.clearTimeout(id);
+  }, [sharedUntil, endIfExpired]);
+
+  // When the user comes back to the tab/app, refresh right away instead of
+  // waiting for a (possibly throttled) heartbeat.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (!sharingRef.current || !maskedRef.current) return;
+      if (endIfExpired()) return;
+      if (Date.now() - lastEmitRef.current < MIN_EMIT_GAP_MS) return;
+      emitMasked(maskedRef.current);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [emitMasked, endIfExpired]);
 
   const clearNotice = useCallback(() => setNotice(null), []);
 
@@ -211,10 +358,12 @@ function usePresenceController(): PresenceApi {
     others,
     selfPublic,
     lastUpdateAt,
+    sharedUntil,
+    durationMs,
     notice,
   };
 
-  return { state, publish, stop, clearNotice };
+  return { state, publish, stop, clearNotice, setDurationMs };
 }
 
 /** Owns sharing/heartbeats for the whole authenticated session. */

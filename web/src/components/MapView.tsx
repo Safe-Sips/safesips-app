@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   CircleMarker,
   MapContainer,
@@ -36,6 +36,25 @@ interface MapViewProps {
   onPickPoint: (point: LatLng) => void;
   onSelectReport: (report: ReportDTO) => void;
   onBoundsChange: (bounds: L.LatLngBounds) => void;
+}
+
+/** "updated 3 min ago" for other people's circles. */
+function updatedAgo(updatedAt: number, now: number): string {
+  const minutes = Math.floor(Math.max(0, now - updatedAt) / 60_000);
+  if (minutes < 1) return "updated just now";
+  if (minutes < 60) return `updated ${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  return `updated ${hours} h ${minutes % 60} min ago`;
+}
+
+/** Re-render every 30 s so "updated X min ago" labels stay current. */
+function useNow(intervalMs = 30_000): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), intervalMs);
+    return () => window.clearInterval(id);
+  }, [intervalMs]);
+  return now;
 }
 
 const DEFAULT_CENTER: [number, number] = [44.4268, 26.1025]; // Bucharest
@@ -137,6 +156,7 @@ export default function MapView({
   onSelectReport,
   onBoundsChange,
 }: MapViewProps) {
+  const now = useNow();
   return (
     <MapContainer
       center={DEFAULT_CENTER}
@@ -171,7 +191,7 @@ export default function MapView({
           }}
         >
           <Tooltip direction="top" offset={[0, -8]}>
-            Someone sharing nearby
+            Someone sharing nearby · {updatedAgo(record.updatedAt, now)}
           </Tooltip>
         </CircleMarker>
       ))}

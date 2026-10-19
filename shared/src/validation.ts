@@ -1,4 +1,4 @@
-import { LocationUpdatePayload } from "./types";
+import { LocationUpdatePayload, SHARE_MAX_DURATION_MS } from "./types";
 
 export interface ValidationResult<T> {
   ok: boolean;
@@ -13,8 +13,9 @@ function isFiniteNumber(value: unknown): value is number {
 /**
  * Validate an incoming location update payload.
  *
- * Accepts only a well-formed `{ lat, lng }` with coordinates inside valid
- * Earth ranges. Any extra fields are dropped so that nothing unexpected
+ * Accepts only a well-formed `{ lat, lng, holdMs? }` with coordinates inside
+ * valid Earth ranges. `holdMs` is optional: missing, invalid or non-positive
+ * values mean live mode, and values above the 24 h cap are clamped. Any extra fields are dropped so that nothing unexpected
  * (e.g. an accidental "exactLat") can be persisted or rebroadcast.
  */
 export function validateLocationUpdate(
@@ -24,7 +25,7 @@ export function validateLocationUpdate(
     return { ok: false, error: "Payload must be an object." };
   }
 
-  const { lat, lng } = payload as Record<string, unknown>;
+  const { lat, lng, holdMs } = payload as Record<string, unknown>;
 
   if (!isFiniteNumber(lat) || !isFiniteNumber(lng)) {
     return { ok: false, error: "lat and lng must be finite numbers." };
@@ -37,5 +38,9 @@ export function validateLocationUpdate(
   }
 
   // Re-construct a clean object, discarding any other fields.
-  return { ok: true, value: { lat, lng } };
+  const value: LocationUpdatePayload = { lat, lng };
+  if (isFiniteNumber(holdMs) && holdMs > 0) {
+    value.holdMs = Math.min(Math.floor(holdMs), SHARE_MAX_DURATION_MS);
+  }
+  return { ok: true, value };
 }
