@@ -16,6 +16,11 @@ import { config } from "./config.js";
 import { db } from "./db.js";
 import { PresenceStore } from "./presenceStore.js";
 import {
+  hasReachedMaxDuration,
+  isDeliberateDisconnect,
+  resumeDecision,
+} from "./presenceLogic.js";
+import {
   setIo,
   trackUserSocket,
   untrackUserSocket,
@@ -70,8 +75,19 @@ app.use(express.json({ limit: "32kb" }));
 
 const store = new PresenceStore(config.presenceTtlMs);
 
-/** One active presence circle per authenticated user (latest socket wins). */
-const activePublicIdByUserId = new Map<string, string>();
+/**
+ * One active presence circle per authenticated user (latest socket wins).
+ * Kept across reconnects so a circle outlives the socket that created it.
+ * `holdUntil` is 0 in live mode, otherwise the epoch ms the user chose to
+ * share until. `ownerSocketId` is the socket that last published it (used to
+ * tell a genuine reload from a second live session). `startedAt` is the epoch
+ * ms the share first began and is preserved across reconnects so the max-
+ * duration cap measures real wall-clock time.
+ */
+const activeShareByUserId = new Map<
+  string,
+  { publicId: string; holdUntil: number; ownerSocketId: string; startedAt: number }
+>();
 
 app.get("/health", (_req, res) => {
   try {
@@ -154,8 +170,8 @@ function removePresence(publicId: string, userId?: string): void {
     if (store.remove(publicId)) {
       io.emit("presence:remove", { publicId });
     }
-    if (userId && activePublicIdByUserId.get(userId) === publicId) {
-      activePublicIdByUserId.delete(userId);
+    if (userId && activeShareByUserId.get(userId)?.publicId === publicId) {
+      activeShareByUserId.delete(userId);
     }
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -189,6 +205,37 @@ io.on("connection", (socket) => {
   socket.emit("presence:self", { publicId });
   socket.emit("presence:init", store.active());
 
+  // If this user still has a circle from an earlier connection (page reload,
+  // app reopened), tell them so the UI shows "Sharing" with a Stop button.
+  // Skip this when another live socket of the same user still owns the circle:
+  // resuming there would hijack it and make the two sessions ping-pong the
+  // circle on every heartbeat.
+  {
+    const now = Date.now();
+    const existing = activeShareByUserId.get(socket.data.userId);
+    const record = existing ? store.get(existing.publicId, now) : undefined;
+    const ownerConnected = existing
+      ? io.sockets.sockets.has(existing.ownerSocketId)
+      : false;
+    const decision = resumeDecision({
+      hasExisting: !!existing,
+      recordExists: !!record,
+      ownerConnected,
+    });
+    if (decision === "resume" && existing && record) {
+      socket.emit("presence:resume", {
+        publicId: existing.publicId,
+        lat: record.lat,
+        lng: record.lng,
+        holdRemainingMs: existing.holdUntil
+          ? Math.max(0, existing.holdUntil - now)
+          : 0,
+      });
+    } else if (decision === "clear") {
+      activeShareByUserId.delete(socket.data.userId);
+    }
+  }
+
   socket.on("location:update", (payload) => {
     const now = Date.now();
 
@@ -196,20 +243,6 @@ io.on("connection", (socket) => {
       socket.emit("error:notice", {
         code: "rate_limited",
         message: "Too many location updates. Please slow down.",
-      });
-      return;
-    }
-
-    if (socket.data.shareStartedAt === 0) {
-      socket.data.shareStartedAt = now;
-    } else if (
-      now - socket.data.shareStartedAt >= config.shareMaxDurationMs
-    ) {
-      removePresence(publicId, socket.data.userId);
-      socket.data.shareStartedAt = 0;
-      socket.emit("error:notice", {
-        code: "share_expired",
-        message: "Location sharing stopped after 24 hours.",
       });
       return;
     }
@@ -225,13 +258,38 @@ io.on("connection", (socket) => {
 
     try {
       const userId = socket.data.userId;
-      const prevPublicId = activePublicIdByUserId.get(userId);
+      const existing = activeShareByUserId.get(userId);
+      // When the share first began. Preserved across reconnects so the max-
+      // duration cap can't be reset by dropping and re-opening the socket.
+      const startedAt = existing?.startedAt ?? now;
+
+      if (hasReachedMaxDuration(startedAt, now, config.shareMaxDurationMs)) {
+        removePresence(existing?.publicId ?? publicId, userId);
+        socket.emit("error:notice", {
+          code: "share_expired",
+          message: "Location sharing stopped after 24 hours.",
+        });
+        return;
+      }
+
+      const prevPublicId = existing?.publicId;
       if (prevPublicId && prevPublicId !== publicId) {
         removePresence(prevPublicId, userId);
       }
-      activePublicIdByUserId.set(userId, publicId);
+      const holdMs = result.value.holdMs ?? 0;
+      activeShareByUserId.set(userId, {
+        publicId,
+        holdUntil: holdMs > 0 ? now + holdMs : 0,
+        ownerSocketId: socket.id,
+        startedAt,
+      });
 
-      const record = store.upsert(publicId, result.value, now);
+      const record = store.upsert(
+        publicId,
+        { lat: result.value.lat, lng: result.value.lng },
+        now,
+        holdMs
+      );
       socket.data.lastUpdateAt = now;
       io.emit("presence:upsert", record);
     } catch (err) {
@@ -247,15 +305,25 @@ io.on("connection", (socket) => {
   socket.on("location:stop", () => {
     socket.data.shareStartedAt = 0;
     removePresence(publicId, socket.data.userId);
+    // Also clear a circle left behind by an earlier connection of this user.
+    const existing = activeShareByUserId.get(socket.data.userId);
+    if (existing) removePresence(existing.publicId, socket.data.userId);
   });
 
-  socket.on("disconnect", () => {
+  socket.on("disconnect", (reason) => {
     const remaining = (connectionsByIp.get(ip) ?? 1) - 1;
     if (remaining <= 0) connectionsByIp.delete(ip);
     else connectionsByIp.set(ip, remaining);
 
     untrackUserSocket(socket.data.userId, socket.id);
-    removePresence(publicId, socket.data.userId);
+
+    // Only a deliberate client disconnect (sign-out) removes the circle right
+    // away. Dropped connections (screen locked, app backgrounded, network
+    // blip, tab closed) keep it until it expires on its own, so locations no
+    // longer vanish the moment a phone goes to sleep.
+    if (isDeliberateDisconnect(reason)) {
+      removePresence(publicId, socket.data.userId);
+    }
   });
 });
 

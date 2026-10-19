@@ -102,7 +102,10 @@ export const config = {
   isProduction,
 
   // Real-time presence.
-  presenceTtlMs: intEnv("PRESENCE_TTL_MS", 90_000),
+  // How long a circle survives without updates in live mode. Must be well
+  // above the client heartbeat (45 s): browsers throttle background tabs to
+  // about one timer per minute, and phones pause them entirely when locked.
+  presenceTtlMs: intEnv("PRESENCE_TTL_MS", 5 * 60_000),
   shareMaxDurationMs: intEnv("SHARE_MAX_DURATION_MS", 24 * 60 * 60 * 1000),
   sweepIntervalMs: intEnv("SWEEP_INTERVAL_MS", 5_000),
   minUpdateIntervalMs: intEnv("MIN_UPDATE_INTERVAL_MS", 2_000),

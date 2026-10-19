@@ -30,7 +30,7 @@ const shareSession: { exact: LatLng | null; source: PendingAction | null } = {
 export default function MapPage() {
   const { user } = useAuth();
   const { socket } = useSocket();
-  const { state, publish, stop, clearNotice } = usePresence();
+  const { state, publish, stop, clearNotice, setDurationMs } = usePresence();
 
   // Exact location lives ONLY on this device; it is never emitted.
   const [exact, setExact] = useState<LatLng | null>(() => shareSession.exact);
@@ -136,8 +136,10 @@ export default function MapPage() {
     if (action?.kind === "gps") runGps();
   }, [pending, runGps]);
 
+  // GPS is the only source, so Update always re-reads it. This also works
+  // after a share was resumed on a fresh page load (no lastSource yet).
   const onUpdate = useCallback(() => {
-    if (lastSource.current?.kind === "gps") runGps();
+    runGps();
   }, [runGps]);
 
   const onStop = useCallback(() => {
@@ -303,6 +305,9 @@ export default function MapPage() {
         geoError={geoError}
         notice={state.notice}
         lastUpdateAt={state.lastUpdateAt}
+        sharedUntil={state.sharedUntil}
+        durationMs={state.durationMs}
+        onDurationChange={setDurationMs}
         othersCount={state.others.length}
         onShareGps={() => guarded({ kind: "gps" })}
         onUpdate={onUpdate}

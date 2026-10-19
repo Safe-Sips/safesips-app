@@ -150,3 +150,100 @@ test("wrong check-in answer is rejected but stays answerable", () => {
   const good = checkins.answerOccurrence(user.id, "occ-wrong", "secret");
   assert.ok(good && good.correct, "correct answer still accepted afterwards");
 });
+
+test("presence: live mode expires after the TTL", async () => {
+  const { PresenceStore } = await import("../src/presenceStore.js");
+  const store = new PresenceStore(300_000);
+  const rec = store.upsert("a", { lat: 1, lng: 2 }, 1_000);
+  assert.equal(rec.expiresAt, 301_000);
+  assert.equal(store.active(300_999).length, 1);
+  assert.deepEqual(store.sweepExpired(301_000), ["a"]);
+});
+
+test("presence: 'share for' hold keeps the circle until the chosen time", async () => {
+  const { PresenceStore } = await import("../src/presenceStore.js");
+  const store = new PresenceStore(300_000);
+  const hour = 60 * 60 * 1000;
+  store.upsert("b", { lat: 1, lng: 2 }, 0, hour);
+  // No heartbeats for 59 minutes (phone locked): still visible.
+  assert.equal(store.active(hour - 60_000).length, 1);
+  assert.ok(store.get("b", hour - 1));
+  // Ends exactly on time, not TTL later.
+  assert.deepEqual(store.sweepExpired(hour), ["b"]);
+});
+
+test("location validation accepts, clamps and drops holdMs", () => {
+  const max = shared.SHARE_MAX_DURATION_MS;
+  assert.deepEqual(shared.validateLocationUpdate({ lat: 1, lng: 2 }).value, {
+    lat: 1,
+    lng: 2,
+  });
+  assert.deepEqual(
+    shared.validateLocationUpdate({ lat: 1, lng: 2, holdMs: 3_600_000 }).value,
+    { lat: 1, lng: 2, holdMs: 3_600_000 }
+  );
+  assert.equal(
+    shared.validateLocationUpdate({ lat: 1, lng: 2, holdMs: max * 10 }).value
+      ?.holdMs,
+    max
+  );
+  for (const bad of [-5, 0, "1h", Number.NaN, null]) {
+    assert.equal(
+      shared.validateLocationUpdate({ lat: 1, lng: 2, holdMs: bad }).value
+        ?.holdMs,
+      undefined
+    );
+  }
+  // Unknown fields are still discarded.
+  assert.deepEqual(
+    shared.validateLocationUpdate({ lat: 1, lng: 2, exactLat: 9 }).value,
+    { lat: 1, lng: 2 }
+  );
+});
+
+test("presence: only a deliberate client disconnect removes the circle", async () => {
+  const { isDeliberateDisconnect } = await import("../src/presenceLogic.js");
+  assert.equal(isDeliberateDisconnect("client namespace disconnect"), true);
+  // Involuntary drops (phone locked, tab closed, network blip) must NOT remove.
+  for (const reason of [
+    "transport close",
+    "ping timeout",
+    "transport error",
+    "server namespace disconnect",
+  ]) {
+    assert.equal(isDeliberateDisconnect(reason), false);
+  }
+});
+
+test("presence: a second live session does not hijack the share", async () => {
+  const { resumeDecision } = await import("../src/presenceLogic.js");
+  // Genuine reload: the previous owner is gone -> restore + take over.
+  assert.equal(
+    resumeDecision({ hasExisting: true, recordExists: true, ownerConnected: false }),
+    "resume"
+  );
+  // Another tab of the same user still owns it -> leave it there (no ping-pong).
+  assert.equal(
+    resumeDecision({ hasExisting: true, recordExists: true, ownerConnected: true }),
+    "skip"
+  );
+  // Tracked share already expired in the store -> drop the stale entry.
+  assert.equal(
+    resumeDecision({ hasExisting: true, recordExists: false, ownerConnected: false }),
+    "clear"
+  );
+  // Nothing to resume.
+  assert.equal(
+    resumeDecision({ hasExisting: false, recordExists: false, ownerConnected: false }),
+    "skip"
+  );
+});
+
+test("presence: max-duration cap is measured from an absolute start", async () => {
+  const { hasReachedMaxDuration } = await import("../src/presenceLogic.js");
+  const day = 24 * 60 * 60 * 1000;
+  assert.equal(hasReachedMaxDuration(1_000, 1_000 + day - 1, day), false);
+  assert.equal(hasReachedMaxDuration(1_000, 1_000 + day, day), true);
+  // Reconnecting (now far past start) still trips the cap: it isn't reset.
+  assert.equal(hasReachedMaxDuration(1_000, 1_000 + day * 3, day), true);
+});

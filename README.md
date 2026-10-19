@@ -9,6 +9,9 @@ location while keeping their **exact** position private.
   and used as the center of a **200 m** yellow, semi-transparent privacy circle
   with an animated radar/pulse border.
 - Only that masked center is broadcast in real time to all connected users.
+- Sharing can be **live** (visible only while the app stays open) or set to a
+  fixed window ("Share for 1 hour"), which keeps the circle up for the chosen
+  time even if the device locks or the app is closed.
 
 ## Monorepo layout
 
@@ -29,8 +32,10 @@ hoisting issues.
 Beyond the anonymous live map, SafeSips now has account-based features backed by
 **SQLite** (`better-sqlite3`):
 
-- **Accounts** — email + password (bcrypt), JWT sessions, email verification.
-  Anti-bot: email verification + auth rate-limiting + a pluggable **Cloudflare
+- **Accounts** — authentication is handled by **Clerk** (Google + email
+  sign-in, sessions, and email verification). The server verifies the Clerk
+  session token on the Socket.io handshake and on REST calls. Anti-bot:
+  Clerk's own checks plus auth rate-limiting and a pluggable **Cloudflare
   Turnstile** hook (enabled only when `TURNSTILE_SECRET` is set).
 - **Profile** — Reddit-style activity history and engagement **badges**
   (bronze/silver/gold = level 1/2/3), computed from activity in
@@ -52,10 +57,13 @@ device, the socket handshake is authenticated, and the broadcast presence
 `publicId` is never linked to an account.
 
 Key extra server env (see [server/.env.example](server/.env.example)):
-`JWT_SECRET` (required in production), `DATABASE_PATH`, `TURNSTILE_SECRET`
-(optional), `WEB_APP_URL`. Web: `VITE_TURNSTILE_SITEKEY` (optional).
+`CLERK_SECRET_KEY` (required for sign-in), `CLERK_AUTHORIZED_PARTIES`
+(optional), `JWT_SECRET` (used for check-in hashing and smoke-test tokens),
+`DATABASE_PATH`, `TURNSTILE_SECRET` (optional), `WEB_APP_URL`. Web:
+`VITE_CLERK_PUBLISHABLE_KEY` (required for sign-in), `VITE_TURNSTILE_SITEKEY`
+(optional).
 
-Run the test suite (badges, votes, check-in state machine):
+Run the test suite (badges, votes, check-in state machine, presence/share logic):
 
 ```bash
 npm test
@@ -95,7 +103,7 @@ Key server settings (`server/.env`):
 
 - `PORT` (default 4000)
 - `CORS_ORIGINS` - comma-separated allowed origins (e.g. `http://localhost:5173`)
-- `PRESENCE_TTL_MS` - inactivity timeout before a circle is removed (default 60000)
+- `PRESENCE_TTL_MS` - in live mode, how long a circle stays after the last update (default 300000 = 5 min). Circles shared "for 1 hour" etc. stay for the chosen time instead.
 - `SWEEP_INTERVAL_MS` - how often expired records are purged (default 5000)
 - `MIN_UPDATE_INTERVAL_MS` - per-socket rate limit (default 2000)
 - `NODE_ENV=production` - enables `trust proxy` for HTTPS/WSS termination
@@ -206,7 +214,10 @@ Notes:
 4. Open the browser Network/WS frames: confirm payloads contain only the masked
    `lat`/`lng`, never the exact position.
 5. Click **Stop sharing** in tab A - the circle disappears from tab B instantly.
-6. Share again, then close tab A without stopping. After `PRESENCE_TTL_MS`
-   (default 60s) the circle is removed from tab B by the server sweep.
+6. Share again with "Share for: While the app is open", then close tab A
+   without stopping. After `PRESENCE_TTL_MS` (default 5 min) the circle is
+   removed from tab B by the server sweep. With "Share for: 1 hour" the circle
+   stays for the full hour instead. Reopening tab A shows "Sharing" again with
+   a Stop button.
 7. Repeat across web + mobile to confirm both clients interoperate on the same
    server.

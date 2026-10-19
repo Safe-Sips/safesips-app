@@ -21,7 +21,7 @@ What we do not do
 • We do not store raw IP addresses for security logs — only salted hashes.
 
 Retention
-• Presence records live in server memory only and are removed when you stop sharing, disconnect, or after a short inactivity timeout (default 60 seconds).
+• Presence records live in server memory only. They are removed when you stop sharing or sign out, when the sharing time you chose (for example 1 hour) runs out, or, in live mode, a few minutes after your device stops sending updates (default 5 minutes).
 • Account, reports, forum posts, and check-in records persist until you delete them or your account.
 
 Third-party services
