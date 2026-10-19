@@ -200,3 +200,50 @@ test("location validation accepts, clamps and drops holdMs", () => {
     { lat: 1, lng: 2 }
   );
 });
+
+test("presence: only a deliberate client disconnect removes the circle", async () => {
+  const { isDeliberateDisconnect } = await import("../src/presenceLogic.js");
+  assert.equal(isDeliberateDisconnect("client namespace disconnect"), true);
+  // Involuntary drops (phone locked, tab closed, network blip) must NOT remove.
+  for (const reason of [
+    "transport close",
+    "ping timeout",
+    "transport error",
+    "server namespace disconnect",
+  ]) {
+    assert.equal(isDeliberateDisconnect(reason), false);
+  }
+});
+
+test("presence: a second live session does not hijack the share", async () => {
+  const { resumeDecision } = await import("../src/presenceLogic.js");
+  // Genuine reload: the previous owner is gone -> restore + take over.
+  assert.equal(
+    resumeDecision({ hasExisting: true, recordExists: true, ownerConnected: false }),
+    "resume"
+  );
+  // Another tab of the same user still owns it -> leave it there (no ping-pong).
+  assert.equal(
+    resumeDecision({ hasExisting: true, recordExists: true, ownerConnected: true }),
+    "skip"
+  );
+  // Tracked share already expired in the store -> drop the stale entry.
+  assert.equal(
+    resumeDecision({ hasExisting: true, recordExists: false, ownerConnected: false }),
+    "clear"
+  );
+  // Nothing to resume.
+  assert.equal(
+    resumeDecision({ hasExisting: false, recordExists: false, ownerConnected: false }),
+    "skip"
+  );
+});
+
+test("presence: max-duration cap is measured from an absolute start", async () => {
+  const { hasReachedMaxDuration } = await import("../src/presenceLogic.js");
+  const day = 24 * 60 * 60 * 1000;
+  assert.equal(hasReachedMaxDuration(1_000, 1_000 + day - 1, day), false);
+  assert.equal(hasReachedMaxDuration(1_000, 1_000 + day, day), true);
+  // Reconnecting (now far past start) still trips the cap: it isn't reset.
+  assert.equal(hasReachedMaxDuration(1_000, 1_000 + day * 3, day), true);
+});

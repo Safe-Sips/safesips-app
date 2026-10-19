@@ -57,6 +57,16 @@ function useNow(intervalMs = 30_000): number {
   return now;
 }
 
+/**
+ * Self-contained "updated X min ago" label. Owns its own ticking clock so the
+ * 30 s refresh re-renders only this tiny span, not the whole map and every
+ * marker on it.
+ */
+function UpdatedAgo({ updatedAt }: { updatedAt: number }) {
+  const now = useNow();
+  return <>{updatedAgo(updatedAt, now)}</>;
+}
+
 const DEFAULT_CENTER: [number, number] = [44.4268, 26.1025]; // Bucharest
 const DEFAULT_ZOOM = 13;
 const FOCUS_ZOOM = 16;
@@ -156,7 +166,6 @@ export default function MapView({
   onSelectReport,
   onBoundsChange,
 }: MapViewProps) {
-  const now = useNow();
   return (
     <MapContainer
       center={DEFAULT_CENTER}
@@ -191,7 +200,7 @@ export default function MapView({
           }}
         >
           <Tooltip direction="top" offset={[0, -8]}>
-            Someone sharing nearby · {updatedAgo(record.updatedAt, now)}
+            Someone sharing nearby · <UpdatedAgo updatedAt={record.updatedAt} />
           </Tooltip>
         </CircleMarker>
       ))}

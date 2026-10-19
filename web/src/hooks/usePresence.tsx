@@ -25,6 +25,9 @@ const DURATION_KEY = "safesips.shareDurationMs";
 /** Minimum gap between two emits we trigger ourselves (server limit is 2 s). */
 const MIN_EMIT_GAP_MS = 3_000;
 
+/** Shown when a timed "share for" window runs out, from whichever path notices. */
+const SHARE_ENDED_NOTICE = "Location sharing ended (the time you chose is up).";
+
 export interface PresenceState {
   connection: ConnectionState;
   selfId: string | null;
@@ -144,7 +147,7 @@ function usePresenceController(): PresenceApi {
     const holdUntil = holdUntilRef.current;
     if (sharingRef.current && holdUntil && Date.now() >= holdUntil) {
       stop();
-      setNotice("Location sharing ended (the time you chose is up).");
+      setNotice(SHARE_ENDED_NOTICE);
       return true;
     }
     return false;
@@ -181,7 +184,7 @@ function usePresenceController(): PresenceApi {
         Date.now() >= holdUntilRef.current - 5_000
       ) {
         stopLocal();
-        setNotice("Location sharing ended (the time you chose is up).");
+        setNotice(SHARE_ENDED_NOTICE);
       }
     };
     const onResume = (data: {
