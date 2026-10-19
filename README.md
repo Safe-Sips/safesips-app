@@ -9,6 +9,9 @@ location while keeping their **exact** position private.
   and used as the center of a **200 m** yellow, semi-transparent privacy circle
   with an animated radar/pulse border.
 - Only that masked center is broadcast in real time to all connected users.
+- Sharing can be **live** (visible only while the app stays open) or set to a
+  fixed window ("Share for 1 hour"), which keeps the circle up for the chosen
+  time even if the device locks or the app is closed.
 
 ## Monorepo layout
 
@@ -29,8 +32,10 @@ hoisting issues.
 Beyond the anonymous live map, SafeSips now has account-based features backed by
 **SQLite** (`better-sqlite3`):
 
-- **Accounts** — email + password (bcrypt), JWT sessions, email verification.
-  Anti-bot: email verification + auth rate-limiting + a pluggable **Cloudflare
+- **Accounts** — authentication is handled by **Clerk** (Google + email
+  sign-in, sessions, and email verification). The server verifies the Clerk
+  session token on the Socket.io handshake and on REST calls. Anti-bot:
+  Clerk's own checks plus auth rate-limiting and a pluggable **Cloudflare
   Turnstile** hook (enabled only when `TURNSTILE_SECRET` is set).
 - **Profile** — Reddit-style activity history and engagement **badges**
   (bronze/silver/gold = level 1/2/3), computed from activity in
@@ -52,10 +57,13 @@ device, the socket handshake is authenticated, and the broadcast presence
 `publicId` is never linked to an account.
 
 Key extra server env (see [server/.env.example](server/.env.example)):
-`JWT_SECRET` (required in production), `DATABASE_PATH`, `TURNSTILE_SECRET`
-(optional), `WEB_APP_URL`. Web: `VITE_TURNSTILE_SITEKEY` (optional).
+`CLERK_SECRET_KEY` (required for sign-in), `CLERK_AUTHORIZED_PARTIES`
+(optional), `JWT_SECRET` (used for check-in hashing and smoke-test tokens),
+`DATABASE_PATH`, `TURNSTILE_SECRET` (optional), `WEB_APP_URL`. Web:
+`VITE_CLERK_PUBLISHABLE_KEY` (required for sign-in), `VITE_TURNSTILE_SITEKEY`
+(optional).
 
-Run the test suite (badges, votes, check-in state machine):
+Run the test suite (badges, votes, check-in state machine, presence/share logic):
 
 ```bash
 npm test
