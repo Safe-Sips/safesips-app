@@ -33,7 +33,7 @@ Third-party services
 • OpenStreetMap map tiles and Nominatim geocoding may receive address queries or map tile requests from your device. See openstreetmap.org for their policies.
 • Clerk (authentication) stores your email and sign-in credentials.
 • Our email provider delivers verification emails and SOS alerts.
-• Our SMS provider (Twilio) delivers SOS text alerts; it receives the contact's phone number and the alert text.
+• Our SMS route delivers SOS text alerts and receives the contact's phone number and the alert text: either Twilio, or a relay service (sms-gate.app) that passes the message to a SafeSips-operated Android phone, which sends it from that phone's number.
 • Our hosting provider processes network traffic necessary to operate the service.
 
 Your choices

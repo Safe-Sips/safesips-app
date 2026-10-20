@@ -164,6 +164,23 @@ export const config = {
           apiBase: strEnv("TWILIO_API_BASE", "https://api.twilio.com"),
         }
       : null,
+  // SMS from your own Android phone and SIM, via the open-source "SMS Gateway
+  // for Android" app (sms-gate.app). Its cloud relay forwards requests to the
+  // phone, which sends the text from your number. Username/password are shown
+  // on the app's Home tab once "Cloud server" is enabled.
+  smsGateway:
+    process.env.SMS_GATEWAY_USERNAME?.trim() && process.env.SMS_GATEWAY_PASSWORD?.trim()
+      ? {
+          baseUrl: strEnv("SMS_GATEWAY_URL", "https://api.sms-gate.app/3rdparty/v1"),
+          username: process.env.SMS_GATEWAY_USERNAME.trim(),
+          password: process.env.SMS_GATEWAY_PASSWORD.trim(),
+        }
+      : null,
+  /**
+   * Which SMS route to use: "android" (your phone) or "twilio". Unset = the
+   * phone gateway if configured, else Twilio.
+   */
+  smsProvider: process.env.SMS_PROVIDER?.trim().toLowerCase() || null,
   /** Cost / abuse limits for SMS (rolling 24 h). */
   smsDailyLimit: intEnv("SMS_DAILY_LIMIT", 300),
   smsMaxPerNumberPerDay: intEnv("SMS_MAX_PER_NUMBER_PER_DAY", 6),
@@ -177,17 +194,18 @@ export const config = {
   allowTestToken: boolEnv("ALLOW_TEST_TOKEN") && !isProduction,
 };
 
-if (isProduction && !config.smtp && !config.twilio) {
+if (isProduction && !config.smtp && !config.twilio && !config.smsGateway) {
   // eslint-disable-next-line no-console
   console.error(
     "[config] Neither SMTP_* nor TWILIO_* is set: SOS alerts for missed check-ins will NOT " +
       "reach anyone (the check-ins page warns users)."
   );
-} else if (isProduction && (!config.smtp || !config.twilio)) {
+} else if (isProduction && (!config.smtp || !(config.twilio || config.smsGateway))) {
+  const sms = Boolean(config.twilio || config.smsGateway);
   // eslint-disable-next-line no-console
   console.warn(
-    `[config] SOS alerts go out by ${config.twilio ? "text" : "email"} only — ` +
-      `${config.twilio ? "SMTP_*" : "TWILIO_*"} is not set.`
+    `[config] SOS alerts go out by ${sms ? "text" : "email"} only — ` +
+      `${sms ? "SMTP_*" : "SMS_GATEWAY_* / TWILIO_*"} is not set.`
   );
 }
 
