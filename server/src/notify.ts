@@ -21,6 +21,11 @@ import { genId, nowMs } from "./util.js";
 export interface EscalationContext {
   occurrenceId: string;
   userId: string;
+  /**
+   * The contacts this check-in should alert (account ids); empty = everyone.
+   * Only accepted contacts are ever alerted.
+   */
+  selectedContactIds?: string[];
   /** Display name of the person who missed the check-in. */
   personName: string;
   planLabel: string | null;
@@ -142,7 +147,12 @@ export async function promptCheckin(userId: string, occurrenceId: string, deadli
  * person's app is closed). Never throws.
  */
 export async function alertEmergencyContacts(ctx: EscalationContext): Promise<EscalationSummary> {
-  const contacts = listAcceptedContacts(ctx.userId);
+  const accepted = listAcceptedContacts(ctx.userId);
+  const chosen = new Set(ctx.selectedContactIds ?? []);
+  const picked = accepted.filter((c) => chosen.has(c.id));
+  // If everyone picked for this check-in has since stopped being a contact,
+  // alert the remaining contacts rather than nobody.
+  const contacts = chosen.size > 0 && picked.length > 0 ? picked : accepted;
   const summary: EscalationSummary = { contacts: 0, pushed: 0, emailed: 0 };
   if (contacts.length === 0) {
     record(ctx.occurrenceId, "none", "failed", "No accepted emergency contacts.");

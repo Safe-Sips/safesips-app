@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ContactsOverviewDTO, PlanDTO } from "@safesips/shared";
+import type { ContactsOverviewDTO, PlanContactDTO, PlanDTO } from "@safesips/shared";
 import { api, ApiError } from "../api";
+import ContactPicker from "../components/ContactPicker";
 import MyCode from "../components/MyCode";
 import NotificationsCard from "../components/NotificationsCard";
 import { timeUntil } from "../format";
@@ -37,7 +38,10 @@ export default function CheckinSetupPage() {
     };
   }, [socket, load]);
 
-  const hasAccepted = !!overview?.contacts.some((c) => c.status === "accepted");
+  // Accepted contacts are the ones a check-in can alert.
+  const acceptedContacts: PlanContactDTO[] = (overview?.contacts ?? [])
+    .filter((c) => c.status === "accepted" && c.userId)
+    .map((c) => ({ userId: c.userId!, displayName: c.displayName ?? c.inviteLabel }));
 
   return (
     <div className="page checkin-page">
@@ -58,7 +62,7 @@ export default function CheckinSetupPage() {
       {overview && (
         <EmergencyContactsSection overview={overview} onChange={setOverview} />
       )}
-      <CheckinPlansSection plans={plans} hasPrimary={hasAccepted} onChange={load} />
+      <CheckinPlansSection plans={plans} contacts={acceptedContacts} onChange={load} />
     </div>
   );
 }
@@ -207,15 +211,93 @@ const INTERVAL_OPTIONS = [1, 30, 60, 90, 120];
 const GRACE_OPTIONS = [1, 5, 10, 15, 20];
 const minutesLabel = (m: number) => (m === 1 ? "1 minute" : `${m} minutes`);
 
+/** "Everyone" or the names a plan alerts. */
+function alertsLabel(p: PlanDTO): string {
+  return p.alertContacts ? p.alertContacts.map((c) => c.displayName).join(", ") : "everyone";
+}
+
+/** Inline "who does this running check-in alert?" editor. */
+function PlanContactsEditor({
+  plan,
+  contacts,
+  onSaved,
+}: {
+  plan: PlanDTO;
+  contacts: PlanContactDTO[];
+  onSaved: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<string[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!open) {
+    return (
+      <div className="muted plan-alerts">
+        Alerts: {alertsLabel(plan)}{" "}
+        {contacts.length > 1 && (
+          <button
+            className="btn-link"
+            type="button"
+            onClick={() => {
+              setSelected(plan.alertContacts ? plan.alertContacts.map((c) => c.userId) : null);
+              setError(null);
+              setOpen(true);
+            }}
+          >
+            Change
+          </button>
+        )}
+      </div>
+    );
+  }
+  const save = async () => {
+    if (selected !== null && selected.length === 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.setPlanContacts(plan.id, selected);
+      setOpen(false);
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't save.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="plan-alerts-edit">
+      <ContactPicker contacts={contacts} selected={selected} onChange={setSelected} />
+      <div className="data-actions">
+        <button
+          className="btn btn-primary btn-sm"
+          type="button"
+          disabled={busy || (selected !== null && selected.length === 0)}
+          onClick={save}
+        >
+          {busy ? "Saving…" : "Save"}
+        </button>
+        <button className="btn btn-ghost btn-sm" type="button" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+      {error && <p className="error">{error}</p>}
+    </div>
+  );
+}
+
 function CheckinPlansSection({
   plans,
-  hasPrimary,
+  contacts,
   onChange,
 }: {
   plans: PlanDTO[];
-  hasPrimary: boolean;
+  contacts: PlanContactDTO[];
   onChange: () => void;
 }) {
+  const hasPrimary = contacts.length > 0;
+  // null = everyone (the default).
+  const [alertIds, setAlertIds] = useState<string[] | null>(null);
   const [label, setLabel] = useState("");
   const [intervalMinutes, setIntervalMinutes] = useState(60);
   const [graceMinutes, setGraceMinutes] = useState(10);
@@ -237,6 +319,10 @@ function CheckinPlansSection({
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (alertIds !== null && alertIds.length === 0) {
+      setError("Pick at least one contact to alert.");
+      return;
+    }
     setBusy(true);
     try {
       const hours = Number(autoStopHours);
@@ -251,8 +337,11 @@ function CheckinPlansSection({
         question,
         answer,
         endsAt,
+        // Only send a selection if it's a real subset of the current contacts.
+        contactUserIds: alertIds?.filter((id) => contacts.some((c) => c.userId === id)) ?? null,
       });
       setLabel("");
+      setAlertIds(null);
       setQuestion("");
       setAnswer("");
       setAutoStopHours("");
@@ -281,6 +370,7 @@ function CheckinPlansSection({
                   {p.nextDueAt ? ` · next in ${timeUntil(p.nextDueAt)}` : ""}
                 </div>
                 <div className="muted">“{p.question}”</div>
+                <PlanContactsEditor plan={p} contacts={contacts} onSaved={onChange} />
               </div>
               <div className="plan-actions">
                 {p.status === "active" && (
@@ -392,10 +482,13 @@ function CheckinPlansSection({
             Case and spacing don't matter when you answer.
           </small>
         </label>
+        {contacts.length > 1 && (
+          <ContactPicker contacts={contacts} selected={alertIds} onChange={setAlertIds} />
+        )}
         {error && <p className="error">{error}</p>}
         <button
           className="btn btn-primary"
-          disabled={busy || !hasPrimary}
+          disabled={busy || !hasPrimary || (alertIds !== null && alertIds.length === 0)}
           type="submit"
         >
           {busy ? "Starting…" : "Start check-ins"}

@@ -7,6 +7,7 @@ import {
 } from "@safesips/shared";
 import { api, ApiError } from "../api";
 import { useAuth } from "../auth/AuthContext";
+import Avatar from "../components/Avatar";
 import { timeAgo } from "../format";
 
 const ACTIVITY_LABEL: Record<ActivityKind, string> = {
@@ -159,7 +160,8 @@ export default function ProfilePage() {
 
   return (
     <div className="page profile-page">
-      <div className="page-head">
+      <div className="page-head profile-hero">
+        {user && <Avatar name={user.displayName} imageUrl={user.imageUrl ?? null} size={72} />}
         <h1>{user?.displayName}</h1>
       </div>
 

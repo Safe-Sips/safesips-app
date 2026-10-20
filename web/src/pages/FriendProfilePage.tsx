@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { FriendProfileDTO } from "@safesips/shared";
 import { api, ApiError } from "../api";
+import Avatar from "../components/Avatar";
 
 const COUNT_LABELS: Array<{ key: keyof FriendProfileDTO["counts"]; label: string }> = [
   { key: "reports", label: "Locations reported" },
@@ -88,11 +89,16 @@ export default function FriendProfilePage() {
         !error && <p className="muted" role="status">Loading…</p>
       ) : (
         <>
-          <h1>{profile.displayName}</h1>
-          <p className="muted">
-            On SafeSips since {monthYear(profile.memberSince)} · friends since{" "}
-            {monthYear(profile.friendsSince)}
-          </p>
+          <div className="profile-hero">
+            <Avatar name={profile.displayName} imageUrl={profile.imageUrl} size={88} />
+            <div>
+              <h1>{profile.displayName}</h1>
+              <p className="muted">
+                On SafeSips since {monthYear(profile.memberSince)} · friends since{" "}
+                {monthYear(profile.friendsSince)}
+              </p>
+            </div>
+          </div>
 
           <section className="card">
             <h2>Emergency contact</h2>

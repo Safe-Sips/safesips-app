@@ -36,7 +36,9 @@ interface FriendshipRow {
 
 const userByCode = db.prepare(`SELECT id FROM users WHERE contact_code = ?`);
 const userByEmail = db.prepare(`SELECT id FROM users WHERE email_norm = ?`);
-const userRow = db.prepare(`SELECT id, display_name, email_norm, created_at FROM users WHERE id = ?`);
+const userRow = db.prepare(
+  `SELECT id, display_name, email_norm, image_url, created_at FROM users WHERE id = ?`
+);
 const countRecent = db.prepare(
   `SELECT COUNT(*) AS c FROM friendships WHERE requester_id = ? AND created_at > ?`
 );
@@ -60,7 +62,7 @@ const acceptRow = db.prepare(
 const deleteRow = db.prepare(`DELETE FROM friendships WHERE id = ?`);
 const rowById = db.prepare(`SELECT * FROM friendships WHERE id = ?`);
 const friendsOf = db.prepare(
-  `SELECT f.id, f.responded_at, f.created_at, u.id AS user_id, u.display_name
+  `SELECT f.id, f.responded_at, f.created_at, u.id AS user_id, u.display_name, u.image_url
      FROM friendships f
      JOIN users u ON u.id = CASE WHEN f.requester_id = @me THEN f.addressee_id ELSE f.requester_id END
     WHERE f.status = 'accepted' AND (f.requester_id = @me OR f.addressee_id = @me)
@@ -182,10 +184,12 @@ export function getFriendsOverview(me: string): FriendsOverviewDTO {
     created_at: number;
     user_id: string;
     display_name: string;
+    image_url: string | null;
   }>).map<FriendDTO>((r) => ({
     id: r.id,
     userId: r.user_id,
     displayName: r.display_name,
+    imageUrl: r.image_url,
     since: r.responded_at ?? r.created_at,
   }));
   // One entry per person, even if they asked by both code and email.
@@ -247,7 +251,7 @@ export function getFriendProfile(me: string, friendId: string): FriendProfileDTO
   const friendship = acceptedFriendship(me, friendId);
   if (!friendship) return null;
   const user = userRow.get(friendId) as
-    | { id: string; display_name: string; created_at: number }
+    | { id: string; display_name: string; image_url: string | null; created_at: number }
     | undefined;
   if (!user) return null;
   const counts = computeCounts(friendId);
@@ -256,6 +260,7 @@ export function getFriendProfile(me: string, friendId: string): FriendProfileDTO
     userId: user.id,
     friendshipId: friendship.id,
     displayName: user.display_name,
+    imageUrl: user.image_url,
     memberSince: user.created_at,
     friendsSince: friendship.responded_at ?? friendship.created_at,
     counts: {

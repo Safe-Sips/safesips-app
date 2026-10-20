@@ -11,6 +11,7 @@ export interface UserRow {
   email_verified: number;
   status: string;
   clerk_id: string | null;
+  image_url?: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -30,6 +31,31 @@ const updateVerified = db.prepare(
 const updateClerkId = db.prepare(
   `UPDATE users SET clerk_id = ?, email_verified = ?, display_name = ?, updated_at = ? WHERE id = ?`
 );
+
+const updateImage = db.prepare(`UPDATE users SET image_url = ?, updated_at = ? WHERE id = ?`);
+
+/** Hosts Clerk serves profile pictures from. Nothing else is accepted. */
+const AVATAR_HOSTS = new Set(["img.clerk.com", "images.clerk.dev"]);
+
+/**
+ * A profile picture URL we're willing to show other people: https on a Clerk
+ * image host. (An arbitrary URL would let someone log every friend's IP when
+ * their profile loads.) Returns the cleaned URL, or null if not acceptable.
+ */
+export function cleanAvatarUrl(raw: string): string | null {
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:" || !AVATAR_HOSTS.has(url.hostname)) return null;
+    if (url.username || url.password || url.port) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+export function setUserImage(userId: string, imageUrl: string | null): void {
+  updateImage.run(imageUrl, nowMs(), userId);
+}
 
 export function findUserByEmail(email: string): UserRow | undefined {
   return selectByEmail.get(normalizeEmail(email)) as UserRow | undefined;
@@ -122,5 +148,6 @@ export function toUserDTO(row: UserRow): UserDTO {
     displayName: row.display_name,
     emailVerified: row.email_verified === 1,
     createdAt: row.created_at,
+    imageUrl: row.image_url ?? null,
   };
 }

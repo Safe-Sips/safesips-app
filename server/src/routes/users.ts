@@ -6,6 +6,7 @@ import { deleteClerkUser } from "../auth/clerk.js";
 import { deleteAccountData, exportAccountData } from "../repos/account.js";
 import { defaultCursor, listActivity } from "../repos/activity.js";
 import { computeStats } from "../repos/stats.js";
+import { cleanAvatarUrl, setUserImage } from "../repos/users.js";
 import { purgeUserRealtime } from "../realtime.js";
 
 export const usersRouter = Router();
@@ -45,6 +46,24 @@ usersRouter.get(
       'attachment; filename="safesips-data-export.json"'
     );
     res.json(data);
+  })
+);
+
+const avatarSchema = z.object({ imageUrl: z.string().trim().max(2000).nullable() });
+
+/** Set my profile picture (the app sends my Clerk picture after sign-in). */
+usersRouter.put(
+  "/me/avatar",
+  asyncHandler(async (req, res) => {
+    const body = parseBody(avatarSchema, req, res);
+    if (!body) return;
+    const url = body.imageUrl ? cleanAvatarUrl(body.imageUrl) : null;
+    if (body.imageUrl && !url) {
+      res.status(400).json({ error: "Profile pictures must come from your SafeSips account.", code: "bad_avatar" });
+      return;
+    }
+    setUserImage(req.auth!.userId, url);
+    res.json({ imageUrl: url });
   })
 );
 

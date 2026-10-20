@@ -39,7 +39,7 @@ const insertLink = db.prepare(
    VALUES (@id, @owner_id, @contact_user_id, @invite_email_norm, @invite_label, 'pending', @created_at)`
 );
 const outgoing = db.prepare(
-  `SELECT l.id, l.status, l.invite_label, l.created_at, u.display_name
+  `SELECT l.id, l.status, l.invite_label, l.created_at, l.contact_user_id, u.display_name
      FROM emergency_links l LEFT JOIN users u ON u.id = l.contact_user_id
     WHERE l.owner_id = ? ORDER BY l.status = 'accepted' DESC, l.created_at ASC`
 );
@@ -188,10 +188,12 @@ export function getOverview(userId: string): ContactsOverviewDTO {
     status: "pending" | "accepted";
     invite_label: string;
     created_at: number;
+    contact_user_id: string | null;
     display_name: string | null;
   }>).map<EmergencyContactDTO>((r) => ({
     id: r.id,
     status: r.status,
+    userId: r.status === "accepted" ? r.contact_user_id : null,
     // Don't reveal who is behind an email/code until they accept.
     displayName: r.status === "accepted" ? r.display_name : null,
     inviteLabel: r.invite_label,

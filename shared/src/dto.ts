@@ -22,6 +22,8 @@ export interface UserDTO {
   displayName: string;
   emailVerified: boolean;
   createdAt: number;
+  /** Profile picture (from Clerk), if any. */
+  imageUrl?: string | null;
 }
 
 export interface RegisterInput {
@@ -175,6 +177,8 @@ export interface ActivityDTO {
 export interface EmergencyContactDTO {
   id: string;
   status: "pending" | "accepted";
+  /** Their account id — only once they accept (used to pick who a check-in alerts). */
+  userId: string | null;
   /** Their display name — only shown once they accept. */
   displayName: string | null;
   /** What I typed to add them (email or code), shown while pending. */
@@ -214,6 +218,7 @@ export interface FriendDTO {
   id: string;
   userId: string;
   displayName: string;
+  imageUrl: string | null;
   since: number;
 }
 
@@ -246,6 +251,7 @@ export interface FriendProfileDTO {
   /** Friendship id (to remove the friend). */
   friendshipId: string;
   displayName: string;
+  imageUrl: string | null;
   memberSince: number;
   friendsSince: number;
   /** Public activity only (no check-in history). */
@@ -279,6 +285,17 @@ export interface CheckinPlanInput {
   /** The expected answer — hashed server-side, never stored in plaintext. */
   answer: string;
   endsAt?: number | null;
+  /**
+   * Which accepted emergency contacts this check-in alerts (account ids).
+   * Omitted or null = everyone.
+   */
+  contactUserIds?: string[] | null;
+}
+
+/** Someone a check-in will alert. */
+export interface PlanContactDTO {
+  userId: string;
+  displayName: string;
 }
 
 export interface PlanDTO {
@@ -293,6 +310,8 @@ export interface PlanDTO {
   createdAt: number;
   /** Due time of the next pending/prompted occurrence, if any. */
   nextDueAt: number | null;
+  /** Who a missed check-in alerts; null = all accepted contacts. */
+  alertContacts: PlanContactDTO[] | null;
 }
 
 export type CheckinOccurrenceStatus =

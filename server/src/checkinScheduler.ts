@@ -3,6 +3,7 @@ import {
   claimDueOccurrences,
   claimOverdueOccurrences,
   markEscalated,
+  planContactIds,
 } from "./repos/checkins.js";
 import { findUserById } from "./repos/users.js";
 import { alertEmergencyContacts, promptCheckin } from "./notify.js";
@@ -41,6 +42,7 @@ export function startCheckinScheduler(): NodeJS.Timeout {
         void alertEmergencyContacts({
           occurrenceId: overdue.occurrenceId,
           userId: overdue.userId,
+          selectedContactIds: planContactIds(overdue.planId),
           personName: user?.display_name ?? "A SafeSips user",
           planLabel: overdue.planLabel,
           area: getSharedArea(overdue.userId),
