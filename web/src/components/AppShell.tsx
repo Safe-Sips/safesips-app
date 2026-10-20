@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Outlet } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { PresenceProvider } from "../hooks/usePresence";
@@ -30,8 +31,17 @@ export default function AppShell() {
         <div className="shell">
           <NavBar />
           <VerifyBanner />
-          <main className="shell-main">
-            <Outlet />
+          <main className="shell-main" id="main">
+            {/* Pages are lazy chunks; keep the nav on screen while one loads. */}
+            <Suspense
+              fallback={
+                <div className="page-loading" role="status">
+                  Loading…
+                </div>
+              }
+            >
+              <Outlet />
+            </Suspense>
           </main>
           <ActiveCheckinModal />
         </div>

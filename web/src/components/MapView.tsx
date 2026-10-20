@@ -9,6 +9,8 @@ import {
   useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
+// Loaded with the (lazy) map chunk instead of on every page.
+import "leaflet/dist/leaflet.css";
 import type {
   LatLng,
   PresenceRecord,
