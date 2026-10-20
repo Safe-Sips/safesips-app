@@ -731,3 +731,45 @@ test("check-ins alert only the contacts picked for the plan", async () => {
   assert.equal(checkins.setPlanContacts(owner.id, plan.id, null)?.alertContacts, null);
   assert.equal(checkins.setPlanContacts(c2.id, plan.id, null), null, "only the owner can edit");
 });
+
+test("friend search: similar names, opt-out respected, add from results", async () => {
+  const friends = await import("../src/repos/friends.js");
+  const me = users.createUser({ email: "fs-me@example.com", displayName: "Searcher", passwordHash: "x" });
+  const mk = (email: string, name: string) => users.createUser({ email, displayName: name, passwordHash: "x" });
+  const maria = mk("fs-maria@example.com", "Maria Popescu");
+  const marian = mk("fs-marian@example.com", "Marian Ionescu");
+  const ana = mk("fs-ana@example.com", "Ana Mariana");
+  const hidden = mk("fs-hidden@example.com", "Maria Hidden");
+  friends.setDiscoverable(hidden.id, false);
+
+  // Ranking helpers
+  assert.equal(friends.matchRank("Maria Popescu", "maria"), 1, "name starts with it");
+  assert.equal(friends.matchRank("Ana Mariana", "mari"), 2, "a word starts with it");
+  assert.ok(friends.matchRank("Ștefan Rusu", "stefan") !== null, "accents don't matter");
+  assert.ok(friends.matchRank("Popescu", "popsecu") !== null, "a typo still matches");
+  assert.equal(friends.matchRank("Bogdan", "maria"), null);
+
+  assert.deepEqual(friends.searchUsers(me.id, "ma"), [], "needs at least 3 letters");
+  const names = friends.searchUsers(me.id, "maria").map((r) => r.displayName);
+  assert.equal(names[0], "Maria Popescu", "best match first");
+  assert.ok(names.includes("Marian Ionescu") && names.includes("Ana Mariana"));
+  assert.ok(!names.includes("Maria Hidden"), "opted-out people aren't listed");
+  assert.ok(!names.includes("Searcher"));
+  assert.ok(friends.searchUsers(me.id, "popsecu").some((r) => r.userId === maria.id), "typo search finds Popescu");
+  assert.ok(!("email" in friends.searchUsers(me.id, "maria")[0]), "no emails in results");
+  assert.ok(friends.searchUsers(me.id, "100%_").length === 0, "LIKE wildcards are escaped");
+
+  const stefan = mk("fs-stefan@example.com", "Ștefan Rusu");
+  assert.ok(friends.searchUsers(me.id, "stefan").some((r) => r.userId === stefan.id), "accented names are found");
+  // Add from results; relation updates.
+  assert.ok(friends.requestFriendByUserId(me.id, maria.id).ok);
+  assert.equal(friends.searchUsers(me.id, "maria").find((r) => r.userId === maria.id)?.relation, "sent");
+  assert.equal(friends.searchUsers(maria.id, "searcher")[0]?.relation, "received");
+  assert.equal(friends.requestFriendByUserId(maria.id, me.id).ok && friends.areFriends(me.id, maria.id), true, "adding back accepts");
+  assert.equal(friends.searchUsers(me.id, "maria").find((r) => r.userId === maria.id)?.relation, "friend");
+  // Opted-out people can't be reached by id either.
+  const r = friends.requestFriendByUserId(me.id, hidden.id);
+  assert.equal(r.ok, false);
+  assert.equal(friends.getFriendsOverview(hidden.id).discoverable, false);
+  void marian; void ana;
+});

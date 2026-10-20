@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 /**
  * Full schema, created idempotently with CREATE TABLE/INDEX IF NOT EXISTS.
@@ -323,6 +323,11 @@ export function runMigrations(db: Database.Database): void {
     if (!userCols.some((c) => c.name === "image_url")) {
       // Profile picture URL (Clerk-hosted only; see routes/users.ts).
       db.exec(`ALTER TABLE users ADD COLUMN image_url TEXT`);
+    }
+    if (!userCols.some((c) => c.name === "discoverable")) {
+      // Shown in friend search by name (1) or not (0). On by default; users
+      // can turn it off on the Friends page.
+      db.exec(`ALTER TABLE users ADD COLUMN discoverable INTEGER NOT NULL DEFAULT 1`);
     }
   });
   apply();

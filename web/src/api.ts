@@ -12,6 +12,7 @@ import type {
   ContactsOverviewDTO,
   FriendProfileDTO,
   FriendsOverviewDTO,
+  UserSearchResultDTO,
   ThreadDTO,
   ThreadDetailDTO,
   UserDTO,
@@ -197,6 +198,12 @@ export const api = {
     request<{ message: string; overview: FriendsOverviewDTO }>("/api/friends", {
       body: { identifier },
     }),
+  addFriendById: (userId: string) =>
+    request<{ message: string; overview: FriendsOverviewDTO }>("/api/friends", { body: { userId } }),
+  searchUsers: (q: string) =>
+    request<{ results: UserSearchResultDTO[] }>(`/api/friends/search?q=${encodeURIComponent(q)}`),
+  setDiscoverable: (discoverable: boolean) =>
+    request<FriendsOverviewDTO>("/api/friends/settings", { method: "PUT", body: { discoverable } }),
   acceptFriend: (id: string) =>
     request<FriendsOverviewDTO>(`/api/friends/${encodeURIComponent(id)}/accept`, { method: "POST", body: {} }),
   removeFriend: (id: string) =>

@@ -4,6 +4,7 @@ import type { FriendsOverviewDTO } from "@safesips/shared";
 import { api, ApiError } from "../api";
 import { timeAgo } from "../format";
 import Avatar from "../components/Avatar";
+import FriendSearch from "../components/FriendSearch";
 import MyCode from "../components/MyCode";
 import { useSocket } from "../socket/SocketProvider";
 
@@ -81,6 +82,8 @@ export default function FriendsPage() {
         <>
           <section className="card">
             <h2>Add a friend</h2>
+            <FriendSearch onChange={setOverview} />
+            <h3>Or use their SafeSips code or email</h3>
             <MyCode code={overview.myCode} hint="Give it to friends who want to add you." />
             <form className="inline-form" onSubmit={add}>
               <input
@@ -98,6 +101,21 @@ export default function FriendsPage() {
             </form>
             {message && <p className="hint" role="status">{message}</p>}
             {error && <p className="error">{error}</p>}
+            <label className="toggle-row">
+              <input
+                type="checkbox"
+                checked={overview.discoverable}
+                onChange={(e) => run(() => api.setDiscoverable(e.target.checked))}
+              />
+              <span>
+                <strong>Let people find me by name</strong>
+                <span className="field-hint">
+                  {" "}
+                  Others can search your display name and see your picture. Turn off to be added only
+                  by your code or email.
+                </span>
+              </span>
+            </label>
           </section>
 
           {overview.incoming.length > 0 && (

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { asyncHandler, parseBody } from "../http.js";
+import { asyncHandler, parseBody, parseQuery } from "../http.js";
 import { requireAuth } from "../auth/middleware.js";
 import { sendPushToUser } from "../push.js";
 import { emitContactsChanged, emitFriendsChanged } from "../realtime.js";
@@ -8,6 +8,9 @@ import { requestContactForUser } from "../repos/emergencyContacts.js";
 import {
   acceptFriend,
   areFriends,
+  requestFriendByUserId,
+  searchUsers,
+  setDiscoverable,
   getFriendProfile,
   getFriendsOverview,
   removeFriendship,
@@ -28,7 +31,58 @@ friendsRouter.get(
   })
 );
 
-const requestSchema = z.object({ identifier: z.string().trim().min(1).max(254) });
+const requestSchema = z.union([
+  z.object({ identifier: z.string().trim().min(1).max(254) }),
+  z.object({ userId: z.string().min(1).max(64) }),
+]);
+
+/** Per-user search budget (in memory): enough to type, too little to scrape. */
+const SEARCH_WINDOW_MS = 10 * 60 * 1000;
+const SEARCH_LIMIT = 120;
+const searchLog = new Map<string, number[]>();
+function allowSearch(userId: string): boolean {
+  const now = Date.now();
+  const recent = (searchLog.get(userId) ?? []).filter((t) => now - t < SEARCH_WINDOW_MS);
+  if (recent.length >= SEARCH_LIMIT) {
+    searchLog.set(userId, recent);
+    return false;
+  }
+  recent.push(now);
+  searchLog.set(userId, recent);
+  if (searchLog.size > 5000) {
+    for (const [k, v] of searchLog) if (!v.some((t) => now - t < SEARCH_WINDOW_MS)) searchLog.delete(k);
+  }
+  return true;
+}
+
+const searchQuery = z.object({ q: z.string().max(100).default("") });
+
+/** Find people by name (only those who allow it). Name + picture only. */
+friendsRouter.get(
+  "/search",
+  asyncHandler(async (req, res) => {
+    const q = parseQuery(searchQuery, req, res);
+    if (!q) return;
+    if (!allowSearch(req.auth!.userId)) {
+      res.status(429).json({ error: "Too many searches. Wait a few minutes.", code: "search_rate_limited" });
+      return;
+    }
+    res.json({ results: searchUsers(req.auth!.userId, q.q) });
+  })
+);
+
+const settingsSchema = z.object({ discoverable: z.boolean() });
+
+/** "Let people find me by name" on/off. */
+friendsRouter.put(
+  "/settings",
+  asyncHandler(async (req, res) => {
+    const body = parseBody(settingsSchema, req, res);
+    if (!body) return;
+    setDiscoverable(req.auth!.userId, body.discoverable);
+    res.json(getFriendsOverview(req.auth!.userId));
+  })
+);
 
 /** Send a friend request by SafeSips code or account email. */
 friendsRouter.post(
@@ -37,7 +91,7 @@ friendsRouter.post(
     const body = parseBody(requestSchema, req, res);
     if (!body) return;
     const me = req.auth!.userId;
-    const result = requestFriend(me, body.identifier);
+    const result = "userId" in body ? requestFriendByUserId(me, body.userId) : requestFriend(me, body.identifier);
     if (!result.ok) {
       res.status(400).json({ error: result.error, code: "friend_request_failed" });
       return;
