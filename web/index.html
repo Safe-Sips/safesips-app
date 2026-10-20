@@ -13,7 +13,10 @@
     />
     
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <!-- No apple-mobile-web-app-status-bar-style: with "black-translucent",
+         iOS 26 Home Screen apps are laid out one status bar short (WebKit bug
+         301108: an empty band at the bottom) and get a gradient drawn over the
+         status bar. The default bar is solid and takes theme-color (navy). -->
     <meta name="apple-mobile-web-app-title" content="SafeSips">
 
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
