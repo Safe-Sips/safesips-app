@@ -1,18 +1,27 @@
 {
+  "id": "/",
   "name": "SafeSips Live Safety Map",
   "short_name": "SafeSips",
-  "description": "Share an approximate area while keeping your exact location private.",
+  "description": "Share an approximate area while keeping your exact location private. Spiking first-aid works offline.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#eef0fa",
   "theme_color": "#0e1330",
   "orientation": "portrait-primary",
   "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
     {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
+      "name": "Spiking first aid",
+      "short_name": "First aid",
+      "description": "What to do if you or a friend may have been spiked (works offline).",
+      "url": "/help",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }

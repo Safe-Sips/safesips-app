@@ -15,6 +15,16 @@ if (!PUBLISHABLE_KEY) {
   throw new Error("Missing VITE_CLERK_PUBLISHABLE_KEY");
 }
 
+// Offline support (first-aid info must open with no connection). Production
+// only: in dev it would cache Vite's hot-reloading modules.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((err) => {
+      console.warn("[sw] registration failed:", err);
+    });
+  });
+}
+
 const root = document.getElementById("root");
 if (!root) throw new Error("Root element #root not found in DOM");
 
