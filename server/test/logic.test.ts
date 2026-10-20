@@ -151,18 +151,40 @@ test("wrong check-in answer is rejected but stays answerable", () => {
   assert.ok(good && good.correct, "correct answer still accepted afterwards");
 });
 
-test("SOS escalation records the real delivery outcome", async () => {
-  const { notifyContact } = await import("../src/notify.js");
+test("SOS phone numbers are normalised to international format", () => {
+  assert.equal(shared.normalizePhone("0722 123 456"), "+40722123456", "Romanian national number");
+  assert.equal(shared.normalizePhone("+40 (722) 123-456"), "+40722123456");
+  assert.equal(shared.normalizePhone("0040722123456"), "+40722123456");
+  assert.equal(shared.normalizePhone("+44 7700 900123"), "+447700900123", "foreign numbers keep their code");
+  for (const bad of ["722123456", "abc", "+0123", "07", ""]) {
+    assert.equal(shared.normalizePhone(bad), null, `rejects ${JSON.stringify(bad)}`);
+  }
+});
+
+test("SOS alert text names the person, says call 112, and links the area", async () => {
+  const { buildEscalationSms, buildEscalationEmail } = await import("../src/notify.js");
+  const base = { occurrenceId: "o", userId: "u", personName: "Ana", planLabel: "Club", area: null };
+  const plain = buildEscalationSms(base);
+  assert.match(plain, /Ana missed a safety check-in \("Club"\)/);
+  assert.match(plain, /call 112/);
+  assert.ok(!plain.includes("openstreetmap"), "no map link when not sharing");
+  const withArea = buildEscalationSms({ ...base, area: { lat: 44.426812, lng: 26.102538 } });
+  assert.match(withArea, /openstreetmap\.org\/\?mlat=44\.4268&mlon=26\.1025/);
+  const longName = buildEscalationSms({ ...base, personName: "x".repeat(200) });
+  assert.ok(longName.length < 320, "stays within two SMS segments");
+  const mail = buildEscalationEmail({ ...base, personName: "<b>Ana</b>", planLabel: "Club & bar" });
+  assert.ok(mail.html.includes("&lt;b&gt;Ana&lt;/b&gt;") && !mail.html.includes("<b>Ana</b>"), "HTML-escaped");
+  assert.ok(mail.html.includes("Club &amp; bar"));
+});
+
+test("SOS: a missed check-in alerts every contact on every channel", async () => {
+  const { notifyContacts } = await import("../src/notify.js");
   const mailer = await import("../src/mailer.js");
+  const sms = await import("../src/sms.js");
   const sos = await import("../src/repos/sosContacts.js");
-  const user = makeUser("sos-owner@test.local");
+  const user = makeUser("sos-multi@test.local");
   const plan = checkins.createPlan(user.id, {
-    label: null,
-    intervalMinutes: 60,
-    graceMinutes: 10,
-    question: "q?",
-    answer: "a",
-    endsAt: null,
+    label: null, intervalMinutes: 60, graceMinutes: 10, question: "q?", answer: "a", endsAt: null,
   });
   const now = Date.now();
   const occ = (id: string) => {
@@ -170,47 +192,91 @@ test("SOS escalation records the real delivery outcome", async () => {
       `INSERT INTO checkin_occurrences (id, plan_id, user_id, due_at, deadline_at, status, prompted_at, created_at)
        VALUES (?, ?, ?, ?, ?, 'missed', ?, ?)`
     ).run(id, plan.id, user.id, now, now, now, now);
-    return { occurrenceId: id, personName: "<b>Ana</b>", planLabel: "Club & bar" };
+    return { occurrenceId: id, userId: user.id, personName: "Ana", planLabel: null, area: null };
   };
-  const recorded = (id: string) =>
-    db.prepare(`SELECT channel, status FROM checkin_escalations WHERE occurrence_id = ?`).get(id);
+  const rows = (id: string) =>
+    db.prepare(`SELECT channel, status FROM checkin_escalations WHERE occurrence_id = ? ORDER BY channel`).all(id);
 
-  // No contact at all.
-  let r = await notifyContact(occ("esc-none"), null);
-  assert.deepEqual([r.channel, r.status], ["none", "failed"]);
-  assert.deepEqual(recorded("esc-none"), { channel: "none", status: "failed" });
+  // No contacts at all: recorded as a failure, not silently "sent".
+  let r = await notifyContacts(occ("esc-none"), []);
+  assert.deepEqual(r.map((x) => [x.channel, x.status]), [["none", "failed"]]);
 
-  // Phone-only contact: no SMS provider, must NOT be reported as sent.
-  const phoneOnly = sos.createContact(user.id, { name: "Pat", email: null, phone: "+40700000000", isPrimary: false });
-  r = await notifyContact(occ("esc-sms"), { ...phoneOnly });
-  assert.deepEqual([r.channel, r.status], ["sms", "failed"]);
+  const both = sos.createContact(user.id, { name: "Mo", email: "mo@test.local", phone: "+40722000001", isPrimary: true });
+  const phoneOnly = sos.createContact(user.id, { name: "Pat", email: null, phone: "+40722000002", isPrimary: false });
 
-  const withEmail = sos.createContact(user.id, { name: "Mo", email: "mo@test.local", phone: null, isPrimary: true });
-
-  // Email contact but SMTP not configured: failed, not silently "sent".
+  // Nothing configured: every attempt is an honest failure.
   mailer.setMailTransport(null);
-  r = await notifyContact(occ("esc-nosmtp"), { ...withEmail });
-  assert.deepEqual([r.channel, r.status], ["email", "failed"]);
+  sms.setSmsTransport(null);
+  r = await notifyContacts(occ("esc-off"), sos.listAlertContacts(user.id));
+  assert.equal(r.length, 3, "Mo: sms+email, Pat: sms");
+  assert.ok(r.every((x) => x.status === "failed"));
 
-  // Email contact with a working transport: actually sent, names the person.
-  const sent: Array<{ to: string; subject: string; text: string; html: string }> = [];
-  mailer.setMailTransport({
-    sendMail: async (m: (typeof sent)[number]) => {
-      sent.push(m);
-      return {};
+  // Both channels working: everyone gets everything they can.
+  const texts: Array<{ to: string; body: string }> = [];
+  const emails: Array<{ to: string }> = [];
+  sms.setSmsTransport({ send: async (to, body) => void texts.push({ to, body }) });
+  mailer.setMailTransport({ sendMail: async (m: { to: string }) => (emails.push(m), {}) } as never);
+  r = await notifyContacts(occ("esc-on"), sos.listAlertContacts(user.id));
+  assert.ok(r.every((x) => x.status === "sent"), JSON.stringify(r));
+  assert.deepEqual(texts.map((t) => t.to).sort(), ["+40722000001", "+40722000002"]);
+  assert.deepEqual(emails.map((e) => e.to), ["mo@test.local"]);
+  assert.deepEqual(rows("esc-on"), [
+    { channel: "email", status: "sent" },
+    { channel: "sms", status: "sent" },
+    { channel: "sms", status: "sent" },
+  ]);
+  assert.ok(both && phoneOnly);
+
+  // The send log never stores the phone number itself.
+  const logged = db.prepare(`SELECT to_hash FROM sms_sends`).all() as Array<{ to_hash: string }>;
+  assert.ok(logged.length > 0 && logged.every((l) => !l.to_hash.includes("722")), "only keyed hashes");
+
+  sms.setSmsTransport(null);
+  mailer.setMailTransport(null);
+});
+
+test("SOS texts retry temporary failures but not permanent ones", async () => {
+  const sms = await import("../src/sms.js");
+  sms.setSmsRetryDelays([0, 0, 0]);
+  const u = makeUser("sms-retry@test.local");
+  let calls = 0;
+  sms.setSmsTransport({
+    send: async () => {
+      calls++;
+      if (calls < 3) throw new sms.SmsError("provider down", true);
     },
-  } as never);
-  r = await notifyContact(occ("esc-ok"), { ...withEmail });
-  mailer.setMailTransport(null);
-  assert.deepEqual([r.channel, r.status], ["email", "sent"]);
-  assert.deepEqual(recorded("esc-ok"), { channel: "email", status: "sent" });
-  assert.equal(sent.length, 1);
-  assert.equal(sent[0].to, "mo@test.local");
-  assert.match(sent[0].subject, /<b>Ana<\/b> missed a safety check-in/);
-  assert.match(sent[0].text, /call 112/);
-  assert.ok(sent[0].html.includes("&lt;b&gt;Ana&lt;/b&gt;"), "name is HTML-escaped");
-  assert.ok(sent[0].html.includes("Club &amp; bar"), "label is HTML-escaped");
-  assert.ok(!sent[0].html.includes("<b>Ana</b>"), "raw HTML from the name is not injected");
+  });
+  let r = await sms.sendSms({ to: "+40722000101", body: "x", userId: u.id, kind: "alert" });
+  assert.equal(r.ok, true, "succeeds on the third attempt");
+  assert.equal(calls, 3);
+
+  calls = 0;
+  sms.setSmsTransport({
+    send: async () => {
+      calls++;
+      throw new sms.SmsError("invalid number", false);
+    },
+  });
+  r = await sms.sendSms({ to: "+40722000102", body: "x", userId: u.id, kind: "alert" });
+  assert.equal(r.ok, false);
+  assert.equal(calls, 1, "a permanent error isn't retried");
+  sms.setSmsTransport(null);
+});
+
+test("SOS texts: one number can't be spammed past the daily cap", async () => {
+  const sms = await import("../src/sms.js");
+  const { config } = await import("../src/config.js");
+  sms.setSmsTransport({ send: async () => {} });
+  const to = "+40722000200";
+  for (let i = 0; i < config.smsMaxPerNumberPerDay; i++) {
+    const u = makeUser(`spammer-${i}@test.local`);
+    assert.equal((await sms.sendSms({ to, body: "x", userId: u.id, kind: "alert" })).ok, true);
+  }
+  const fresh = makeUser("spammer-new@test.local");
+  const blocked = await sms.sendSms({ to, body: "x", userId: fresh.id, kind: "alert" });
+  assert.equal(blocked.ok, false, "even from a different account");
+  assert.match(blocked.detail, /most texts allowed today/);
+  sms.setSmsTransport(null);
 });
 
 test("IPs and emails are stored as keyed hashes, not plain sha256", async () => {

@@ -170,6 +170,12 @@ export const api = {
   // SOS contacts
   listContacts: () => request<SosContactDTO[]>("/api/sos-contacts"),
   sosDelivery: () => request<SosDeliveryDTO>("/api/sos-contacts/delivery"),
+  /** Send a test alert to one contact (rate-limited per day). */
+  testContact: (id: string) =>
+    request<{ results: Array<{ channel: "email" | "sms"; ok: boolean; detail: string }> }>(
+      `/api/sos-contacts/${id}/test`,
+      { method: "POST", body: {} }
+    ),
   createContact: (input: SosContactInput) =>
     request<SosContactDTO>("/api/sos-contacts", { body: input }),
   deleteContact: (id: string) =>

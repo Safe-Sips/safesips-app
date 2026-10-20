@@ -4,10 +4,10 @@ import {
   claimOverdueOccurrences,
   markEscalated,
 } from "./repos/checkins.js";
-import { getPrimaryContact } from "./repos/sosContacts.js";
+import { listAlertContacts } from "./repos/sosContacts.js";
 import { findUserById } from "./repos/users.js";
-import { notifyContact } from "./notify.js";
-import { emitCheckinDue } from "./realtime.js";
+import { notifyContacts } from "./notify.js";
+import { emitCheckinDue, getSharedArea } from "./realtime.js";
 import { purgeOldAttempts } from "./auth/throttle.js";
 import { nowMs } from "./util.js";
 
@@ -33,18 +33,19 @@ export function startCheckinScheduler(): NodeJS.Timeout {
       }
 
       for (const overdue of claimOverdueOccurrences(now)) {
-        const contact = getPrimaryContact(overdue.userId);
         const user = findUserById(overdue.userId);
-        // Delivery is async (SMTP); the occurrence is already claimed as
-        // missed, so mark it escalated now. notifyContact records the real
-        // delivery outcome itself and never throws.
-        void notifyContact(
+        // Delivery is async (SMS/SMTP with retries); the occurrence is already
+        // claimed as missed, so mark it escalated now. notifyContacts alerts
+        // every contact, records each real outcome, and never throws.
+        void notifyContacts(
           {
             occurrenceId: overdue.occurrenceId,
+            userId: overdue.userId,
             personName: user?.display_name ?? "A SafeSips user",
             planLabel: overdue.planLabel,
+            area: getSharedArea(overdue.userId),
           },
-          contact
+          listAlertContacts(overdue.userId)
         );
         markEscalated(overdue.occurrenceId);
       }

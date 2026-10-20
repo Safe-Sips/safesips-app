@@ -16,7 +16,7 @@ What we process
 • Masked presence: a randomized center point + an anonymous per-connection id + timestamps (held in memory only).
 • Safety reports: the exact point you chose, an optional note/tag, your display name, and upvotes. Reports are shown on the map for 48 hours, fading as they age, and then hidden; they stay in your account history until you delete them or your account.
 • Forum posts, your activity history (used for badges), and check-in records.
-• SOS contacts: the name, email and optional phone number of people you add. If you miss a check-in, we email your primary contact with your display name and the check-in label so they can check on you. Only add people who agree to be contacted.
+• Emergency contacts: the name, phone number and/or email of people you add. If you miss a check-in, we send each of them a text and/or email with your display name and the check-in label so they can check on you. If you are sharing your location at that moment, the alert also links your approximate area (the same ~200 m masked circle others see, never your exact position). You can send a test alert to check it arrives. Only add people who agree to be contacted. We keep a log of texts sent (with the number stored only as a keyed hash) to prevent abuse and control costs.
 
 What we do not do
 • We do not transmit or store your exact presence coordinates on our servers.
@@ -33,6 +33,7 @@ Third-party services
 • OpenStreetMap map tiles and Nominatim geocoding may receive address queries or map tile requests from your device. See openstreetmap.org for their policies.
 • Clerk (authentication) stores your email and sign-in credentials.
 • Our email provider delivers verification emails and SOS alerts.
+• Our SMS provider (Twilio) delivers SOS text alerts; it receives the contact's phone number and the alert text.
 • Our hosting provider processes network traffic necessary to operate the service.
 
 Your choices

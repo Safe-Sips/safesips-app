@@ -3,7 +3,7 @@ import { z } from "zod";
 import { asyncHandler, parseBody, parseQuery } from "../http.js";
 import { requireAuth, requireVerified } from "../auth/middleware.js";
 import { defaultCursor } from "../repos/activity.js";
-import { getPrimaryContact } from "../repos/sosContacts.js";
+import { hasReachableContact } from "../repos/sosContacts.js";
 import * as checkins from "../repos/checkins.js";
 
 export const checkinsRouter = Router();
@@ -34,11 +34,11 @@ checkinsRouter.post(
     const body = parseBody(planSchema, req, res);
     if (!body) return;
 
-    // A check-in plan is useless without someone to alert. Require a primary
-    // SOS contact we can actually reach (email is the only alert channel).
-    if (!getPrimaryContact(req.auth!.userId)?.email) {
+    // A check-in plan is useless without someone to alert: require at least
+    // one emergency contact with a phone number or email.
+    if (!hasReachableContact(req.auth!.userId)) {
       res.status(400).json({
-        error: "Add a primary SOS contact with an email address before starting check-ins.",
+        error: "Add an emergency contact with a phone number or email before starting check-ins.",
         code: "no_sos_contact",
       });
       return;
