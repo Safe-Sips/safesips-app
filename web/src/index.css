@@ -83,10 +83,12 @@
 }
 
 html,
-body,
-#root {
+body {
   height: 100%;
   margin: 0;
+}
+#root {
+  min-height: 100%;
 }
 
 /* iOS 26 Home Screen apps installed with the translucent status bar (every
@@ -102,14 +104,16 @@ body,
   }
 }
 
-/* Every page starts with the navy nav. iOS 26.1+ draws a blur/gradient over
-   the status bar of Home Screen apps installed with the translucent bar,
-   tinted with the document's background colour — light lavender painted a
-   foggy band over the nav. So the document background is navy, and the page
-   colour lives on <body> and the app shell. (The bottom band that a navy
-   <html> once exposed was the short-viewport bug, fixed above.) */
-html {
-  background: var(--nav-bg);
+/* Every page starts with the navy nav, and iOS 26 colours the status bar
+   (and the fade under it) from the page itself, not theme-color: from a
+   fixed/sticky element at the top edge, else the page background. Any light
+   source there showed as a light or foggy band over the nav. So: <html> and
+   <body> are navy, the light page colour lives on #root (which grows with the
+   content), and the signed-out nav sticks to the top. (The bottom band a navy
+   background once exposed was the short-viewport bug, fixed above.) */
+html,
+body {
+  background-color: var(--nav-bg);
 }
 /* Safari tabs tint the status bar from a fixed bar at the very top. */
 body::before {
@@ -124,8 +128,7 @@ body::before {
   pointer-events: none;
 }
 
-body,
-.shell {
+#root {
   background:
     radial-gradient(900px 520px at 100% -8%, #ffe2f1 0%, rgba(255, 226, 241, 0) 55%),
     radial-gradient(900px 640px at -8% 108%, #dfe4fb 0%, rgba(223, 228, 251, 0) 55%),
@@ -849,6 +852,12 @@ body {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
+}
+/* Keeps a navy bar at the top edge while the page scrolls: iOS 26 colours the
+   status bar from it (see the note on html/body). */
+.auth-layout > .nav {
+  position: sticky;
+  top: 0;
 }
 .clerk-auth-controls {
   display: flex;
