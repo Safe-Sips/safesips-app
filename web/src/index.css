@@ -644,10 +644,14 @@ body {
 .shell {
   display: flex;
   flex-direction: column;
-  /* Pinned to the screen edges: on iPhone home-screen apps 100dvh can come up
-     short of the screen and leave an empty band at the bottom. */
+  /* Pinned to the screen. On iPhone Home Screen apps the viewport is short by
+     the status-bar height; fitScreen.ts then sets --app-height to the real
+     screen height so there's no empty band at the bottom. */
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--app-height, 100%);
   width: 100%;
   overflow: hidden;
 }
@@ -1120,7 +1124,7 @@ select option {
 .page {
   max-width: 760px;
   margin: 0 auto;
-  padding: 22px 18px 60px;
+  padding: 22px 18px calc(60px + env(safe-area-inset-bottom, 0px));
 }
 .page-head {
   display: flex;

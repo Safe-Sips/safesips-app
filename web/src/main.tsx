@@ -4,6 +4,7 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { AuthProvider } from "./auth/AuthContext";
+import { fitStandaloneScreen } from "./fitScreen";
 // Self-hosted brand font (no Google Fonts request: works offline and doesn't
 // send visitors' IPs to a third party). Includes Latin Extended for Romanian.
 import "@fontsource-variable/nunito";
@@ -24,6 +25,8 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
     });
   });
 }
+
+fitStandaloneScreen();
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Root element #root not found in DOM");
