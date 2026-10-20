@@ -16,7 +16,7 @@ What we process
 • Masked presence: a randomized center point + an anonymous per-connection id + timestamps (held in memory only).
 • Safety reports: the exact point you chose, an optional note/tag, your display name, and upvotes. Reports are shown on the map for 48 hours, fading as they age, and then hidden; they stay in your account history until you delete them or your account.
 • Forum posts, your activity history (used for badges), and check-in records.
-• Emergency contacts: other SafeSips users you invite by their account email or SafeSips code. They only become your contact after they accept, and either of you can remove the link at any time; we don't reveal who is behind an email or code until they accept. If you miss a check-in, each contact gets an alert in SafeSips (and a notification on their devices) with your display name and the check-in label, plus your approximate area if you are sharing your location at that moment (the same ~200 m masked circle others see, never your exact position). If email delivery is set up, they're also emailed at their account address. Alerts stay in their inbox until they delete their account or you delete yours.
+• Emergency contacts: other SafeSips users you invite by their account email or SafeSips code. They only become your contact after they accept, and either of you can remove the link at any time; we don't reveal who is behind an email or code until they accept. If you miss a check-in, each contact gets an alert in SafeSips (and a notification on their devices) with your display name and the check-in label, plus your approximate area if you are sharing your location at that moment (the same ~200 m masked circle others see, never your exact position). Alerts stay in their inbox until they delete their account or you delete yours.
 
 What we do not do
 • We do not transmit or store your exact presence coordinates on our servers.
@@ -32,7 +32,7 @@ Retention
 Third-party services
 • OpenStreetMap map tiles and Nominatim geocoding may receive address queries or map tile requests from your device. See openstreetmap.org for their policies.
 • Clerk (authentication) stores your email and sign-in credentials.
-• Our email provider delivers verification emails and SOS alerts.
+• Our email provider delivers verification emails.
 • Notifications are delivered through your browser's push service (for example Google, Mozilla or Apple). The message is end-to-end encrypted to your device; the push service only sees an address for your device, not the content.
 • Our hosting provider processes network traffic necessary to operate the service.
 
