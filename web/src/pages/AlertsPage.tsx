@@ -1,14 +1,9 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { EMERGENCY_NUMBER } from "@safesips/shared";
 import NotificationsCard from "../components/NotificationsCard";
 import { timeAgo } from "../format";
 import { useAlerts } from "../hooks/useAlerts";
-
-function areaLink(area: { lat: number; lng: number }): string {
-  const lat = area.lat.toFixed(4);
-  const lng = area.lng.toFixed(4);
-  return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=16/${lat}/${lng}`;
-}
 
 /** Alerts I received because someone I protect missed a check-in. */
 export default function AlertsPage() {
@@ -69,9 +64,15 @@ export default function AlertsPage() {
                   </button>
                 )}
                 {a.area && (
-                  <a className="btn btn-ghost" href={areaLink(a.area)} target="_blank" rel="noreferrer">
+                  <Link
+                    className="btn btn-ghost"
+                    to="/"
+                    state={{
+                      alertArea: { lat: a.area.lat, lng: a.area.lng, name: a.ownerDisplayName, at: a.createdAt },
+                    }}
+                  >
                     See where they were last sharing
-                  </a>
+                  </Link>
                 )}
               </div>
               <p className="hint">

@@ -34,8 +34,8 @@ export default function AuthIntro() {
             ⏱️
           </span>
           <span>
-            Set check-ins: if you don't answer one, a trusted contact gets an
-            email asking them to check on you.
+            Set check-ins: if you don't answer one, your emergency contacts
+            are alerted in SafeSips so they can check on you.
           </span>
         </li>
         <li>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  Circle,
   CircleMarker,
   MapContainer,
   Marker,
@@ -12,6 +13,7 @@ import L from "leaflet";
 // Loaded with the (lazy) map chunk instead of on every page.
 import "leaflet/dist/leaflet.css";
 import {
+  PUBLIC_RADIUS_METERS,
   reportOpacity,
   type LatLng,
   type PresenceRecord,
@@ -21,6 +23,13 @@ import {
 } from "@safesips/shared";
 import { timeAgo } from "../format";
 import PrivacyCircle from "./PrivacyCircle";
+
+/** Someone's last shared (masked) area, opened from a missed-check-in alert. */
+export interface AlertArea extends LatLng {
+  name: string;
+  /** When the alert was raised. */
+  at: number;
+}
 
 /** A place to recenter the map on. Optional zoom overrides the focus zoom. */
 export type FocusPoint = LatLng & { zoom?: number };
@@ -40,6 +49,8 @@ interface MapViewProps {
   pendingPoint: LatLng | null;
   /** Recenters the map (on entry, on "use my location", after reporting). */
   focusPoint: FocusPoint | null;
+  /** Shown highlighted when opened from an alert. */
+  alertArea: AlertArea | null;
   onPickPoint: (point: LatLng) => void;
   onSelectReport: (report: ReportDTO) => void;
   onBoundsChange: (bounds: L.LatLngBounds) => void;
@@ -186,6 +197,7 @@ export default function MapView({
   pickMode,
   pendingPoint,
   focusPoint,
+  alertArea,
   onPickPoint,
   onSelectReport,
   onBoundsChange,
@@ -231,6 +243,20 @@ export default function MapView({
           </Tooltip>
         </CircleMarker>
       ))}
+
+      {/* Where someone who missed a check-in was last sharing (their masked
+          circle at the time of the alert — never an exact position). */}
+      {alertArea && (
+        <Circle
+          center={[alertArea.lat, alertArea.lng]}
+          radius={PUBLIC_RADIUS_METERS}
+          pathOptions={{ color: "#ff4d5e", fillColor: "#ff4d5e", fillOpacity: 0.14, weight: 3 }}
+        >
+          <Tooltip direction="top" permanent>
+            {alertArea.name} · last shared area
+          </Tooltip>
+        </Circle>
+      )}
 
       {/* This user's own public privacy circle. */}
       {selfPublic && (
