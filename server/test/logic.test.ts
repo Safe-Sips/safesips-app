@@ -681,3 +681,53 @@ test("friends: code + email requests from one person show once and merge on acce
   assert.equal(fiView.outgoing.length, 0, "the other request was dropped");
   assert.equal(friends.getFriendsOverview(gu.id).incoming.length, 0);
 });
+
+test("avatars: only https Clerk image URLs are accepted", () => {
+  assert.equal(users.cleanAvatarUrl("https://img.clerk.com/abc?w=96"), "https://img.clerk.com/abc?w=96");
+  assert.ok(users.cleanAvatarUrl("https://images.clerk.dev/x.png"));
+  assert.equal(users.cleanAvatarUrl("http://img.clerk.com/abc"), null, "no plain http");
+  assert.equal(users.cleanAvatarUrl("https://evil.example/track.gif"), null, "no other hosts");
+  assert.equal(users.cleanAvatarUrl("https://img.clerk.com.evil.example/x"), null);
+  assert.equal(users.cleanAvatarUrl("https://user:pw@img.clerk.com/x"), null);
+  assert.equal(users.cleanAvatarUrl("javascript:alert(1)"), null);
+});
+
+test("check-ins alert only the contacts picked for the plan", async () => {
+  const contacts = await import("../src/repos/emergencyContacts.js");
+  const notify = await import("../src/notify.js");
+  const push = await import("../src/push.js");
+  push.setPushSender(async () => undefined);
+  const owner = makeUser("pc-owner@example.com");
+  const c1 = makeUser("pc-one@example.com");
+  const c2 = makeUser("pc-two@example.com");
+  for (const c of [c1, c2]) {
+    contacts.requestContactForUser(owner.id, c.id);
+    const req = contacts.getOverview(c.id).incoming[0];
+    contacts.acceptRequest(c.id, req.id);
+  }
+  const plan = checkins.createPlan(owner.id, {
+    label: "Picked", intervalMinutes: 30, graceMinutes: 10, question: "Cat?", answer: "tom",
+    contactUserIds: [c1.id],
+  });
+  assert.deepEqual(plan.alertContacts?.map((c) => c.userId), [c1.id]);
+  assert.deepEqual(checkins.planContactIds(plan.id), [c1.id]);
+
+  const occ = db.prepare(`SELECT id FROM checkin_occurrences WHERE plan_id = ?`).get(plan.id) as { id: string };
+  const alertsFor = (userId: string) =>
+    (db.prepare(`SELECT COUNT(*) AS c FROM checkin_alerts WHERE contact_user_id = ?`).get(userId) as { c: number }).c;
+  const ctx = { occurrenceId: occ.id, userId: owner.id, personName: "Owner", planLabel: "Picked", area: null };
+
+  await notify.alertEmergencyContacts({ ...ctx, selectedContactIds: checkins.planContactIds(plan.id) });
+  assert.equal(alertsFor(c1.id), 1, "the picked contact is alerted");
+  assert.equal(alertsFor(c2.id), 0, "the other one isn't");
+
+  // The picked contact steps down: alert the remaining contacts, not nobody.
+  const link = contacts.getOverview(c1.id).protecting[0];
+  contacts.removeLink(c1.id, link.id);
+  await notify.alertEmergencyContacts({ ...ctx, selectedContactIds: checkins.planContactIds(plan.id) });
+  assert.equal(alertsFor(c2.id), 1, "falls back to everyone left");
+
+  // Editing the selection; null = everyone.
+  assert.equal(checkins.setPlanContacts(owner.id, plan.id, null)?.alertContacts, null);
+  assert.equal(checkins.setPlanContacts(c2.id, plan.id, null), null, "only the owner can edit");
+});

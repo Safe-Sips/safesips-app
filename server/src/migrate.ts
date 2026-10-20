@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 /**
  * Full schema, created idempotently with CREATE TABLE/INDEX IF NOT EXISTS.
@@ -151,6 +151,13 @@ CREATE TABLE IF NOT EXISTS checkin_plans (
   created_at       INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_plans_user ON checkin_plans(user_id);
+
+-- Which emergency contacts a plan alerts. No rows = all accepted contacts.
+CREATE TABLE IF NOT EXISTS checkin_plan_contacts (
+  plan_id          TEXT NOT NULL REFERENCES checkin_plans(id) ON DELETE CASCADE,
+  contact_user_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  PRIMARY KEY (plan_id, contact_user_id)
+);
 CREATE INDEX IF NOT EXISTS idx_plans_active ON checkin_plans(status);
 
 CREATE TABLE IF NOT EXISTS checkin_occurrences (
@@ -313,6 +320,10 @@ export function runMigrations(db: Database.Database): void {
     db.exec(
       `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_contact_code ON users(contact_code)`
     );
+    if (!userCols.some((c) => c.name === "image_url")) {
+      // Profile picture URL (Clerk-hosted only; see routes/users.ts).
+      db.exec(`ALTER TABLE users ADD COLUMN image_url TEXT`);
+    }
   });
   apply();
 }

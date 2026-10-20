@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { FriendsOverviewDTO } from "@safesips/shared";
 import { api, ApiError } from "../api";
 import { timeAgo } from "../format";
+import Avatar from "../components/Avatar";
 import MyCode from "../components/MyCode";
 import { useSocket } from "../socket/SocketProvider";
 
@@ -131,11 +132,10 @@ export default function FriendsPage() {
               <ul className="contact-list">
                 {overview.friends.map((f) => (
                   <li key={f.id} className="contact-row">
-                    <span>
-                      <Link to={`/friends/${encodeURIComponent(f.userId)}`}>
-                        <strong>{f.displayName}</strong>
-                      </Link>
-                    </span>
+                    <Link className="friend-link" to={`/friends/${encodeURIComponent(f.userId)}`}>
+                      <Avatar name={f.displayName} imageUrl={f.imageUrl} size={36} />
+                      <strong>{f.displayName}</strong>
+                    </Link>
                     <span className="contact-actions">
                       <Link className="btn btn-ghost btn-sm" to={`/friends/${encodeURIComponent(f.userId)}`}>
                         View profile

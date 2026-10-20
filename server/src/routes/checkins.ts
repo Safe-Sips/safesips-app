@@ -3,7 +3,7 @@ import { z } from "zod";
 import { asyncHandler, parseBody, parseQuery } from "../http.js";
 import { requireAuth, requireVerified } from "../auth/middleware.js";
 import { defaultCursor } from "../repos/activity.js";
-import { hasAcceptedContact } from "../repos/emergencyContacts.js";
+import { hasAcceptedContact, listAcceptedContacts } from "../repos/emergencyContacts.js";
 import * as checkins from "../repos/checkins.js";
 
 export const checkinsRouter = Router();
@@ -25,7 +25,28 @@ const planSchema = z.object({
   question: z.string().trim().min(3, "Question is too short.").max(200),
   answer: z.string().trim().min(1, "Answer can't be empty.").max(100),
   endsAt: z.number().int().positive().optional().nullable(),
+  /** Who to alert; omitted/null = all accepted contacts. */
+  contactUserIds: z.array(z.string().min(1).max(64)).max(50).optional().nullable(),
 });
+
+/**
+ * Validate a selection of contacts: every id must be one of my accepted
+ * contacts. Returns the de-duplicated ids (null = everyone), or an error.
+ */
+function checkContactSelection(
+  userId: string,
+  ids: string[] | null | undefined
+): { ids: string[] | null } | { error: string } {
+  if (ids == null) return { ids: null };
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return { error: "Pick at least one emergency contact to alert." };
+  const accepted = new Set(listAcceptedContacts(userId).map((c) => c.id));
+  if (unique.some((id) => !accepted.has(id))) {
+    return { error: "You can only pick emergency contacts who have accepted." };
+  }
+  // Everyone selected = "everyone", so contacts who accept later are included too.
+  return { ids: unique.length === accepted.size ? null : unique };
+}
 
 checkinsRouter.post(
   "/plans",
@@ -41,6 +62,11 @@ checkinsRouter.post(
         error: "Add an emergency contact (and wait for them to accept) before starting check-ins.",
         code: "no_sos_contact",
       });
+      return;
+    }
+    const selection = checkContactSelection(req.auth!.userId, body.contactUserIds);
+    if ("error" in selection) {
+      res.status(400).json({ error: selection.error, code: "bad_contacts" });
       return;
     }
     // Equal is fine: each check-in's deadline is when the next one starts, so
@@ -60,8 +86,33 @@ checkinsRouter.post(
       question: body.question,
       answer: body.answer,
       endsAt: body.endsAt ?? null,
+      contactUserIds: selection.ids,
     });
     res.status(201).json(plan);
+  })
+);
+
+const contactsSchema = z.object({
+  contactUserIds: z.array(z.string().min(1).max(64)).max(50).nullable(),
+});
+
+/** Change who a running check-in alerts. */
+checkinsRouter.put(
+  "/plans/:id/contacts",
+  asyncHandler(async (req, res) => {
+    const body = parseBody(contactsSchema, req, res);
+    if (!body) return;
+    const selection = checkContactSelection(req.auth!.userId, body.contactUserIds);
+    if ("error" in selection) {
+      res.status(400).json({ error: selection.error, code: "bad_contacts" });
+      return;
+    }
+    const plan = checkins.setPlanContacts(req.auth!.userId, req.params.id, selection.ids);
+    if (!plan) {
+      res.status(404).json({ error: "Plan not found." });
+      return;
+    }
+    res.json(plan);
   })
 );
 

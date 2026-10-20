@@ -4,6 +4,7 @@ import type {
   CheckinOccurrenceStatus,
   CheckinPlanInput,
   CheckinPlanStatus,
+  PlanContactDTO,
   PlanDTO,
 } from "@safesips/shared";
 import { db } from "../db.js";
@@ -105,6 +106,32 @@ const selectOverdue = db.prepare(
 const setMissed = db.prepare(
   `UPDATE checkin_occurrences SET status = 'missed' WHERE id = ? AND status = 'prompted'`
 );
+const insertPlanContact = db.prepare(
+  `INSERT OR IGNORE INTO checkin_plan_contacts (plan_id, contact_user_id) VALUES (?, ?)`
+);
+const clearPlanContacts = db.prepare(`DELETE FROM checkin_plan_contacts WHERE plan_id = ?`);
+const selectPlanContacts = db.prepare(
+  `SELECT c.contact_user_id AS user_id, u.display_name
+     FROM checkin_plan_contacts c JOIN users u ON u.id = c.contact_user_id
+    WHERE c.plan_id = ? ORDER BY u.display_name COLLATE NOCASE`
+);
+
+/** Who this plan alerts; null = everyone (no selection stored). */
+function planContacts(planId: string): PlanContactDTO[] | null {
+  const rows = selectPlanContacts.all(planId) as Array<{ user_id: string; display_name: string }>;
+  return rows.length ? rows.map((r) => ({ userId: r.user_id, displayName: r.display_name })) : null;
+}
+
+/** The selected contact ids for a plan (empty = everyone). */
+export function planContactIds(planId: string): string[] {
+  return (selectPlanContacts.all(planId) as Array<{ user_id: string }>).map((r) => r.user_id);
+}
+
+function storePlanContacts(planId: string, ids: string[] | null | undefined): void {
+  clearPlanContacts.run(planId);
+  for (const id of ids ?? []) insertPlanContact.run(planId, id);
+}
+
 const setEscalated = db.prepare(
   `UPDATE checkin_occurrences SET status = 'escalated' WHERE id = ?`
 );
@@ -121,6 +148,7 @@ function planToDTO(p: PlanRow, nextDueAt: number | null): PlanDTO {
     endsAt: p.ends_at,
     createdAt: p.created_at,
     nextDueAt,
+    alertContacts: planContacts(p.id),
   };
 }
 
@@ -176,6 +204,7 @@ export const createPlan = db.transaction(
       created_at: now,
     };
     insertPlan.run(plan);
+    storePlanContacts(planId, input.contactUserIds);
 
     const firstDue = now + interval * MINUTE;
     let nextDue: number | null = null;
@@ -208,6 +237,18 @@ export function pausePlan(userId: string, planId: string): boolean {
     return changed;
   });
   return tx();
+}
+
+/**
+ * Change who an active or paused plan alerts (null/empty = everyone). The
+ * caller checks the ids are accepted contacts. Returns the plan, or null if
+ * it isn't this user's.
+ */
+export function setPlanContacts(userId: string, planId: string, ids: string[] | null): PlanDTO | null {
+  const plan = selectPlanById.get(planId) as PlanRow | undefined;
+  if (!plan || plan.user_id !== userId || plan.status === "ended") return null;
+  storePlanContacts(planId, ids);
+  return listPlans(userId).find((p) => p.id === planId) ?? null;
 }
 
 export function endPlan(userId: string, planId: string): boolean {
@@ -322,6 +363,7 @@ export function claimDueOccurrences(now: number): DueOccurrence[] {
 export interface OverdueOccurrence {
   occurrenceId: string;
   userId: string;
+  planId: string;
   planLabel: string | null;
 }
 
@@ -344,7 +386,7 @@ export function claimOverdueOccurrences(now: number): OverdueOccurrence[] {
   const tx = db.transaction(() => {
     for (const r of rows) {
       if (setMissed.run(r.id).changes > 0) {
-        claimed.push({ occurrenceId: r.id, userId: r.user_id, planLabel: r.label });
+        claimed.push({ occurrenceId: r.id, userId: r.user_id, planId: r.plan_id, planLabel: r.label });
         const plan = selectPlanById.get(r.plan_id) as PlanRow | undefined;
         if (plan) scheduleNext(plan, r.due_at);
       }

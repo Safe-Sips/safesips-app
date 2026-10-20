@@ -1966,3 +1966,71 @@ select option {
     flex-direction: column;
   }
 }
+
+/* ---------------------------- Avatars & pickers ---------------------------- */
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--nav-bg);
+  color: #fff;
+  font-weight: 800;
+}
+.profile-hero {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.profile-hero h1 {
+  margin: 0;
+}
+.friend-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+}
+.contact-picker {
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 10px 14px 12px;
+  margin: 12px 0;
+}
+.contact-picker legend {
+  font-weight: 700;
+  padding: 0 4px;
+}
+.contact-picker ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+.contact-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  cursor: pointer;
+}
+.contact-picker-row input {
+  width: 18px;
+  height: 18px;
+}
+.plan-alerts-edit {
+  margin-top: 8px;
+}
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

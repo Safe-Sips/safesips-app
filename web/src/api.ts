@@ -201,6 +201,8 @@ export const api = {
     request<FriendsOverviewDTO>(`/api/friends/${encodeURIComponent(id)}/accept`, { method: "POST", body: {} }),
   removeFriend: (id: string) =>
     request<FriendsOverviewDTO>(`/api/friends/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  setAvatar: (imageUrl: string | null) =>
+    request<{ imageUrl: string | null }>("/api/users/me/avatar", { method: "PUT", body: { imageUrl } }),
   friendProfile: (userId: string) =>
     request<FriendProfileDTO>(`/api/friends/${encodeURIComponent(userId)}/profile`),
   askFriendAsContact: (userId: string) =>
@@ -228,6 +230,11 @@ export const api = {
   listPlans: () => request<PlanDTO[]>("/api/checkins/plans"),
   createPlan: (input: CheckinPlanInput) =>
     request<PlanDTO>("/api/checkins/plans", { body: input }),
+  setPlanContacts: (id: string, contactUserIds: string[] | null) =>
+    request<PlanDTO>(`/api/checkins/plans/${encodeURIComponent(id)}/contacts`, {
+      method: "PUT",
+      body: { contactUserIds },
+    }),
   pausePlan: (id: string) =>
     request<{ ok: true }>(`/api/checkins/plans/${id}/pause`, { method: "POST" }),
   endPlan: (id: string) =>

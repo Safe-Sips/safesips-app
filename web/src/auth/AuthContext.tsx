@@ -64,6 +64,20 @@ function clearCachedUsers(): void {
   }
 }
 
+/**
+ * Keep the server's copy of my profile picture in step with Clerk, so friends
+ * see it. Best effort: a failure just leaves the old picture.
+ */
+async function syncAvatar(user: UserDTO, clerkImage: string | null): Promise<UserDTO> {
+  if ((user.imageUrl ?? null) === clerkImage) return user;
+  try {
+    const { imageUrl } = await api.setAvatar(clerkImage);
+    return { ...user, imageUrl };
+  } catch {
+    return user;
+  }
+}
+
 /** The server rejected this account/session, as opposed to being unreachable. */
 function isAuthRejection(err: unknown): boolean {
   return err instanceof ApiError && (err.status === 401 || err.status === 403);
@@ -128,8 +142,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         const { user: appUser } = await api.me();
         if (active) {
-          writeCachedUser(clerkId, appUser);
-          setUser(appUser);
+          const synced = await syncAvatar(appUser, clerkUser?.hasImage ? clerkUser.imageUrl : null);
+          writeCachedUser(clerkId, synced);
+          setUser(synced);
           setSyncError(null);
         }
       } catch (err) {
@@ -151,7 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [isLoaded, isSignedIn, getToken, clerkUser?.id]);
+  }, [isLoaded, isSignedIn, getToken, clerkUser?.id, clerkUser?.imageUrl]);
 
   useEffect(() => {
     setUnauthorizedHandler(() => {
