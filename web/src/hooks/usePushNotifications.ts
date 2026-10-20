@@ -64,8 +64,15 @@ export function usePushNotifications() {
         setStatus("denied");
         return;
       }
-      const sub = await reg.pushManager.getSubscription();
+      let sub = await reg.pushManager.getSubscription();
       if (sub && Notification.permission === "granted") {
+        // If the server's push keys changed (DB reset, new VAPID_* keys), the
+        // old subscription can't receive anything: quietly make a new one.
+        const key = urlBase64ToUint8Array((await api.pushPublicKey()).publicKey);
+        if (!sameKey(sub.options.applicationServerKey, key)) {
+          await sub.unsubscribe();
+          sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
+        }
         // Re-sync: keeps working after a server reset and follows whoever is
         // signed in on this browser.
         void api.pushSubscribe(sub.toJSON()).catch(() => undefined);
