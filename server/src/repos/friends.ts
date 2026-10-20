@@ -1,4 +1,5 @@
 import type {
+  UserSearchResultDTO,
   FriendDTO,
   FriendProfileDTO,
   FriendRequestDTO,
@@ -78,6 +79,18 @@ const incomingFor = db.prepare(
 const outgoingFor = db.prepare(
   `SELECT id, invite_label, created_at FROM friendships
     WHERE status = 'pending' AND requester_id = ? ORDER BY created_at DESC`
+);
+const discoverableOf = db.prepare(`SELECT discoverable FROM users WHERE id = ?`);
+const setDiscoverableStmt = db.prepare(`UPDATE users SET discoverable = ?, updated_at = ? WHERE id = ?`);
+/** Candidates for a name search: anyone discoverable whose name shares a letter run. */
+const searchCandidates = db.prepare(
+  `SELECT id, display_name, image_url FROM users
+    WHERE discoverable = 1 AND status = 'active' AND id <> @me
+      AND (display_name LIKE @contains ESCAPE '\\' OR display_name LIKE @start ESCAPE '\\'
+           -- LIKE only folds ASCII: let accented names (Ștefan, Ioană) through
+           -- to the precise, accent-insensitive ranking.
+           OR display_name GLOB '*[^ -~]*')
+    LIMIT 300`
 );
 const myContactLink = db.prepare(
   `SELECT status FROM emergency_links WHERE owner_id = ? AND contact_user_id = ?`
@@ -205,7 +218,13 @@ export function getFriendsOverview(me: string): FriendsOverviewDTO {
   const outgoing = (outgoingFor.all(me) as Array<{ id: string; invite_label: string; created_at: number }>).map<OutgoingFriendRequestDTO>(
     (r) => ({ id: r.id, label: r.invite_label, createdAt: r.created_at })
   );
-  return { myCode: formatCode(ensureContactCode(me)), friends, incoming, outgoing };
+  return {
+    myCode: formatCode(ensureContactCode(me)),
+    discoverable: isDiscoverable(me),
+    friends,
+    incoming,
+    outgoing,
+  };
 }
 
 /** Accept a request addressed to me. Returns the requester's id, or null. */
@@ -272,3 +291,140 @@ export function getFriendProfile(me: string, friendId: string): FriendProfileDTO
     emergencyContact: link?.status ?? "none",
   };
 }
+
+/* ------------------------------ Search by name ------------------------------ */
+
+export function isDiscoverable(userId: string): boolean {
+  return (discoverableOf.get(userId) as { discoverable: number } | undefined)?.discoverable !== 0;
+}
+
+export function setDiscoverable(userId: string, on: boolean): void {
+  setDiscoverableStmt.run(on ? 1 : 0, nowMs(), userId);
+}
+
+/** Lower-case, accents stripped ("Ștefan" ~ "stefan"), spaces collapsed. */
+export function foldName(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Edit distance where swapping two neighbouring letters counts as one typo
+ * ("smoek" → "smoke"), capped: anything above `max` returns max + 1.
+ */
+function editDistance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let before: number[] = [];
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    let rowMin = i;
+    for (let j = 1; j <= b.length; j++) {
+      let v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, before[j - 2] + 1);
+      cur.push(v);
+      rowMin = Math.min(rowMin, v);
+    }
+    if (rowMin > max) return max + 1;
+    before = prev;
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+/**
+ * How well a name matches the query (lower = better), or null if not at all:
+ * whole name starts with it, a word starts with it, contains it, then a word
+ * (or the start of the name) within one or two typos of it.
+ */
+export function matchRank(name: string, query: string): number | null {
+  const n = foldName(name);
+  const q = foldName(query);
+  if (!q) return null;
+  if (n === q) return 0;
+  if (n.startsWith(q)) return 1;
+  const words = n.split(" ");
+  if (words.some((w) => w.startsWith(q))) return 2;
+  if (n.includes(q)) return 3;
+  const allowed = q.length >= 6 ? 2 : 1;
+  let best = allowed + 1;
+  for (const w of [...words, n]) {
+    best = Math.min(best, editDistance(w.slice(0, q.length + 1), q, allowed), editDistance(w, q, allowed));
+  }
+  return best <= allowed ? 3 + best : null;
+}
+
+export const SEARCH_MIN_CHARS = 3;
+export const SEARCH_MAX_RESULTS = 10;
+
+const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
+
+/**
+ * Find people by display name. Only discoverable, active users other than me;
+ * name and picture only. Rate-limited by the route.
+ */
+export function searchUsers(me: string, rawQuery: string): UserSearchResultDTO[] {
+  const query = rawQuery.trim().slice(0, 60);
+  if (foldName(query).length < SEARCH_MIN_CHARS) return [];
+  // The LIKE pre-filter is case-insensitive for ASCII; typo matches are found
+  // through a shared two-letter start, then ranked precisely below.
+  const head = likeEscape(query.slice(0, 2));
+  const rows = searchCandidates.all({
+    me,
+    contains: `%${likeEscape(query)}%`,
+    start: `%${head}%`,
+  }) as Array<{ id: string; display_name: string; image_url: string | null }>;
+
+  const myEmail = emailOf(me);
+  return rows
+    .map((r) => ({ r, rank: matchRank(r.display_name, query) }))
+    .filter((x): x is { r: (typeof rows)[number]; rank: number } => x.rank !== null)
+    .sort((a, b) => a.rank - b.rank || a.r.display_name.localeCompare(b.r.display_name))
+    .slice(0, SEARCH_MAX_RESULTS)
+    .map(({ r }) => {
+      const rel = rowsBetween.all({ a: me, b: r.id, aEmail: myEmail, bEmail: emailOf(r.id) }) as FriendshipRow[];
+      const relation: UserSearchResultDTO["relation"] = rel.some((x) => x.status === "accepted")
+        ? "friend"
+        : rel.some((x) => x.status === "pending" && addressedTo(x, me))
+          ? "received"
+          : rel.some((x) => x.requester_id === me)
+            ? "sent"
+            : "none";
+      return { userId: r.id, displayName: r.display_name, imageUrl: r.image_url, relation };
+    });
+}
+
+/**
+ * Send a friend request to someone picked from search. Only works for people
+ * who are discoverable (or already connected to me), so ids can't be used to
+ * reach people who opted out.
+ */
+export const requestFriendByUserId = db.transaction((me: string, targetId: string): FriendRequestResult => {
+  if (targetId === me) return { ok: false, error: "That's you." };
+  const target = userRow.get(targetId) as { id: string; display_name: string } | undefined;
+  const rows = target ? between(me, targetId) : [];
+  if (!target || (!isDiscoverable(targetId) && rows.length === 0)) {
+    return { ok: false, error: "That person can't be found." };
+  }
+  const since = nowMs() - 24 * 60 * 60 * 1000;
+  if ((countRecent.get(me, since) as { c: number }).c >= MAX_FRIEND_REQUESTS_PER_DAY) {
+    return { ok: false, error: "You've sent a lot of friend requests today. Try again tomorrow." };
+  }
+  if (rows.some((r) => r.status === "accepted")) return { ok: true, message: "You're already friends.", notify: null };
+  const theirs = rows.find((r) => r.status === "pending" && addressedTo(r, me));
+  if (theirs) {
+    acceptAs(me, theirs);
+    return { ok: true, message: "You're now friends.", notify: { userId: targetId, accepted: true } };
+  }
+  if (rows.some((r) => r.requester_id === me && r.addressee_id === targetId)) {
+    return { ok: true, message: "Friend request sent.", notify: null };
+  }
+  insertRow.run({
+    id: genId(),
+    requester_id: me,
+    addressee_id: targetId,
+    invite_email_norm: null,
+    invite_label: target.display_name,
+    created_at: nowMs(),
+  });
+  return { ok: true, message: "Friend request sent.", notify: { userId: targetId, accepted: false } };
+}) as (me: string, targetId: string) => FriendRequestResult;

@@ -16,6 +16,7 @@ What we process
 • Masked presence: a randomized center point + an anonymous per-connection id + timestamps (held in memory only).
 • Safety reports: the exact point you chose, an optional note/tag, your display name, and upvotes. Reports are shown on the map for 48 hours, fading as they age, and then hidden; they stay in your account history until you delete them or your account.
 • Forum posts, your activity history (used for badges), and check-in records.
+• Friend search: by default other signed-in users can find you by your display name and see your profile picture (never your email). Turn off "Let people find me by name" on the Friends page and you can only be added with your SafeSips code or email.
 • Emergency contacts: other SafeSips users you invite by their account email or SafeSips code. They only become your contact after they accept, and either of you can remove the link at any time; we don't reveal who is behind an email or code until they accept. If you miss a check-in, each contact gets an alert in SafeSips (and a notification on their devices) with your display name and the check-in label, plus your approximate area if you are sharing your location at that moment (the same ~200 m masked circle others see, never your exact position). Alerts stay in their inbox until they delete their account or you delete yours.
 
 What we do not do

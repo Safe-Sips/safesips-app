@@ -240,9 +240,20 @@ export interface OutgoingFriendRequestDTO {
 export interface FriendsOverviewDTO {
   /** My SafeSips code (the same one used for emergency contacts). */
   myCode: string;
+  /** Whether other users can find me by name in friend search. */
+  discoverable: boolean;
   friends: FriendDTO[];
   incoming: FriendRequestDTO[];
   outgoing: OutgoingFriendRequestDTO[];
+}
+
+/** A person found by name in friend search (name + picture only). */
+export interface UserSearchResultDTO {
+  userId: string;
+  displayName: string;
+  imageUrl: string | null;
+  /** Where things stand with them. */
+  relation: "none" | "friend" | "sent" | "received";
 }
 
 /** A friend's profile, visible only to their friends. */

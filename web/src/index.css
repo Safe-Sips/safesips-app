@@ -2034,3 +2034,26 @@ select option {
   text-decoration: underline;
   cursor: pointer;
 }
+
+.friend-search input[type="search"] {
+  width: 100%;
+  margin-bottom: 6px;
+}
+.search-results {
+  margin-top: 6px;
+}
+.toggle-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--panel-border);
+  cursor: pointer;
+}
+.toggle-row input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
