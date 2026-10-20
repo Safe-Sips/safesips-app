@@ -97,7 +97,7 @@ const setPrompted = db.prepare(
   `UPDATE checkin_occurrences SET status = 'prompted', prompted_at = ? WHERE id = ? AND status = 'pending'`
 );
 const selectOverdue = db.prepare(
-  `SELECT o.id, o.plan_id, o.user_id, p.label
+  `SELECT o.id, o.plan_id, o.user_id, o.due_at, p.label
      FROM checkin_occurrences o
      LEFT JOIN checkin_plans p ON p.id = o.plan_id
     WHERE o.status = 'prompted' AND o.deadline_at <= ?`
@@ -325,12 +325,19 @@ export interface OverdueOccurrence {
   planLabel: string | null;
 }
 
-/** Flip overdue prompted occurrences to 'missed' and return them to escalate. */
+/**
+ * Flip overdue prompted occurrences to 'missed' and return them to escalate.
+ * The plan carries on: the next check-in is scheduled just like after an
+ * answer, so someone who missed one keeps being checked on (and their
+ * contacts keep being alerted while they don't respond) instead of the plan
+ * silently going quiet.
+ */
 export function claimOverdueOccurrences(now: number): OverdueOccurrence[] {
   const rows = selectOverdue.all(now) as Array<{
     id: string;
     plan_id: string;
     user_id: string;
+    due_at: number;
     label: string | null;
   }>;
   const claimed: OverdueOccurrence[] = [];
@@ -338,6 +345,8 @@ export function claimOverdueOccurrences(now: number): OverdueOccurrence[] {
     for (const r of rows) {
       if (setMissed.run(r.id).changes > 0) {
         claimed.push({ occurrenceId: r.id, userId: r.user_id, planLabel: r.label });
+        const plan = selectPlanById.get(r.plan_id) as PlanRow | undefined;
+        if (plan) scheduleNext(plan, r.due_at);
       }
     }
   });

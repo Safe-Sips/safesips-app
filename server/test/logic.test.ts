@@ -575,3 +575,28 @@ test("missed check-in alerts accepted contacts in-app and by push", async () => 
   push.setPushSender(async () => {});
 });
 
+
+test("check-ins keep going after a miss (next one is scheduled)", () => {
+  const user = makeUser("keeps-going@test.local");
+  const plan = checkins.createPlan(user.id, {
+    label: "Test", intervalMinutes: 1, graceMinutes: 1, question: "q?", answer: "a", endsAt: null,
+  });
+  const now = Date.now();
+  db.prepare(
+    `INSERT INTO checkin_occurrences (id, plan_id, user_id, due_at, deadline_at, status, prompted_at, created_at)
+     VALUES ('occ-miss-1', ?, ?, ?, ?, 'prompted', ?, ?)`
+  ).run(plan.id, user.id, now - 70_000, now - 10_000, now - 70_000, now);
+  const before = (db.prepare(`SELECT COUNT(*) AS c FROM checkin_occurrences WHERE plan_id = ? AND status = 'pending'`).get(plan.id) as { c: number }).c;
+
+  const missed = checkins.claimOverdueOccurrences(now);
+  assert.ok(missed.some((o) => o.occurrenceId === "occ-miss-1"));
+  const next = db
+    // Earliest pending = the one scheduled after the miss (the plan's own first
+    // check-in, made at creation, is due later).
+    .prepare(`SELECT due_at, deadline_at FROM checkin_occurrences WHERE plan_id = ? AND status = 'pending' ORDER BY due_at ASC LIMIT 1`)
+    .get(plan.id) as { due_at: number; deadline_at: number };
+  const after = (db.prepare(`SELECT COUNT(*) AS c FROM checkin_occurrences WHERE plan_id = ? AND status = 'pending'`).get(plan.id) as { c: number }).c;
+  assert.equal(after, before + 1, "a new check-in was scheduled after the miss");
+  assert.equal(next.due_at, now - 70_000 + 60_000, "one interval after the missed one");
+  assert.equal(next.deadline_at - next.due_at, 60_000, "with the plan's answer window");
+});
