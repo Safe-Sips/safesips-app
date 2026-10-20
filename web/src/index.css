@@ -644,14 +644,13 @@ body {
 .shell {
   display: flex;
   flex-direction: column;
-  /* Pinned to the screen. On iPhone Home Screen apps the viewport is short by
-     the status-bar height; fitScreen.ts then sets --app-height to the real
-     screen height so there's no empty band at the bottom. */
+  /* Pinned to the viewport iOS/the browser reports (not 100vh/lvh, which can
+     include the status bar in iOS Home Screen apps). */
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  height: var(--app-height, 100%);
+  height: 100%;
   width: 100%;
   overflow: hidden;
 }
