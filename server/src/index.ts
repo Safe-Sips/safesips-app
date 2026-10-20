@@ -46,10 +46,13 @@ const app = express();
 // Render (and other reverse proxies) set X-Forwarded-For; needed for rate limits.
 app.set("trust proxy", 1);
 
-// 1. CORS MUST BE AT THE VERY TOP TO HANDLE OPTIONS PREFLIGHT CORRECTLY
+// 1. CORS MUST BE AT THE VERY TOP TO HANDLE OPTIONS PREFLIGHT CORRECTLY.
+// Only the explicit CORS_ORIGINS allowlist (config refuses wildcards in
+// production). Requests without an Origin header (native mobile, curl) are
+// unaffected by CORS.
 app.use(
   cors({
-    origin: true, // Accepts request origin dynamically (bypasses CORS restrictions)
+    origin: config.corsOrigins,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
@@ -133,7 +136,7 @@ const io = new Server<
   SocketData
 >(httpServer, {
   cors: {
-    origin: "*",
+    origin: config.corsOrigins,
     methods: ["GET", "POST"],
   },
 });
