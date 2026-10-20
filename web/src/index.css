@@ -1376,6 +1376,23 @@ select option {
   background: rgba(255, 71, 87, 0.14);
   color: var(--danger);
 }
+/* Check-ins: how each emergency contact is reached + test alerts. */
+.contact-via {
+  display: block;
+  font-size: 12px;
+  color: var(--success);
+  font-weight: 700;
+}
+.contact-test {
+  display: block;
+  margin-top: 4px;
+}
+.contact-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 /* Profile → "Your data" (export / delete account). */
 .data-actions {
   display: flex;

@@ -64,6 +64,24 @@ export function emitPresenceMine(userId: string, publicId: string | null): void 
   }
 }
 
+/** Looks up a user's current (masked) circle centre; registered by index.ts. */
+let sharedAreaLookup: ((userId: string) => { lat: number; lng: number } | null) | null = null;
+
+export function setSharedAreaLookup(
+  fn: (userId: string) => { lat: number; lng: number } | null
+): void {
+  sharedAreaLookup = fn;
+}
+
+/**
+ * The user's last shared area if they're sharing right now — the same masked
+ * centre everyone else already sees, never the exact position. Used to tell
+ * SOS contacts roughly where to look.
+ */
+export function getSharedArea(userId: string): { lat: number; lng: number } | null {
+  return sharedAreaLookup?.(userId) ?? null;
+}
+
 /** Removes a user's live presence circle; registered by index.ts. */
 let presencePurger: ((userId: string) => void) | null = null;
 

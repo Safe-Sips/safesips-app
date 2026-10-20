@@ -51,6 +51,26 @@ export function getPrimaryContact(userId: string): NotifyContact | null {
   return { id: row.id, name: row.name, email: row.email, phone: row.phone };
 }
 
+/** Everyone to alert when a check-in is missed (primary first). */
+export function listAlertContacts(userId: string): NotifyContact[] {
+  return (selectByUser.all(userId) as ContactRow[]).map((row) => ({
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    phone: row.phone,
+  }));
+}
+
+/** One of the user's contacts, or undefined. */
+export function getContact(userId: string, id: string): NotifyContact | undefined {
+  return listAlertContacts(userId).find((c) => c.id === id);
+}
+
+/** True when at least one contact has a phone or email to alert. */
+export function hasReachableContact(userId: string): boolean {
+  return listAlertContacts(userId).some((c) => !!(c.phone || c.email));
+}
+
 /** Create a contact. When marked primary, demote any existing primary first. */
 export const createContact = db.transaction(
   (

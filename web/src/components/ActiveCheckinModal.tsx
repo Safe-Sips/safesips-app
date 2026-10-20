@@ -58,7 +58,7 @@ export default function ActiveCheckinModal() {
         <h2 id="checkin-title">SafeSips check-in</h2>
         <p className="muted" id="checkin-desc">
           Answer your security question to confirm you're OK. If you don't answer
-          in time, your primary SOS contact will be notified to check on you.
+          in time, your emergency contacts will be alerted to check on you.
         </p>
         <p className="checkin-deadline">
           Time left: <strong>{timeUntil(active.deadlineAt)}</strong>

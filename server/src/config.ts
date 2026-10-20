@@ -149,6 +149,26 @@ export const config = {
     : null,
   emailFrom: strEnv("EMAIL_FROM", "SafeSips <no-reply@safesips.app>"),
 
+  // SMS for SOS alerts via Twilio's REST API. Off unless the account SID, auth
+  // token and a sender (a Twilio number, an alphanumeric sender like
+  // "SafeSips", or a Messaging Service) are all set.
+  twilio:
+    process.env.TWILIO_ACCOUNT_SID?.trim() &&
+    process.env.TWILIO_AUTH_TOKEN?.trim() &&
+    (process.env.TWILIO_FROM?.trim() || process.env.TWILIO_MESSAGING_SERVICE_SID?.trim())
+      ? {
+          accountSid: process.env.TWILIO_ACCOUNT_SID.trim(),
+          authToken: process.env.TWILIO_AUTH_TOKEN.trim(),
+          from: process.env.TWILIO_FROM?.trim() || null,
+          messagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID?.trim() || null,
+          apiBase: strEnv("TWILIO_API_BASE", "https://api.twilio.com"),
+        }
+      : null,
+  /** Cost / abuse limits for SMS (rolling 24 h). */
+  smsDailyLimit: intEnv("SMS_DAILY_LIMIT", 300),
+  smsMaxPerNumberPerDay: intEnv("SMS_MAX_PER_NUMBER_PER_DAY", 6),
+  smsTestsPerUserPerDay: intEnv("SMS_TESTS_PER_USER_PER_DAY", 3),
+
   // Check-in scheduler sweep cadence.
   checkinSweepIntervalMs: intEnv("CHECKIN_SWEEP_INTERVAL_MS", 15_000),
 
@@ -157,11 +177,17 @@ export const config = {
   allowTestToken: boolEnv("ALLOW_TEST_TOKEN") && !isProduction,
 };
 
-if (isProduction && !config.smtp) {
+if (isProduction && !config.smtp && !config.twilio) {
   // eslint-disable-next-line no-console
   console.error(
-    "[config] SMTP_HOST is not set. SOS alerts for missed check-ins will NOT be emailed " +
-      "(the check-ins page warns users) and verification emails won't send."
+    "[config] Neither SMTP_* nor TWILIO_* is set: SOS alerts for missed check-ins will NOT " +
+      "reach anyone (the check-ins page warns users)."
+  );
+} else if (isProduction && (!config.smtp || !config.twilio)) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[config] SOS alerts go out by ${config.twilio ? "text" : "email"} only — ` +
+      `${config.twilio ? "SMTP_*" : "TWILIO_*"} is not set.`
   );
 }
 

@@ -1,15 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
-import type { PlanDTO, SosContactDTO } from "@safesips/shared";
+import {
+  normalizePhone,
+  type PlanDTO,
+  type SosContactDTO,
+  type SosDeliveryDTO,
+} from "@safesips/shared";
 import { api, ApiError } from "../api";
 import { timeUntil } from "../format";
 
-/** Whether this server can really email an SOS contact. */
-type AlertStatus = "loading" | "active" | "inactive" | "unknown";
+/** Which alert channels this server can really use (or why we don't know). */
+type Delivery = SosDeliveryDTO | "loading" | "unknown";
 
 export default function CheckinSetupPage() {
   const [contacts, setContacts] = useState<SosContactDTO[]>([]);
   const [plans, setPlans] = useState<PlanDTO[]>([]);
-  const [alertStatus, setAlertStatus] = useState<AlertStatus>("loading");
+  const [delivery, setDelivery] = useState<Delivery>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -26,8 +31,8 @@ export default function CheckinSetupPage() {
     load();
     api
       .sosDelivery()
-      .then((d) => setAlertStatus(d.email ? "active" : "inactive"))
-      .catch(() => setAlertStatus("unknown"));
+      .then(setDelivery)
+      .catch(() => setDelivery("unknown"));
   }, [load]);
 
   return (
@@ -38,17 +43,18 @@ export default function CheckinSetupPage() {
       <p className="muted">
         Going somewhere unfamiliar? Set up check-ins. SafeSips will ask you a
         personal question on a schedule — you need to be clear-headed enough to
-        answer. Miss it, and your primary SOS contact gets an email asking them
-        to check on you.
+        answer. Miss it, and <strong>all your emergency contacts</strong> get a
+        text and/or email asking them to check on you — with your approximate
+        area if you're sharing your location at the time.
         <strong> Keep the app open so you receive the prompt.</strong>
       </p>
-      <AlertStatusBanner status={alertStatus} />
+      <AlertStatusBanner delivery={delivery} />
       {loadError && <p className="error">{loadError}</p>}
 
-      <SosContactsSection contacts={contacts} onChange={load} />
+      <SosContactsSection contacts={contacts} delivery={delivery} onChange={load} />
       <CheckinPlansSection
         plans={plans}
-        hasPrimary={contacts.some((c) => c.isPrimary && !!c.email)}
+        hasPrimary={contacts.some((c) => !!(c.phone || c.email))}
         onChange={load}
       />
     </div>
@@ -59,17 +65,9 @@ export default function CheckinSetupPage() {
  * Never let the UI imply a contact will be alerted when the server can't
  * actually send the alert.
  */
-function AlertStatusBanner({ status }: { status: AlertStatus }) {
-  if (status === "inactive") {
-    return (
-      <p className="sos-delivery-banner" role="alert">
-        <strong>SOS alerts are not active yet.</strong> If you miss a check-in,
-        your contact will <strong>not</strong> be notified. Don't rely on
-        check-ins for your safety right now.
-      </p>
-    );
-  }
-  if (status === "unknown") {
+function AlertStatusBanner({ delivery }: { delivery: Delivery }) {
+  if (delivery === "loading") return null;
+  if (delivery === "unknown") {
     return (
       <p className="sos-delivery-banner" role="alert">
         <strong>We couldn't confirm SOS alerts are working.</strong> Don't rely
@@ -77,14 +75,50 @@ function AlertStatusBanner({ status }: { status: AlertStatus }) {
       </p>
     );
   }
+  if (!delivery.email && !delivery.sms) {
+    return (
+      <p className="sos-delivery-banner" role="alert">
+        <strong>SOS alerts are not active yet.</strong> If you miss a check-in,
+        your contacts will <strong>not</strong> be notified. Don't rely on
+        check-ins for your safety right now.
+      </p>
+    );
+  }
+  if (!delivery.sms) {
+    return (
+      <p className="hint">
+        Text alerts aren't set up on this server yet, so contacts are alerted
+        by <strong>email only</strong>. Give each contact an email address.
+      </p>
+    );
+  }
+  if (!delivery.email) {
+    return (
+      <p className="hint">
+        Email alerts aren't set up on this server yet, so contacts are alerted
+        by <strong>text only</strong>. Give each contact a phone number.
+      </p>
+    );
+  }
   return null;
+}
+
+/** How a contact will actually be reached, given what the server supports. */
+function reachVia(contact: SosContactDTO, delivery: Delivery): string[] {
+  if (typeof delivery === "string") return [];
+  const via: string[] = [];
+  if (contact.phone && delivery.sms) via.push("text");
+  if (contact.email && delivery.email) via.push("email");
+  return via;
 }
 
 function SosContactsSection({
   contacts,
+  delivery,
   onChange,
 }: {
   contacts: SosContactDTO[];
+  delivery: Delivery;
   onChange: () => void;
 }) {
   const [name, setName] = useState("");
@@ -93,10 +127,20 @@ function SosContactsSection({
   const [isPrimary, setIsPrimary] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const normalized = phone.trim() ? normalizePhone(phone) : null;
+  const phoneInvalid = phone.trim() !== "" && normalized === null;
 
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (!email.trim() && !phone.trim()) {
+      setError("Add a phone number or an email so we can alert them.");
+      return;
+    }
+    if (phoneInvalid) {
+      setError("Enter a valid phone number, e.g. 0722 123 456 or +40 722 123 456.");
+      return;
+    }
     setBusy(true);
     try {
       await api.createContact({
@@ -119,34 +163,17 @@ function SosContactsSection({
 
   return (
     <section className="card">
-      <h2>SOS contacts</h2>
+      <h2>Emergency contacts</h2>
+      <p className="muted">
+        Everyone here is alerted if you miss a check-in. Use{" "}
+        <strong>Send test alert</strong> to make sure it really reaches them.
+      </p>
       {contacts.length === 0 ? (
-        <p className="muted">No contacts yet. Add at least one primary contact.</p>
+        <p className="muted">No contacts yet. Add at least one.</p>
       ) : (
         <ul className="contact-list">
           {contacts.map((c) => (
-            <li key={c.id} className="contact-row">
-              <span>
-                <strong>{c.name}</strong>
-                {c.isPrimary && <span className="pill pill-primary">Primary</span>}
-                {!c.email && (
-                  <span className="pill pill-warn">Can't be alerted — add an email</span>
-                )}
-                <span className="muted">
-                  {" "}
-                  {c.email ?? c.phone}
-                </span>
-              </span>
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={async () => {
-                  await api.deleteContact(c.id);
-                  onChange();
-                }}
-              >
-                Remove
-              </button>
-            </li>
+            <ContactRow key={c.id} contact={c} delivery={delivery} onChange={onChange} />
           ))}
         </ul>
       )}
@@ -154,22 +181,28 @@ function SosContactsSection({
       <form className="inline-form" onSubmit={add}>
         <input
           placeholder="Name"
+          aria-label="Contact name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
           minLength={2}
         />
         <input
-          placeholder="Email (alerts go here)"
+          placeholder="Phone, e.g. 0722 123 456"
+          aria-label="Phone number (for text alerts)"
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          aria-invalid={phoneInvalid}
+        />
+        <input
+          placeholder="Email"
+          aria-label="Email (for email alerts)"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-        <input
-          placeholder="Phone (optional, not used for alerts yet)"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
         />
         <label className="checkbox">
           <input
@@ -183,8 +216,83 @@ function SosContactsSection({
           {busy ? "Adding…" : "Add contact"}
         </button>
       </form>
+      {normalized && <p className="field-hint">Texts will go to {normalized}</p>}
+      {phoneInvalid && (
+        <p className="error">Use a full number, e.g. 0722 123 456 or +40 722 123 456.</p>
+      )}
       {error && <p className="error">{error}</p>}
     </section>
+  );
+}
+
+function ContactRow({
+  contact: c,
+  delivery,
+  onChange,
+}: {
+  contact: SosContactDTO;
+  delivery: Delivery;
+  onChange: () => void;
+}) {
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
+  const [testFailed, setTestFailed] = useState(false);
+  const via = reachVia(c, delivery);
+  const known = typeof delivery !== "string";
+
+  const sendTest = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const { results } = await api.testContact(c.id);
+      const label = (ch: string) => (ch === "sms" ? "Text" : "Email");
+      setTestFailed(results.every((r) => !r.ok));
+      setTestResult(results.map((r) => `${label(r.channel)}: ${r.detail}`).join(" · "));
+    } catch (err) {
+      setTestFailed(true);
+      setTestResult(err instanceof ApiError ? err.message : "Couldn't send the test.");
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <li className="contact-row">
+      <span>
+        <strong>{c.name}</strong>
+        {c.isPrimary && <span className="pill pill-primary">Primary</span>}
+        {known && via.length === 0 && (
+          <span className="pill pill-warn">Can't be alerted yet</span>
+        )}
+        <span className="muted"> {[c.phone, c.email].filter(Boolean).join(" · ")}</span>
+        {via.length > 0 && <span className="contact-via"> Alerted by {via.join(" and ")}</span>}
+        {testResult && (
+          <span className={testFailed ? "error contact-test" : "hint contact-test"} role="status">
+            {testResult}
+          </span>
+        )}
+      </span>
+      <span className="contact-actions">
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={sendTest}
+          disabled={testing || (known && via.length === 0)}
+          type="button"
+        >
+          {testing ? "Sending…" : "Send test alert"}
+        </button>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={async () => {
+            await api.deleteContact(c.id);
+            onChange();
+          }}
+          type="button"
+        >
+          Remove
+        </button>
+      </span>
+    </li>
   );
 }
 
@@ -292,8 +400,8 @@ function CheckinPlansSection({
 
       {!hasPrimary && (
         <p className="hint">
-          Add a primary SOS contact with an email address above before starting a
-          plan.
+          Add an emergency contact with a phone number or email above before
+          starting a plan.
         </p>
       )}
 

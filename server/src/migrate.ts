@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 /**
  * Full schema, created idempotently with CREATE TABLE/INDEX IF NOT EXISTS.
@@ -190,6 +190,20 @@ CREATE TABLE IF NOT EXISTS waitlist (
   created_at  INTEGER NOT NULL,
   ip_hash     TEXT
 );
+
+-- ──────────────────────────── SMS send log ────────────────────────────
+-- Only for cost/abuse limits: who sent, to which number (keyed hash, never
+-- the number itself), and whether it was a real alert or a test.
+CREATE TABLE IF NOT EXISTS sms_sends (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT REFERENCES users(id) ON DELETE CASCADE,
+  to_hash     TEXT NOT NULL,
+  kind        TEXT NOT NULL,
+  status      TEXT NOT NULL,
+  created_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sms_sends_created ON sms_sends(created_at);
+CREATE INDEX IF NOT EXISTS idx_sms_sends_to ON sms_sends(to_hash, created_at);
 `;
 
 /** Create all tables/indexes idempotently inside a single transaction. */

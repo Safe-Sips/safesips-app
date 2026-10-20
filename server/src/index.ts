@@ -24,6 +24,7 @@ import {
 import {
   emitPresenceMine,
   setIo,
+  setSharedAreaLookup,
   setUserPresencePurger,
   trackUserSocket,
   userSocketIds,
@@ -195,6 +196,13 @@ function removePresence(publicId: string, userId?: string, replacing = false): v
 setUserPresencePurger((userId) => {
   const existing = activeShareByUserId.get(userId);
   if (existing) removePresence(existing.publicId, userId);
+});
+
+// SOS alerts include the user's current circle (masked centre) if sharing.
+setSharedAreaLookup((userId) => {
+  const share = activeShareByUserId.get(userId);
+  const record = share ? store.get(share.publicId, Date.now()) : undefined;
+  return record ? { lat: record.lat, lng: record.lng } : null;
 });
 
 io.on("connection", (socket) => {
