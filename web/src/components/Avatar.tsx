@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 /** A round profile picture, or the person's initial when there isn't one. */
 export default function Avatar({
@@ -11,6 +11,7 @@ export default function Avatar({
   size?: number;
 }) {
   const [broken, setBroken] = useState(false);
+  useEffect(() => setBroken(false), [imageUrl]);
   const style = { width: size, height: size, fontSize: Math.round(size * 0.42) };
   if (imageUrl && !broken) {
     return (

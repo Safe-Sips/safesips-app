@@ -1,5 +1,10 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
+/** Lower-case, accents stripped ("Ștefan" ~ "stefan"), spaces collapsed — for name search. */
+export function foldName(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
 /** A fresh, non-identifying UUID for primary keys. */
 export function genId(): string {
   return randomUUID();

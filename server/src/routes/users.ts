@@ -2,7 +2,8 @@ import { Router } from "express";
 import { z } from "zod";
 import { asyncHandler, parseBody, parseQuery } from "../http.js";
 import { requireAuth } from "../auth/middleware.js";
-import { deleteClerkUser } from "../auth/clerk.js";
+import { deleteClerkUser, fetchClerkImageUrl } from "../auth/clerk.js";
+import { config } from "../config.js";
 import { deleteAccountData, exportAccountData } from "../repos/account.js";
 import { defaultCursor, listActivity } from "../repos/activity.js";
 import { computeStats } from "../repos/stats.js";
@@ -49,17 +50,36 @@ usersRouter.get(
   })
 );
 
-const avatarSchema = z.object({ imageUrl: z.string().trim().max(2000).nullable() });
+// imageUrl is only read for local test accounts (no Clerk identity).
+const avatarSchema = z.object({ imageUrl: z.string().trim().max(2000).nullable().optional() });
 
-/** Set my profile picture (the app sends my Clerk picture after sign-in). */
+/**
+ * Refresh my profile picture. The server reads it from my Clerk account
+ * itself — a picture URL sent by the client is never trusted, so nobody can
+ * put someone else's photo (or any other image) on their profile.
+ */
 usersRouter.put(
   "/me/avatar",
   asyncHandler(async (req, res) => {
     const body = parseBody(avatarSchema, req, res);
     if (!body) return;
-    const url = body.imageUrl ? cleanAvatarUrl(body.imageUrl) : null;
-    if (body.imageUrl && !url) {
-      res.status(400).json({ error: "Profile pictures must come from your SafeSips account.", code: "bad_avatar" });
+    const user = req.auth!.user;
+    let url: string | null;
+    if (user.clerk_id) {
+      const fetched = await fetchClerkImageUrl(user.clerk_id);
+      if (!fetched.ok) {
+        res.status(503).json({ error: "Couldn't read your profile picture right now.", code: "avatar_unavailable" });
+        return;
+      }
+      url = fetched.imageUrl ? cleanAvatarUrl(fetched.imageUrl) : null;
+    } else if (config.allowTestToken) {
+      url = body.imageUrl ? cleanAvatarUrl(body.imageUrl) : null;
+      if (body.imageUrl && !url) {
+        res.status(400).json({ error: "Profile pictures must come from your SafeSips account.", code: "bad_avatar" });
+        return;
+      }
+    } else {
+      res.status(400).json({ error: "This account has no profile picture source.", code: "bad_avatar" });
       return;
     }
     setUserImage(req.auth!.userId, url);

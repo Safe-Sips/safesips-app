@@ -24,6 +24,10 @@ export interface UserDTO {
   createdAt: number;
   /** Profile picture (from Clerk), if any. */
   imageUrl?: string | null;
+  /** Findable by name in friend search. */
+  discoverable?: boolean;
+  /** Show the one-time "people can find you by name" notice. */
+  searchNoticePending?: boolean;
 }
 
 export interface RegisterInput {

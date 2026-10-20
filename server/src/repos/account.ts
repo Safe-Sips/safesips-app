@@ -37,6 +37,7 @@ export interface AccountExport {
   emergencyContacts: Row[];
   emergencyContactFor: Row[];
   friends: Row[];
+  friendRequestsDeclined: Row[];
   alertsReceived: Row[];
   pushDevices: Row[];
   checkinPlans: Row[];
@@ -83,8 +84,14 @@ export function exportAccountData(userId: string): AccountExport | null {
               CASE WHEN f.status = 'accepted' OR f.requester_id <> ? THEN o.display_name ELSE f.invite_label END AS person
          FROM friendships f
          LEFT JOIN users o ON o.id = CASE WHEN f.requester_id = ? THEN f.addressee_id ELSE f.requester_id END
-        WHERE f.requester_id = ? OR f.addressee_id = ?`,
-      userId, userId, userId, userId, userId
+        WHERE f.requester_id = ? OR f.addressee_id = ?
+           OR (f.addressee_id IS NULL AND f.invite_email_norm = ?)`,
+      userId, userId, userId, userId, userId, user.email_norm
+    ),
+    friendRequestsDeclined: all(
+      `SELECT u.display_name AS person, d.created_at
+         FROM friend_declines d JOIN users u ON u.id = d.requester_id WHERE d.decliner_id = ?`,
+      userId
     ),
     pushDevices: all(`SELECT id, created_at FROM push_subscriptions WHERE user_id = ?`, userId),
     checkinPlans: omit(all(`SELECT * FROM checkin_plans WHERE user_id = ?`, userId), [

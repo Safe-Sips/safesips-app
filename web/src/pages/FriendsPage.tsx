@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { FriendsOverviewDTO } from "@safesips/shared";
 import { api, ApiError } from "../api";
+import { useAuth } from "../auth/AuthContext";
 import { timeAgo } from "../format";
 import Avatar from "../components/Avatar";
 import FriendSearch from "../components/FriendSearch";
@@ -11,6 +12,7 @@ import { useSocket } from "../socket/SocketProvider";
 /** Your friends, requests, and adding someone by SafeSips code or email. */
 export default function FriendsPage() {
   const { socket } = useSocket();
+  const { patchUser } = useAuth();
   const [overview, setOverview] = useState<FriendsOverviewDTO | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [identifier, setIdentifier] = useState("");
@@ -105,7 +107,14 @@ export default function FriendsPage() {
               <input
                 type="checkbox"
                 checked={overview.discoverable}
-                onChange={(e) => run(() => api.setDiscoverable(e.target.checked))}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  void run(async () => {
+                    const o = await api.setDiscoverable(on);
+                    patchUser({ discoverable: on, searchNoticePending: false });
+                    return o;
+                  });
+                }}
               />
               <span>
                 <strong>Let people find me by name</strong>
@@ -121,6 +130,10 @@ export default function FriendsPage() {
           {overview.incoming.length > 0 && (
             <section className="card" aria-label="Friend requests for you">
               <h2>Requests for you</h2>
+              <p className="field-hint">
+                Declining is private: they aren't told, and they can't send you new requests unless
+                you add them.
+              </p>
               <ul className="contact-list">
                 {overview.incoming.map((r) => (
                   <li key={r.id} className="contact-row">
