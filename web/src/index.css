@@ -1149,6 +1149,24 @@ select option {
   background: rgba(255, 212, 0, 0.16);
   color: var(--accent);
 }
+.pill-warn {
+  background: rgba(255, 71, 87, 0.14);
+  color: var(--danger);
+}
+/* Shown on the check-ins page when SOS alerts can't actually be delivered. */
+.sos-delivery-banner {
+  border: 1px solid var(--danger);
+  background: rgba(255, 71, 87, 0.08);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin: 12px 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.sos-delivery-banner strong {
+  color: var(--danger);
+}
 .plan-actions {
   display: flex;
   gap: 6px;

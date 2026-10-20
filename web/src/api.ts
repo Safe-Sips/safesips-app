@@ -10,6 +10,7 @@ import type {
   SafeHavenDTO,
   SosContactDTO,
   SosContactInput,
+  SosDeliveryDTO,
   ThreadDTO,
   ThreadDetailDTO,
   UserDTO,
@@ -160,6 +161,7 @@ export const api = {
 
   // SOS contacts
   listContacts: () => request<SosContactDTO[]>("/api/sos-contacts"),
+  sosDelivery: () => request<SosDeliveryDTO>("/api/sos-contacts/delivery"),
   createContact: (input: SosContactInput) =>
     request<SosContactDTO>("/api/sos-contacts", { body: input }),
   deleteContact: (id: string) =>

@@ -1,6 +1,6 @@
-import nodemailer, { type Transporter } from "nodemailer";
 import { config } from "../config.js";
 import { db } from "../db.js";
+import { getMailTransport } from "../mailer.js";
 import { genId, nowMs, randomToken, sha256 } from "../util.js";
 
 const insertVerification = db.prepare(
@@ -47,25 +47,6 @@ export function buildVerifyUrl(rawToken: string): string {
   return `${base}/verify?token=${encodeURIComponent(rawToken)}`;
 }
 
-/** Lazily-created SMTP transport (null when SMTP isn't configured). */
-let transporter: Transporter | null = null;
-let transporterInit = false;
-
-function getTransporter(): Transporter | null {
-  if (transporterInit) return transporter;
-  transporterInit = true;
-  if (!config.smtp) return null;
-  transporter = nodemailer.createTransport({
-    host: config.smtp.host,
-    port: config.smtp.port,
-    secure: config.smtp.secure,
-    auth: config.smtp.user
-      ? { user: config.smtp.user, pass: config.smtp.pass }
-      : undefined,
-  });
-  return transporter;
-}
-
 function verificationEmailHtml(url: string): string {
   return `
   <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1a1a1a">
@@ -98,7 +79,7 @@ export async function sendVerificationEmail(
   rawToken: string
 ): Promise<void> {
   const url = buildVerifyUrl(rawToken);
-  const tx = getTransporter();
+  const tx = getMailTransport();
 
   if (!tx) {
     if (!config.isProduction) {

@@ -151,6 +151,68 @@ test("wrong check-in answer is rejected but stays answerable", () => {
   assert.ok(good && good.correct, "correct answer still accepted afterwards");
 });
 
+test("SOS escalation records the real delivery outcome", async () => {
+  const { notifyContact } = await import("../src/notify.js");
+  const mailer = await import("../src/mailer.js");
+  const sos = await import("../src/repos/sosContacts.js");
+  const user = makeUser("sos-owner@test.local");
+  const plan = checkins.createPlan(user.id, {
+    label: null,
+    intervalMinutes: 60,
+    graceMinutes: 10,
+    question: "q?",
+    answer: "a",
+    endsAt: null,
+  });
+  const now = Date.now();
+  const occ = (id: string) => {
+    db.prepare(
+      `INSERT INTO checkin_occurrences (id, plan_id, user_id, due_at, deadline_at, status, prompted_at, created_at)
+       VALUES (?, ?, ?, ?, ?, 'missed', ?, ?)`
+    ).run(id, plan.id, user.id, now, now, now, now);
+    return { occurrenceId: id, personName: "<b>Ana</b>", planLabel: "Club & bar" };
+  };
+  const recorded = (id: string) =>
+    db.prepare(`SELECT channel, status FROM checkin_escalations WHERE occurrence_id = ?`).get(id);
+
+  // No contact at all.
+  let r = await notifyContact(occ("esc-none"), null);
+  assert.deepEqual([r.channel, r.status], ["none", "failed"]);
+  assert.deepEqual(recorded("esc-none"), { channel: "none", status: "failed" });
+
+  // Phone-only contact: no SMS provider, must NOT be reported as sent.
+  const phoneOnly = sos.createContact(user.id, { name: "Pat", email: null, phone: "+40700000000", isPrimary: false });
+  r = await notifyContact(occ("esc-sms"), { ...phoneOnly });
+  assert.deepEqual([r.channel, r.status], ["sms", "failed"]);
+
+  const withEmail = sos.createContact(user.id, { name: "Mo", email: "mo@test.local", phone: null, isPrimary: true });
+
+  // Email contact but SMTP not configured: failed, not silently "sent".
+  mailer.setMailTransport(null);
+  r = await notifyContact(occ("esc-nosmtp"), { ...withEmail });
+  assert.deepEqual([r.channel, r.status], ["email", "failed"]);
+
+  // Email contact with a working transport: actually sent, names the person.
+  const sent: Array<{ to: string; subject: string; text: string; html: string }> = [];
+  mailer.setMailTransport({
+    sendMail: async (m: (typeof sent)[number]) => {
+      sent.push(m);
+      return {};
+    },
+  } as never);
+  r = await notifyContact(occ("esc-ok"), { ...withEmail });
+  mailer.setMailTransport(null);
+  assert.deepEqual([r.channel, r.status], ["email", "sent"]);
+  assert.deepEqual(recorded("esc-ok"), { channel: "email", status: "sent" });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].to, "mo@test.local");
+  assert.match(sent[0].subject, /<b>Ana<\/b> missed a safety check-in/);
+  assert.match(sent[0].text, /call 112/);
+  assert.ok(sent[0].html.includes("&lt;b&gt;Ana&lt;/b&gt;"), "name is HTML-escaped");
+  assert.ok(sent[0].html.includes("Club &amp; bar"), "label is HTML-escaped");
+  assert.ok(!sent[0].html.includes("<b>Ana</b>"), "raw HTML from the name is not injected");
+});
+
 test("forum downvotes do not raise engagement score", async () => {
   const forum = await import("../src/repos/forum.js");
   const stats = await import("../src/repos/stats.js");

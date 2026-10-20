@@ -97,7 +97,10 @@ const setPrompted = db.prepare(
   `UPDATE checkin_occurrences SET status = 'prompted', prompted_at = ? WHERE id = ? AND status = 'pending'`
 );
 const selectOverdue = db.prepare(
-  `SELECT id, plan_id, user_id FROM checkin_occurrences WHERE status = 'prompted' AND deadline_at <= ?`
+  `SELECT o.id, o.plan_id, o.user_id, p.label
+     FROM checkin_occurrences o
+     LEFT JOIN checkin_plans p ON p.id = o.plan_id
+    WHERE o.status = 'prompted' AND o.deadline_at <= ?`
 );
 const setMissed = db.prepare(
   `UPDATE checkin_occurrences SET status = 'missed' WHERE id = ? AND status = 'prompted'`
@@ -319,6 +322,7 @@ export function claimDueOccurrences(now: number): DueOccurrence[] {
 export interface OverdueOccurrence {
   occurrenceId: string;
   userId: string;
+  planLabel: string | null;
 }
 
 /** Flip overdue prompted occurrences to 'missed' and return them to escalate. */
@@ -327,12 +331,13 @@ export function claimOverdueOccurrences(now: number): OverdueOccurrence[] {
     id: string;
     plan_id: string;
     user_id: string;
+    label: string | null;
   }>;
   const claimed: OverdueOccurrence[] = [];
   const tx = db.transaction(() => {
     for (const r of rows) {
       if (setMissed.run(r.id).changes > 0) {
-        claimed.push({ occurrenceId: r.id, userId: r.user_id });
+        claimed.push({ occurrenceId: r.id, userId: r.user_id, planLabel: r.label });
       }
     }
   });

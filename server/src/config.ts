@@ -155,6 +155,14 @@ export const config = {
   allowTestToken: boolEnv("ALLOW_TEST_TOKEN") && !isProduction,
 };
 
+if (isProduction && !config.smtp) {
+  // eslint-disable-next-line no-console
+  console.error(
+    "[config] SMTP_HOST is not set. SOS alerts for missed check-ins will NOT be emailed " +
+      "(the check-ins page warns users) and verification emails won't send."
+  );
+}
+
 if (isProduction && !config.clerkSecretKey) {
   // eslint-disable-next-line no-console
   console.error(

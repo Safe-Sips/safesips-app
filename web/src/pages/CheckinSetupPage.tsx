@@ -3,9 +3,13 @@ import type { PlanDTO, SosContactDTO } from "@safesips/shared";
 import { api, ApiError } from "../api";
 import { timeUntil } from "../format";
 
+/** Whether this server can really email an SOS contact. */
+type AlertStatus = "loading" | "active" | "inactive" | "unknown";
+
 export default function CheckinSetupPage() {
   const [contacts, setContacts] = useState<SosContactDTO[]>([]);
   const [plans, setPlans] = useState<PlanDTO[]>([]);
+  const [alertStatus, setAlertStatus] = useState<AlertStatus>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -20,6 +24,10 @@ export default function CheckinSetupPage() {
 
   useEffect(() => {
     load();
+    api
+      .sosDelivery()
+      .then((d) => setAlertStatus(d.email ? "active" : "inactive"))
+      .catch(() => setAlertStatus("unknown"));
   }, [load]);
 
   return (
@@ -30,19 +38,46 @@ export default function CheckinSetupPage() {
       <p className="muted">
         Going somewhere unfamiliar? Set up check-ins. SafeSips will ask you a
         personal question on a schedule — you need to be clear-headed enough to
-        answer. Miss it, and your primary SOS contact is alerted to check on you.
+        answer. Miss it, and your primary SOS contact gets an email asking them
+        to check on you.
         <strong> Keep the app open so you receive the prompt.</strong>
       </p>
+      <AlertStatusBanner status={alertStatus} />
       {loadError && <p className="error">{loadError}</p>}
 
       <SosContactsSection contacts={contacts} onChange={load} />
       <CheckinPlansSection
         plans={plans}
-        hasPrimary={contacts.some((c) => c.isPrimary)}
+        hasPrimary={contacts.some((c) => c.isPrimary && !!c.email)}
         onChange={load}
       />
     </div>
   );
+}
+
+/**
+ * Never let the UI imply a contact will be alerted when the server can't
+ * actually send the alert.
+ */
+function AlertStatusBanner({ status }: { status: AlertStatus }) {
+  if (status === "inactive") {
+    return (
+      <p className="sos-delivery-banner" role="alert">
+        <strong>SOS alerts are not active yet.</strong> If you miss a check-in,
+        your contact will <strong>not</strong> be notified. Don't rely on
+        check-ins for your safety right now.
+      </p>
+    );
+  }
+  if (status === "unknown") {
+    return (
+      <p className="sos-delivery-banner" role="alert">
+        <strong>We couldn't confirm SOS alerts are working.</strong> Don't rely
+        on check-ins for your safety until this page loads normally.
+      </p>
+    );
+  }
+  return null;
 }
 
 function SosContactsSection({
@@ -94,9 +129,12 @@ function SosContactsSection({
               <span>
                 <strong>{c.name}</strong>
                 {c.isPrimary && <span className="pill pill-primary">Primary</span>}
+                {!c.email && (
+                  <span className="pill pill-warn">Can't be alerted — add an email</span>
+                )}
                 <span className="muted">
                   {" "}
-                  {c.phone ?? c.email}
+                  {c.email ?? c.phone}
                 </span>
               </span>
               <button
@@ -122,13 +160,14 @@ function SosContactsSection({
           minLength={2}
         />
         <input
-          placeholder="Email (optional)"
+          placeholder="Email (alerts go here)"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          required
         />
         <input
-          placeholder="Phone (optional)"
+          placeholder="Phone (optional, not used for alerts yet)"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
         />
@@ -252,7 +291,10 @@ function CheckinPlansSection({
       )}
 
       {!hasPrimary && (
-        <p className="hint">Add a primary SOS contact above before starting a plan.</p>
+        <p className="hint">
+          Add a primary SOS contact with an email address above before starting a
+          plan.
+        </p>
       )}
 
       <form className="card-form" onSubmit={create}>

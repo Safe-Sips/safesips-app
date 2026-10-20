@@ -1,5 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
+import type { SosDeliveryDTO } from "@safesips/shared";
+import { isEmailDeliveryConfigured } from "../mailer.js";
 import { asyncHandler, isValidEmail, parseBody } from "../http.js";
 import { requireAuth } from "../auth/middleware.js";
 import { cleanText } from "../util.js";
@@ -22,9 +24,11 @@ const contactSchema = z
     phone: z.string().max(PHONE_MAX).optional().nullable(),
     isPrimary: z.boolean().optional(),
   })
+  // Email is the only alert channel that works today; a phone-only contact
+  // could never be notified. The phone is kept for when SMS is added.
   .refine(
-    (v) => (v.email && v.email.trim()) || (v.phone && v.phone.trim()),
-    "Add an email or phone number so we can reach them."
+    (v) => !!(v.email && v.email.trim()),
+    "Add an email address — that's how we alert them (SMS isn't available yet)."
   )
   .refine(
     (v) => !v.email || !v.email.trim() || isValidEmail(v.email.trim()),
@@ -35,6 +39,15 @@ sosContactsRouter.get(
   "/",
   asyncHandler(async (req, res) => {
     res.json(listContacts(req.auth!.userId));
+  })
+);
+
+/** Which alert channels actually work on this server (see SosDeliveryDTO). */
+sosContactsRouter.get(
+  "/delivery",
+  asyncHandler(async (_req, res) => {
+    const dto: SosDeliveryDTO = { email: isEmailDeliveryConfigured(), sms: false };
+    res.json(dto);
   })
 );
 
