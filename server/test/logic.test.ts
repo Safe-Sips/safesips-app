@@ -151,134 +151,6 @@ test("wrong check-in answer is rejected but stays answerable", () => {
   assert.ok(good && good.correct, "correct answer still accepted afterwards");
 });
 
-test("SOS phone numbers are normalised to international format", () => {
-  assert.equal(shared.normalizePhone("0722 123 456"), "+40722123456", "Romanian national number");
-  assert.equal(shared.normalizePhone("+40 (722) 123-456"), "+40722123456");
-  assert.equal(shared.normalizePhone("0040722123456"), "+40722123456");
-  assert.equal(shared.normalizePhone("+44 7700 900123"), "+447700900123", "foreign numbers keep their code");
-  for (const bad of ["722123456", "abc", "+0123", "07", ""]) {
-    assert.equal(shared.normalizePhone(bad), null, `rejects ${JSON.stringify(bad)}`);
-  }
-});
-
-test("SOS alert text names the person, says call 112, and links the area", async () => {
-  const { buildEscalationSms, buildEscalationEmail } = await import("../src/notify.js");
-  const base = { occurrenceId: "o", userId: "u", personName: "Ana", planLabel: "Club", area: null };
-  const plain = buildEscalationSms(base);
-  assert.match(plain, /Ana missed a safety check-in \("Club"\)/);
-  assert.match(plain, /call 112/);
-  assert.ok(!plain.includes("openstreetmap"), "no map link when not sharing");
-  const withArea = buildEscalationSms({ ...base, area: { lat: 44.426812, lng: 26.102538 } });
-  assert.match(withArea, /openstreetmap\.org\/\?mlat=44\.4268&mlon=26\.1025/);
-  const longName = buildEscalationSms({ ...base, personName: "x".repeat(200) });
-  assert.ok(longName.length < 320, "stays within two SMS segments");
-  const mail = buildEscalationEmail({ ...base, personName: "<b>Ana</b>", planLabel: "Club & bar" });
-  assert.ok(mail.html.includes("&lt;b&gt;Ana&lt;/b&gt;") && !mail.html.includes("<b>Ana</b>"), "HTML-escaped");
-  assert.ok(mail.html.includes("Club &amp; bar"));
-});
-
-test("SOS: a missed check-in alerts every contact on every channel", async () => {
-  const { notifyContacts } = await import("../src/notify.js");
-  const mailer = await import("../src/mailer.js");
-  const sms = await import("../src/sms.js");
-  const sos = await import("../src/repos/sosContacts.js");
-  const user = makeUser("sos-multi@test.local");
-  const plan = checkins.createPlan(user.id, {
-    label: null, intervalMinutes: 60, graceMinutes: 10, question: "q?", answer: "a", endsAt: null,
-  });
-  const now = Date.now();
-  const occ = (id: string) => {
-    db.prepare(
-      `INSERT INTO checkin_occurrences (id, plan_id, user_id, due_at, deadline_at, status, prompted_at, created_at)
-       VALUES (?, ?, ?, ?, ?, 'missed', ?, ?)`
-    ).run(id, plan.id, user.id, now, now, now, now);
-    return { occurrenceId: id, userId: user.id, personName: "Ana", planLabel: null, area: null };
-  };
-  const rows = (id: string) =>
-    db.prepare(`SELECT channel, status FROM checkin_escalations WHERE occurrence_id = ? ORDER BY channel`).all(id);
-
-  // No contacts at all: recorded as a failure, not silently "sent".
-  let r = await notifyContacts(occ("esc-none"), []);
-  assert.deepEqual(r.map((x) => [x.channel, x.status]), [["none", "failed"]]);
-
-  const both = sos.createContact(user.id, { name: "Mo", email: "mo@test.local", phone: "+40722000001", isPrimary: true });
-  const phoneOnly = sos.createContact(user.id, { name: "Pat", email: null, phone: "+40722000002", isPrimary: false });
-
-  // Nothing configured: every attempt is an honest failure.
-  mailer.setMailTransport(null);
-  sms.setSmsTransport(null);
-  r = await notifyContacts(occ("esc-off"), sos.listAlertContacts(user.id));
-  assert.equal(r.length, 3, "Mo: sms+email, Pat: sms");
-  assert.ok(r.every((x) => x.status === "failed"));
-
-  // Both channels working: everyone gets everything they can.
-  const texts: Array<{ to: string; body: string }> = [];
-  const emails: Array<{ to: string }> = [];
-  sms.setSmsTransport({ send: async (to, body) => void texts.push({ to, body }) });
-  mailer.setMailTransport({ sendMail: async (m: { to: string }) => (emails.push(m), {}) } as never);
-  r = await notifyContacts(occ("esc-on"), sos.listAlertContacts(user.id));
-  assert.ok(r.every((x) => x.status === "sent"), JSON.stringify(r));
-  assert.deepEqual(texts.map((t) => t.to).sort(), ["+40722000001", "+40722000002"]);
-  assert.deepEqual(emails.map((e) => e.to), ["mo@test.local"]);
-  assert.deepEqual(rows("esc-on"), [
-    { channel: "email", status: "sent" },
-    { channel: "sms", status: "sent" },
-    { channel: "sms", status: "sent" },
-  ]);
-  assert.ok(both && phoneOnly);
-
-  // The send log never stores the phone number itself.
-  const logged = db.prepare(`SELECT to_hash FROM sms_sends`).all() as Array<{ to_hash: string }>;
-  assert.ok(logged.length > 0 && logged.every((l) => !l.to_hash.includes("722")), "only keyed hashes");
-
-  sms.setSmsTransport(null);
-  mailer.setMailTransport(null);
-});
-
-test("SOS texts retry temporary failures but not permanent ones", async () => {
-  const sms = await import("../src/sms.js");
-  sms.setSmsRetryDelays([0, 0, 0]);
-  const u = makeUser("sms-retry@test.local");
-  let calls = 0;
-  sms.setSmsTransport({
-    send: async () => {
-      calls++;
-      if (calls < 3) throw new sms.SmsError("provider down", true);
-    },
-  });
-  let r = await sms.sendSms({ to: "+40722000101", body: "x", userId: u.id, kind: "alert" });
-  assert.equal(r.ok, true, "succeeds on the third attempt");
-  assert.equal(calls, 3);
-
-  calls = 0;
-  sms.setSmsTransport({
-    send: async () => {
-      calls++;
-      throw new sms.SmsError("invalid number", false);
-    },
-  });
-  r = await sms.sendSms({ to: "+40722000102", body: "x", userId: u.id, kind: "alert" });
-  assert.equal(r.ok, false);
-  assert.equal(calls, 1, "a permanent error isn't retried");
-  sms.setSmsTransport(null);
-});
-
-test("SOS texts: one number can't be spammed past the daily cap", async () => {
-  const sms = await import("../src/sms.js");
-  const { config } = await import("../src/config.js");
-  sms.setSmsTransport({ send: async () => {} });
-  const to = "+40722000200";
-  for (let i = 0; i < config.smsMaxPerNumberPerDay; i++) {
-    const u = makeUser(`spammer-${i}@test.local`);
-    assert.equal((await sms.sendSms({ to, body: "x", userId: u.id, kind: "alert" })).ok, true);
-  }
-  const fresh = makeUser("spammer-new@test.local");
-  const blocked = await sms.sendSms({ to, body: "x", userId: fresh.id, kind: "alert" });
-  assert.equal(blocked.ok, false, "even from a different account");
-  assert.match(blocked.detail, /most texts allowed today/);
-  sms.setSmsTransport(null);
-});
-
 test("IPs and emails are stored as keyed hashes, not plain sha256", async () => {
   const { hashIdentifier } = await import("../src/privacyHash.js");
   const { loginKey, ipKey } = await import("../src/auth/throttle.js");
@@ -291,9 +163,9 @@ test("IPs and emails are stored as keyed hashes, not plain sha256", async () => 
 
 test("GDPR: export covers the account and omits secrets", async () => {
   const account = await import("../src/repos/account.js");
-  const sos = await import("../src/repos/sosContacts.js");
+  const ec = await import("../src/repos/emergencyContacts.js");
   const user = makeUser("export-me@test.local");
-  sos.createContact(user.id, { name: "Kim", email: "kim@test.local", phone: null, isPrimary: true });
+  ec.requestContact(user.id, "kim-export@test.local");
   checkins.createPlan(user.id, {
     label: "Night out",
     intervalMinutes: 60,
@@ -305,7 +177,7 @@ test("GDPR: export covers the account and omits secrets", async () => {
   const data = account.exportAccountData(user.id)!;
   assert.equal(data.profile.id, user.id);
   assert.ok(!("password_hash" in data.profile), "password hash omitted");
-  assert.equal(data.sosContacts.length, 1);
+  assert.equal(data.emergencyContacts.length, 1);
   assert.equal(data.checkinPlans.length, 1);
   assert.ok(!("answer_hash" in data.checkinPlans[0]), "security-answer hash omitted");
   assert.equal(account.exportAccountData("no-such-user"), null);
@@ -313,12 +185,18 @@ test("GDPR: export covers the account and omits secrets", async () => {
 
 test("GDPR: account deletion erases the user's data and nobody else's", async () => {
   const account = await import("../src/repos/account.js");
-  const sos = await import("../src/repos/sosContacts.js");
+  const ec = await import("../src/repos/emergencyContacts.js");
   const gone = makeUser("delete-me@test.local");
   const other = makeUser("keep-me@test.local");
   const now = Date.now();
+  // Someone invited the soon-deleted user by email before linking.
+  const inviter = makeUser("inviter@test.local");
+  db.prepare(
+    `INSERT INTO emergency_links (id, owner_id, contact_user_id, invite_email_norm, invite_label, status, created_at)
+     VALUES ('pending-by-email', ?, NULL, 'delete-me@test.local', 'delete-me@test.local', 'pending', ?)`
+  ).run(inviter.id, now);
   for (const u of [gone, other]) {
-    sos.createContact(u.id, { name: "C", email: "c@test.local", phone: null, isPrimary: true });
+    ec.requestContact(u.id, `friend-of-${u.id}@test.local`);
     reports.createReport(u.id, {
       lat: 44.4,
       lng: 26.1,
@@ -336,12 +214,13 @@ test("GDPR: account deletion erases the user's data and nobody else's", async ()
 
   const count = (sql: string, id: string) => (db.prepare(sql).get(id) as { c: number }).c;
   assert.equal(count(`SELECT COUNT(*) AS c FROM users WHERE id = ?`, gone.id), 0);
-  assert.equal(count(`SELECT COUNT(*) AS c FROM sos_contacts WHERE user_id = ?`, gone.id), 0);
+  assert.equal(count(`SELECT COUNT(*) AS c FROM emergency_links WHERE owner_id = ?`, gone.id), 0);
+  assert.equal(count(`SELECT COUNT(*) AS c FROM emergency_links WHERE id = ?`, "pending-by-email"), 0, "invite to their email erased");
   assert.equal(count(`SELECT COUNT(*) AS c FROM reports WHERE author_id = ?`, gone.id), 0);
   assert.equal(count(`SELECT COUNT(*) AS c FROM waitlist WHERE id = ?`, "wl-gone"), 0);
   // The other user is untouched.
   assert.equal(count(`SELECT COUNT(*) AS c FROM users WHERE id = ?`, other.id), 1);
-  assert.equal(count(`SELECT COUNT(*) AS c FROM sos_contacts WHERE user_id = ?`, other.id), 1);
+  assert.equal(count(`SELECT COUNT(*) AS c FROM emergency_links WHERE owner_id = ?`, other.id), 1);
   assert.equal(count(`SELECT COUNT(*) AS c FROM reports WHERE author_id = ?`, other.id), 1);
   // Deleting again is a no-op.
   assert.equal(account.deleteAccountData(gone.id), null);
@@ -549,3 +428,150 @@ test("presence: a dropped owner hands the circle to the user's newest session", 
   // No other session open: the circle just stays until it expires.
   assert.equal(pickHandoverSocket({ droppedIsOwner: true, remainingSocketIds: [] }), null);
 });
+
+test("emergency contacts: SafeSips codes are typed forgivingly and formatted", async () => {
+  const ec = await import("../src/repos/emergencyContacts.js");
+  const u = makeUser("code-owner@test.local");
+  const code = ec.ensureContactCode(u.id);
+  assert.match(code, /^[A-HJ-NP-Z2-9]{8}$/, "no ambiguous 0/O/1/I/L");
+  assert.equal(ec.ensureContactCode(u.id), code, "stable once created");
+  assert.equal(ec.normalizeCode(` ${code.slice(0, 4).toLowerCase()}-${code.slice(4)} `), code);
+  assert.equal(ec.normalizeCode("ABC"), null);
+  assert.equal(ec.formatCode("ABCD2345"), "ABCD-2345");
+});
+
+test("emergency contacts: request rules (self, duplicates, no account probing)", async () => {
+  const ec = await import("../src/repos/emergencyContacts.js");
+  const owner = makeUser("req-owner@test.local");
+  const friend = makeUser("req-friend@test.local");
+
+  assert.equal(ec.requestContact(owner.id, "req-owner@test.local").ok, false, "can't add own email");
+  assert.equal(ec.requestContact(owner.id, ec.ensureContactCode(owner.id)).ok, false, "can't add own code");
+  assert.equal(ec.requestContact(owner.id, "ZZZZ-ZZZZ").ok, false, "unknown code is an error");
+
+  // Same reply for a real and an unknown email: no way to probe who has an account.
+  const real = ec.requestContact(owner.id, "req-friend@test.local");
+  const unknown = ec.requestContact(owner.id, "nobody-here@test.local");
+  assert.ok(real.ok && unknown.ok);
+  if (real.ok && unknown.ok) {
+    assert.equal(
+      real.message.replace("req-friend@test.local", "X"),
+      unknown.message.replace("nobody-here@test.local", "X")
+    );
+    assert.equal(real.notifyUserId, friend.id, "an existing user is notified");
+  }
+
+  // Adding the same person again (email, then code) doesn't duplicate them.
+  ec.requestContact(owner.id, "req-friend@test.local");
+  ec.requestContact(owner.id, ec.ensureContactCode(friend.id));
+  const mine = ec.getOverview(owner.id).contacts;
+  assert.equal(mine.filter((c) => c.inviteLabel !== "nobody-here@test.local").length, 1);
+  assert.ok(mine.every((c) => c.displayName === null), "names hidden until they accept");
+});
+
+test("emergency contacts: invites wait for sign-up; alerts only after accepting", async () => {
+  const ec = await import("../src/repos/emergencyContacts.js");
+  const owner = makeUser("inv-owner@test.local");
+  ec.requestContact(owner.id, "joins-later@test.local");
+  assert.equal(ec.hasAcceptedContact(owner.id), false, "pending isn't enough to start check-ins");
+
+  const later = makeUser("joins-later@test.local");
+  const incoming = ec.getOverview(later.id).incoming;
+  assert.equal(incoming.length, 1, "the invite shows up once they have an account");
+  assert.equal(incoming[0].fromDisplayName, "inv-owner@test.local");
+
+  assert.equal(ec.acceptRequest(makeUser("stranger@test.local").id, incoming[0].id), null, "only the invitee can accept");
+  assert.equal(ec.acceptRequest(later.id, incoming[0].id), owner.id);
+  assert.equal(ec.hasAcceptedContact(owner.id), true);
+  assert.equal(ec.getOverview(owner.id).contacts[0].displayName, "joins-later@test.local", "name shown once accepted");
+  assert.equal(ec.getOverview(later.id).protecting[0].displayName, "inv-owner@test.local");
+
+  // The contact can step down at any time.
+  assert.ok(ec.removeLink(later.id, incoming[0].id));
+  assert.equal(ec.hasAcceptedContact(owner.id), false);
+});
+
+test("emergency contacts: request rate limit", async () => {
+  const ec = await import("../src/repos/emergencyContacts.js");
+  const spammer = makeUser("req-spammer@test.local");
+  for (let i = 0; i < ec.MAX_REQUESTS_PER_DAY; i++) {
+    assert.equal(ec.requestContact(spammer.id, `victim-${i}@test.local`).ok, true);
+  }
+  assert.equal(ec.requestContact(spammer.id, "one-more@test.local").ok, false);
+});
+
+test("missed check-in alerts accepted contacts in-app and by push", async () => {
+  const ec = await import("../src/repos/emergencyContacts.js");
+  const push = await import("../src/push.js");
+  const notify = await import("../src/notify.js");
+  const alerts = await import("../src/repos/alerts.js");
+  const owner = makeUser("alert-owner@test.local");
+  const mo = makeUser("alert-mo@test.local");
+  const pat = makeUser("alert-pat@test.local");
+  const pending = makeUser("alert-pending@test.local");
+  for (const c of [mo, pat]) {
+    ec.requestContact(owner.id, ec.ensureContactCode(c.id));
+    ec.acceptRequest(c.id, ec.getOverview(c.id).incoming[0].id);
+  }
+  ec.requestContact(owner.id, ec.ensureContactCode(pending.id)); // never accepts
+
+  const plan = checkins.createPlan(owner.id, {
+    label: "Club", intervalMinutes: 60, graceMinutes: 10, question: "q?", answer: "a", endsAt: null,
+  });
+  const now = Date.now();
+  db.prepare(
+    `INSERT INTO checkin_occurrences (id, plan_id, user_id, due_at, deadline_at, status, prompted_at, created_at)
+     VALUES ('occ-inapp', ?, ?, ?, ?, 'missed', ?, ?)`
+  ).run(plan.id, owner.id, now, now, now, now);
+
+  // Mo has two devices (one is dead), Pat hasn't turned notifications on.
+  push.saveSubscription(mo.id, { endpoint: "https://push.example/mo-phone", keys: { p256dh: "k", auth: "a" } });
+  push.saveSubscription(mo.id, { endpoint: "https://push.example/mo-old", keys: { p256dh: "k", auth: "a" } });
+  const delivered: Array<{ endpoint: string; payload: Record<string, unknown>; urgent: boolean }> = [];
+  push.setPushSender(async (sub, payload, urgent) => {
+    if (sub.endpoint.endsWith("mo-old")) throw Object.assign(new Error("gone"), { statusCode: 410 });
+    delivered.push({ endpoint: sub.endpoint, payload: JSON.parse(payload), urgent });
+  });
+
+  const summary = await notify.alertEmergencyContacts({
+    occurrenceId: "occ-inapp",
+    userId: owner.id,
+    personName: "Ana",
+    planLabel: "Club",
+    area: { lat: 44.43, lng: 26.1 },
+  });
+  assert.deepEqual(summary, { contacts: 2, pushed: 1, emailed: 0 }, "Mo + Pat alerted; the pending user isn't");
+  assert.equal(delivered.length, 1);
+  assert.equal(delivered[0].urgent, true);
+  assert.equal(delivered[0].payload.title, "Ana missed a safety check-in");
+  assert.equal(delivered[0].payload.url, "/alerts");
+  assert.equal(push.hasPushSubscription(mo.id), true);
+  assert.equal(
+    (db.prepare(`SELECT COUNT(*) AS c FROM push_subscriptions WHERE endpoint = ?`).get("https://push.example/mo-old") as { c: number }).c,
+    0,
+    "a subscription the push service reports gone is removed"
+  );
+
+  // Both have it in their inbox, with the masked area; the pending user doesn't.
+  const moAlerts = alerts.listAlerts(mo.id);
+  assert.equal(moAlerts.length, 1);
+  assert.deepEqual(moAlerts[0].area, { lat: 44.43, lng: 26.1 });
+  assert.equal(alerts.listAlerts(pat.id).length, 1);
+  assert.equal(alerts.listAlerts(pending.id).length, 0);
+
+  // Mo says "I'm checking on them": Pat sees it; acking twice is a no-op.
+  assert.deepEqual(alerts.acknowledgeAlert(mo.id, moAlerts[0].id), { ownerId: owner.id });
+  assert.equal(alerts.acknowledgeAlert(mo.id, moAlerts[0].id), null);
+  assert.deepEqual(alerts.listAlerts(pat.id)[0].othersOnIt, ["alert-mo@test.local"]);
+  assert.equal(alerts.unreadAlertCount(mo.id), 0);
+  assert.equal(alerts.unreadAlertCount(pat.id), 1);
+
+  // Nobody accepted: recorded as an honest failure.
+  const lonely = makeUser("alert-lonely@test.local");
+  const none = await notify.alertEmergencyContacts({
+    occurrenceId: "occ-inapp", userId: lonely.id, personName: "L", planLabel: null, area: null,
+  });
+  assert.equal(none.contacts, 0);
+  push.setPushSender(async () => {});
+});
+

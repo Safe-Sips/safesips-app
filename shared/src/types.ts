@@ -143,6 +143,13 @@ export interface ServerToClientEvents {
     question: string;
     deadlineAt: number;
   }) => void;
+  /**
+   * Someone this user is an emergency contact for missed a check-in. Pushed
+   * only to the contact's own sockets (also sent as a push notification).
+   */
+  "alert:new": (data: { alertId: string; ownerDisplayName: string }) => void;
+  /** A contact request was received, accepted or removed: refresh contacts. */
+  "contacts:changed": () => void;
 }
 
 /** Events emitted by clients to the server. */

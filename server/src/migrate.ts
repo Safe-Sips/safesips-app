@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 /**
  * Full schema, created idempotently with CREATE TABLE/INDEX IF NOT EXISTS.
@@ -191,19 +191,58 @@ CREATE TABLE IF NOT EXISTS waitlist (
   ip_hash     TEXT
 );
 
--- ──────────────────────────── SMS send log ────────────────────────────
--- Only for cost/abuse limits: who sent, to which number (keyed hash, never
--- the number itself), and whether it was a real alert or a test.
-CREATE TABLE IF NOT EXISTS sms_sends (
+-- ───────────────────── In-app emergency contacts ─────────────────────
+-- owner = the person who checks in; contact = the SafeSips user alerted when
+-- they miss one. A contact must accept first. Email invites to people without
+-- an account yet keep contact_user_id NULL until they sign up with that email.
+CREATE TABLE IF NOT EXISTS emergency_links (
+  id                TEXT PRIMARY KEY,
+  owner_id          TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  contact_user_id   TEXT REFERENCES users(id) ON DELETE CASCADE,
+  invite_email_norm TEXT,
+  invite_label      TEXT NOT NULL,
+  status            TEXT NOT NULL DEFAULT 'pending',
+  created_at        INTEGER NOT NULL,
+  responded_at      INTEGER
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_links_owner_contact
+  ON emergency_links(owner_id, contact_user_id) WHERE contact_user_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_links_owner_email
+  ON emergency_links(owner_id, invite_email_norm) WHERE contact_user_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_links_contact ON emergency_links(contact_user_id);
+CREATE INDEX IF NOT EXISTS idx_links_email ON emergency_links(invite_email_norm);
+
+-- Web Push subscriptions (one per browser/device).
+CREATE TABLE IF NOT EXISTS push_subscriptions (
   id          TEXT PRIMARY KEY,
-  user_id     TEXT REFERENCES users(id) ON DELETE CASCADE,
-  to_hash     TEXT NOT NULL,
-  kind        TEXT NOT NULL,
-  status      TEXT NOT NULL,
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint    TEXT NOT NULL UNIQUE,
+  p256dh      TEXT NOT NULL,
+  auth        TEXT NOT NULL,
   created_at  INTEGER NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_sms_sends_created ON sms_sends(created_at);
-CREATE INDEX IF NOT EXISTS idx_sms_sends_to ON sms_sends(to_hash, created_at);
+CREATE INDEX IF NOT EXISTS idx_push_user ON push_subscriptions(user_id);
+
+-- Alerts a contact received because someone they protect missed a check-in.
+CREATE TABLE IF NOT EXISTS checkin_alerts (
+  id               TEXT PRIMARY KEY,
+  occurrence_id    TEXT NOT NULL REFERENCES checkin_occurrences(id) ON DELETE CASCADE,
+  owner_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  contact_user_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  plan_label       TEXT,
+  area_lat         REAL,
+  area_lng         REAL,
+  created_at       INTEGER NOT NULL,
+  acknowledged_at  INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_alerts_contact ON checkin_alerts(contact_user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_alerts_occ ON checkin_alerts(occurrence_id);
+
+-- Small key/value store (e.g. auto-generated Web Push VAPID keys).
+CREATE TABLE IF NOT EXISTS app_settings (
+  key    TEXT PRIMARY KEY,
+  value  TEXT NOT NULL
+);
 `;
 
 /** Create all tables/indexes idempotently inside a single transaction. */
@@ -229,6 +268,10 @@ export function runMigrations(db: Database.Database): void {
           DELETE FROM auth_attempts;
         `);
       }
+      if (row.version < 5) {
+        // v5: SOS alerts are in-app now; the SMS send log is no longer used.
+        db.exec(`DROP TABLE IF EXISTS sms_sends;`);
+      }
       db.prepare("UPDATE schema_version SET version = ?").run(SCHEMA_VERSION);
     }
     const userCols = db
@@ -239,6 +282,13 @@ export function runMigrations(db: Database.Database): void {
     }
     db.exec(
       `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_clerk_id ON users(clerk_id)`
+    );
+    if (!userCols.some((c) => c.name === "contact_code")) {
+      // Short code people share so others can add them as an emergency contact.
+      db.exec(`ALTER TABLE users ADD COLUMN contact_code TEXT`);
+    }
+    db.exec(
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_contact_code ON users(contact_code)`
     );
   });
   apply();

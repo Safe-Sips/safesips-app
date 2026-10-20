@@ -4,9 +4,8 @@ import {
   claimOverdueOccurrences,
   markEscalated,
 } from "./repos/checkins.js";
-import { listAlertContacts } from "./repos/sosContacts.js";
 import { findUserById } from "./repos/users.js";
-import { notifyContacts } from "./notify.js";
+import { alertEmergencyContacts, promptCheckin } from "./notify.js";
 import { emitCheckinDue, getSharedArea } from "./realtime.js";
 import { purgeOldAttempts } from "./auth/throttle.js";
 import { nowMs } from "./util.js";
@@ -30,23 +29,22 @@ export function startCheckinScheduler(): NodeJS.Timeout {
           question: due.question,
           deadlineAt: due.deadlineAt,
         });
+        // Also reaches them with the app closed (push notification).
+        void promptCheckin(due.userId, due.occurrenceId, due.deadlineAt);
       }
 
       for (const overdue of claimOverdueOccurrences(now)) {
         const user = findUserById(overdue.userId);
-        // Delivery is async (SMS/SMTP with retries); the occurrence is already
-        // claimed as missed, so mark it escalated now. notifyContacts alerts
-        // every contact, records each real outcome, and never throws.
-        void notifyContacts(
-          {
-            occurrenceId: overdue.occurrenceId,
-            userId: overdue.userId,
-            personName: user?.display_name ?? "A SafeSips user",
-            planLabel: overdue.planLabel,
-            area: getSharedArea(overdue.userId),
-          },
-          listAlertContacts(overdue.userId)
-        );
+        // Delivery is async (push); the occurrence is already claimed as
+        // missed, so mark it escalated now. alertEmergencyContacts alerts every
+        // accepted contact in-app, records each outcome, and never throws.
+        void alertEmergencyContacts({
+          occurrenceId: overdue.occurrenceId,
+          userId: overdue.userId,
+          personName: user?.display_name ?? "A SafeSips user",
+          planLabel: overdue.planLabel,
+          area: getSharedArea(overdue.userId),
+        });
         markEscalated(overdue.occurrenceId);
       }
 

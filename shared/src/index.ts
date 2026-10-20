@@ -5,4 +5,3 @@ export * from "./badges";
 export * from "./dto";
 export * from "./reports";
 export * from "./live";
-export * from "./phone";

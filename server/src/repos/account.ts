@@ -34,6 +34,10 @@ export interface AccountExport {
   forumPostVotes: Row[];
   activity: Row[];
   sosContacts: Row[];
+  emergencyContacts: Row[];
+  emergencyContactFor: Row[];
+  alertsReceived: Row[];
+  pushDevices: Row[];
   checkinPlans: Row[];
   checkinOccurrences: Row[];
   checkinEscalations: Row[];
@@ -58,6 +62,21 @@ export function exportAccountData(userId: string): AccountExport | null {
     forumPostVotes: all(`SELECT * FROM forum_post_votes WHERE user_id = ?`, userId),
     activity: all(`SELECT * FROM activity_log WHERE user_id = ?`, userId),
     sosContacts: all(`SELECT * FROM sos_contacts WHERE user_id = ?`, userId),
+    emergencyContacts: all(
+      `SELECT id, invite_label, status, created_at, responded_at FROM emergency_links WHERE owner_id = ?`,
+      userId
+    ),
+    emergencyContactFor: all(
+      `SELECT l.id, o.display_name AS person, l.status, l.created_at, l.responded_at
+         FROM emergency_links l JOIN users o ON o.id = l.owner_id WHERE l.contact_user_id = ?`,
+      userId
+    ),
+    alertsReceived: all(
+      `SELECT a.id, o.display_name AS person, a.plan_label, a.area_lat, a.area_lng, a.created_at, a.acknowledged_at
+         FROM checkin_alerts a JOIN users o ON o.id = a.owner_id WHERE a.contact_user_id = ?`,
+      userId
+    ),
+    pushDevices: all(`SELECT id, created_at FROM push_subscriptions WHERE user_id = ?`, userId),
     checkinPlans: omit(all(`SELECT * FROM checkin_plans WHERE user_id = ?`, userId), [
       "answer_hash",
     ]),
@@ -82,6 +101,8 @@ export interface DeletedAccount {
 const deleteTx = db.transaction((userId: string, emailNorm: string) => {
   // The waitlist and throttle rows aren't linked by user_id.
   db.prepare(`DELETE FROM waitlist WHERE email_norm = ?`).run(emailNorm);
+  // Pending emergency-contact invites addressed to this email (not yet linked).
+  db.prepare(`DELETE FROM emergency_links WHERE contact_user_id IS NULL AND invite_email_norm = ?`).run(emailNorm);
   db.prepare(`DELETE FROM auth_attempts WHERE key = ?`).run(loginKey(emailNorm));
   // Everything else references users(id) ON DELETE CASCADE: reports, votes,
   // forum threads/posts (and replies inside the user's threads), activity,

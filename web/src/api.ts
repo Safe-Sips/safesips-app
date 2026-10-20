@@ -8,9 +8,8 @@ import type {
   ReportDTO,
   ReportInput,
   SafeHavenDTO,
-  SosContactDTO,
-  SosContactInput,
-  SosDeliveryDTO,
+  CheckinAlertDTO,
+  ContactsOverviewDTO,
   ThreadDTO,
   ThreadDetailDTO,
   UserDTO,
@@ -167,19 +166,31 @@ export const api = {
   activity: (cursor?: number) =>
     request<ActivityDTO[]>(`/api/users/me/activity${cursor ? `?cursor=${cursor}` : ""}`),
 
-  // SOS contacts
-  listContacts: () => request<SosContactDTO[]>("/api/sos-contacts"),
-  sosDelivery: () => request<SosDeliveryDTO>("/api/sos-contacts/delivery"),
-  /** Send a test alert to one contact (rate-limited per day). */
-  testContact: (id: string) =>
-    request<{ results: Array<{ channel: "email" | "sms"; ok: boolean; detail: string }> }>(
-      `/api/sos-contacts/${id}/test`,
-      { method: "POST", body: {} }
-    ),
-  createContact: (input: SosContactInput) =>
-    request<SosContactDTO>("/api/sos-contacts", { body: input }),
-  deleteContact: (id: string) =>
-    request<{ ok: true }>(`/api/sos-contacts/${id}`, { method: "DELETE" }),
+  // Emergency contacts (other SafeSips users)
+  contacts: () => request<ContactsOverviewDTO>("/api/contacts"),
+  addContact: (identifier: string) =>
+    request<{ message: string; overview: ContactsOverviewDTO }>("/api/contacts", {
+      body: { identifier },
+    }),
+  acceptContact: (id: string) =>
+    request<ContactsOverviewDTO>(`/api/contacts/${id}/accept`, { method: "POST", body: {} }),
+  removeContact: (id: string) =>
+    request<ContactsOverviewDTO>(`/api/contacts/${id}`, { method: "DELETE" }),
+
+  // Alerts I received as someone's emergency contact
+  alerts: () => request<{ alerts: CheckinAlertDTO[]; unread: number }>("/api/alerts"),
+  ackAlert: (id: string) =>
+    request<{ alerts: CheckinAlertDTO[]; unread: number }>(`/api/alerts/${id}/ack`, {
+      method: "POST",
+      body: {},
+    }),
+
+  // Push notifications
+  pushPublicKey: () => request<{ publicKey: string }>("/api/push/public-key"),
+  pushSubscribe: (sub: PushSubscriptionJSON) =>
+    request<{ ok: true }>("/api/push/subscribe", { body: sub }),
+  pushUnsubscribe: (endpoint: string) =>
+    request<{ ok: true }>("/api/push/unsubscribe", { body: { endpoint } }),
 
   // Check-ins
   listPlans: () => request<PlanDTO[]>("/api/checkins/plans"),

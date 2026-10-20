@@ -10,6 +10,8 @@
  * auto-derived from a user's presence/location sharing.
  */
 
+import type { LatLng } from "./types";
+
 import type { BadgeTier, EngagementCounts } from "./badges";
 
 /* --------------------------------- Auth --------------------------------- */
@@ -162,31 +164,56 @@ export interface ActivityDTO {
   createdAt: number;
 }
 
-/* ----------------------------- SOS contacts ----------------------------- */
+/* -------------------------- Emergency contacts -------------------------- */
+/*
+ * Emergency contacts are other SafeSips users. You add someone by their
+ * account email or their SafeSips code; they must accept before they receive
+ * your check-in alerts. Alerts arrive as notifications inside SafeSips.
+ */
 
-export interface SosContactInput {
-  name: string;
-  email?: string | null;
-  phone?: string | null;
-  isPrimary?: boolean;
-}
-
-export interface SosContactDTO {
+/** Someone I asked to be my emergency contact. */
+export interface EmergencyContactDTO {
   id: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  isPrimary: boolean;
+  status: "pending" | "accepted";
+  /** Their display name — only shown once they accept. */
+  displayName: string | null;
+  /** What I typed to add them (email or code), shown while pending. */
+  inviteLabel: string;
   createdAt: number;
 }
 
-/**
- * Which channels this server can actually use to alert an SOS contact when a
- * check-in is missed. The UI must not imply alerts work when these are false.
- */
-export interface SosDeliveryDTO {
-  email: boolean;
-  sms: boolean;
+/** A request from someone who wants me as their emergency contact. */
+export interface ContactRequestDTO {
+  id: string;
+  fromDisplayName: string;
+  createdAt: number;
+}
+
+/** Someone I have agreed to be an emergency contact for. */
+export interface ProtecteeDTO {
+  id: string;
+  displayName: string;
+}
+
+export interface ContactsOverviewDTO {
+  /** My SafeSips code, to give to people who want to add me. */
+  myCode: string;
+  contacts: EmergencyContactDTO[];
+  incoming: ContactRequestDTO[];
+  protecting: ProtecteeDTO[];
+}
+
+/** An alert I received because someone I protect missed a check-in. */
+export interface CheckinAlertDTO {
+  id: string;
+  ownerDisplayName: string;
+  planLabel: string | null;
+  /** Their last shared area (masked circle centre), if they were sharing. */
+  area: LatLng | null;
+  createdAt: number;
+  acknowledgedAt: number | null;
+  /** Other contacts who said they're checking on them. */
+  othersOnIt: string[];
 }
 
 /* ------------------------------- Check-ins ------------------------------ */

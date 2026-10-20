@@ -61,12 +61,18 @@ if (config.allowTestToken) {
   authRouter.get(
     "/test-token",
     asyncHandler(async (req, res) => {
-      const email = "smoke@safesips.local";
+      // ?as=<name> mints additional test users (e.g. a second account to act
+      // as an emergency contact). Dev/test only: this route doesn't exist in
+      // production.
+      const as = typeof req.query.as === "string" && /^[a-z0-9-]{1,20}$/.test(req.query.as)
+        ? req.query.as
+        : null;
+      const email = as ? `smoke-${as}@safesips.local` : "smoke@safesips.local";
       let user = findUserByEmail(email);
       if (!user) {
         user = createUser({
           email,
-          displayName: "Smoke Test",
+          displayName: as ? `Smoke ${as}` : "Smoke Test",
           passwordHash: hashSecret("smoke-test-password"),
         });
         markEmailVerified(user.id);
