@@ -56,7 +56,7 @@ Beyond the anonymous live map, SafeSips now has account-based features backed by
   works with the app closed). Miss it, and a server-side scheduler alerts every
   accepted contact: an entry in their **Alerts** inbox, a live in-app banner,
   and an urgent push notification — with your approximate (masked) area if you
-  were sharing — plus an email to their account address if SMTP is set. A
+  were sharing. Alerts stay inside SafeSips (no email). A
   contact can tap **I'm checking on them**; the others see it and you're told.
   Push keys are generated automatically (optional `VAPID_*`). On iPhone, web
   push needs SafeSips added to the Home Screen (iOS 16.4+). Every outcome is

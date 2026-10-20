@@ -74,7 +74,6 @@
 - [x] SQLite persistence, security hardening, unit + smoke tests
 - [x] Email alerts for SOS escalation (real outcome recorded; UI warns when SMTP is off)
 - [x] In-app emergency contacts (SafeSips users, accept to link) + push alerts for missed check-ins
-- [ ] Optional: configure SMTP so contacts also get an email copy of alerts
 - [x] Fix engagement-score bug (downvotes currently raise score)
 - [x] Reconcile 911 vs 112 across the web UI (Romania → 112)
 - [x] GDPR account deletion + data export (Profile → Your data)

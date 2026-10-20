@@ -540,7 +540,7 @@ test("missed check-in alerts accepted contacts in-app and by push", async () => 
     planLabel: "Club",
     area: { lat: 44.43, lng: 26.1 },
   });
-  assert.deepEqual(summary, { contacts: 2, pushed: 1, emailed: 0 }, "Mo + Pat alerted; the pending user isn't");
+  assert.deepEqual(summary, { contacts: 2, pushed: 1 }, "Mo + Pat alerted; the pending user isn't");
   assert.equal(delivered.length, 1);
   assert.equal(delivered[0].urgent, true);
   assert.equal(delivered[0].payload.title, "Ana missed a safety check-in");
