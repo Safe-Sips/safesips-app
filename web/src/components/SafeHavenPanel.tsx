@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { LatLng, SafeHavenDTO, SafeHavenKind } from "@safesips/shared";
 import { api } from "../api";
+import { EMERGENCY_NUMBER } from "../content/firstAid";
 
 const KIND_LABEL: Record<SafeHavenKind, string> = {
   police: "🚓 Police",
@@ -38,7 +39,7 @@ export default function SafeHavenPanel({
         if (res.error) setError(res.error);
       })
       .catch(() => {
-        if (active) setError("Couldn't load nearby help. In an emergency call 112.");
+        if (active) setError(`Couldn't load nearby help. In an emergency call ${EMERGENCY_NUMBER}.`);
       });
     return () => {
       active = false;
@@ -49,20 +50,20 @@ export default function SafeHavenPanel({
     <aside className="haven-panel">
       <div className="haven-panel-head">
         <h3>Nearby help &amp; safe havens</h3>
-        <button className="panel-close" onClick={onClose} aria-label="Close">
+        <button className="panel-close" onClick={onClose} aria-label="Close nearby help">
           ✕
         </button>
       </div>
 
-      <a className="emergency-call sm" href="tel:112">
-        🚨 Call 112
+      <a className="emergency-call sm" href={`tel:${EMERGENCY_NUMBER}`}>
+        <span aria-hidden="true">🚨 </span>Call {EMERGENCY_NUMBER}
       </a>
 
       {error && <p className="error">{error}</p>}
       {!havens && !error && <p className="muted">Finding the closest help…</p>}
       {havens && havens.length === 0 && !error && (
         <p className="muted">
-          No places found nearby. Head toward a busy, well-lit area and call 112
+          No places found nearby. Head toward a busy, well-lit area and call {EMERGENCY_NUMBER}
           if you need help.
         </p>
       )}

@@ -9,6 +9,8 @@ import {
   useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
+// Loaded with the (lazy) map chunk instead of on every page.
+import "leaflet/dist/leaflet.css";
 import type {
   LatLng,
   PresenceRecord,
@@ -67,6 +69,14 @@ function UpdatedAgo({ updatedAt }: { updatedAt: number }) {
   return <>{updatedAgo(updatedAt, now)}</>;
 }
 
+/** Honour the OS "reduce motion" setting for Leaflet's JS-driven animations. */
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
+  );
+}
+
 const DEFAULT_CENTER: [number, number] = [44.4268, 26.1025]; // Bucharest
 const DEFAULT_ZOOM = 13;
 const FOCUS_ZOOM = 16;
@@ -101,7 +111,7 @@ function Recenter({ exact }: { exact: LatLng | null }) {
   useEffect(() => {
     if (exact) {
       map.setView([exact.lat, exact.lng], Math.max(map.getZoom(), FOCUS_ZOOM), {
-        animate: true,
+        animate: !prefersReducedMotion(),
       });
     }
   }, [exact?.lat, exact?.lng, map]);
@@ -115,7 +125,7 @@ function FlyTo({ focus }: { focus: FocusPoint | null }) {
   useEffect(() => {
     if (!focus) return;
     const zoom = focus.zoom ?? Math.max(map.getZoom(), FOCUS_ZOOM);
-    map.setView([focus.lat, focus.lng], zoom, { animate: true });
+    map.setView([focus.lat, focus.lng], zoom, { animate: !prefersReducedMotion() });
   }, [focus?.lat, focus?.lng, focus?.zoom, map]);
   return null;
 }
@@ -171,6 +181,9 @@ export default function MapView({
       center={DEFAULT_CENTER}
       zoom={DEFAULT_ZOOM}
       zoomControl={false}
+      zoomAnimation={!prefersReducedMotion()}
+      fadeAnimation={!prefersReducedMotion()}
+      markerZoomAnimation={!prefersReducedMotion()}
       className="map-root"
       preferCanvas={false}
     >

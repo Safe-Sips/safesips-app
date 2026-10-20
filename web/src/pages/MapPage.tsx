@@ -13,6 +13,7 @@ import ReportPanel from "../components/ReportPanel";
 import SafeHavenPanel from "../components/SafeHavenPanel";
 import LegalFooter from "../components/LegalFooter";
 import LegalModal from "../components/LegalModal";
+import MapIntro, { hasSeenMapIntro, markMapIntroSeen } from "../components/MapIntro";
 import { PRIVACY_POLICY, TERMS_OF_SERVICE } from "../legal/content";
 
 const ACK_KEY = "safesips.sensitiveAck";
@@ -26,6 +27,22 @@ const shareSession: { exact: LatLng | null; source: PendingAction | null } = {
   exact: null,
   source: null,
 };
+
+/** Turn a GeolocationPositionError into something the user can act on. */
+function geolocationErrorMessage(err: GeolocationPositionError): string {
+  if (err.code === err.PERMISSION_DENIED) {
+    return (
+      "Location is blocked for SafeSips. To share, allow it: tap the lock or " +
+      "info icon next to the address bar → Site settings → Location → Allow, " +
+      "then try again. On iPhone also check Settings → Privacy & Security → " +
+      "Location Services → Safari Websites."
+    );
+  }
+  if (err.code === err.TIMEOUT) {
+    return "Getting your location took too long. Move near a window or outdoors and try again.";
+  }
+  return "Your device couldn't find your location. Turn on Location / GPS and try again.";
+}
 
 export default function MapPage() {
   const { user } = useAuth();
@@ -75,6 +92,12 @@ export default function MapPage() {
   const [havenPoint, setHavenPoint] = useState<LatLng | null>(null);
   const [havens, setHavens] = useState<SafeHavenDTO[]>([]);
   const [legalDoc, setLegalDoc] = useState<LegalDoc>(null);
+  // First visit: explain what the map shows before anyone shares.
+  const [introOpen, setIntroOpen] = useState(() => !hasSeenMapIntro());
+  const closeIntro = useCallback(() => {
+    markMapIntroSeen();
+    setIntroOpen(false);
+  }, []);
 
   const boundsRef = useRef<LatLngBounds | null>(null);
   const fetchTimer = useRef<number | undefined>(undefined);
@@ -106,11 +129,7 @@ export default function MapPage() {
       },
       (err) => {
         setGeoStatus(null);
-        setGeoError(
-          err.code === err.PERMISSION_DENIED
-            ? "Location permission denied. Enable location access to share."
-            : "Could not get your location. Check permissions and try again."
-        );
+        setGeoError(geolocationErrorMessage(err));
       },
       { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 }
     );
@@ -314,6 +333,7 @@ export default function MapPage() {
         onStop={onStop}
         onOpenPrivacy={() => setLegalDoc("privacy")}
         onOpenTerms={() => setLegalDoc("terms")}
+        onOpenHowItWorks={() => setIntroOpen(true)}
       />
 
       {/* Report-a-place + find-help controls, or the report-mode banner. */}
@@ -326,10 +346,10 @@ export default function MapPage() {
               setReportMode(true);
             }}
           >
-            ＋ Report a place
+            <span aria-hidden="true">＋ </span>Report a place
           </button>
           <button className="help-fab" onClick={findHelpNearMe}>
-            🆘 Help near me
+            <span aria-hidden="true">🆘 </span>Help near me
           </button>
         </div>
       ) : (
@@ -349,6 +369,15 @@ export default function MapPage() {
             Cancel
           </button>
         </div>
+      )}
+
+      {/* Empty map: say so instead of showing a silent, empty map. */}
+      {!reportMode && state.connection === "connected" && state.others.length === 0 && (
+        <p className="map-empty" role="status">
+          {state.selfPublic
+            ? "You're sharing. No one else is sharing right now."
+            : "No one else is sharing right now. Share your circle so friends can find you."}
+        </p>
       )}
 
       {pendingPoint && (
@@ -399,7 +428,9 @@ export default function MapPage() {
       <LegalFooter
         onOpenPrivacy={() => setLegalDoc("privacy")}
         onOpenTerms={() => setLegalDoc("terms")}
+        onOpenHowItWorks={() => setIntroOpen(true)}
       />
+      <MapIntro open={introOpen} onClose={closeIntro} />
       <LegalModal
         title="Privacy Policy"
         body={PRIVACY_POLICY}

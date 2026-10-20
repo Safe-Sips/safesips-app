@@ -53,7 +53,7 @@ export default function ReportPanel({
 
   return (
     <aside className="report-panel">
-      <button className="panel-close" onClick={onClose} aria-label="Close">
+      <button className="panel-close" onClick={onClose} aria-label="Close report">
         ✕
       </button>
       <span
