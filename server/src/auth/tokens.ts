@@ -1,7 +1,8 @@
 import jwt from "jsonwebtoken";
 import { config } from "../config.js";
 import { db } from "../db.js";
-import { genId, nowMs, sha256 } from "../util.js";
+import { hashIdentifier } from "../privacyHash.js";
+import { genId, nowMs } from "../util.js";
 
 interface SessionRow {
   id: string;
@@ -40,7 +41,7 @@ export function issueToken(
     created_at: now,
     expires_at: now + config.jwtTtlDays * 86_400_000,
     user_agent: opts.userAgent ?? null,
-    ip_hash: opts.ip ? sha256(opts.ip) : null,
+    ip_hash: opts.ip ? hashIdentifier(opts.ip) : null,
   });
   return jwt.sign({ ev: emailVerified }, config.jwtSecret, {
     subject: userId,

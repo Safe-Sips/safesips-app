@@ -119,6 +119,8 @@ export const config = {
 
   // Auth.
   jwtSecret: resolveJwtSecret(),
+  /** Optional dedicated key for hashing IPs/emails (falls back to JWT_SECRET). */
+  hashPepper: process.env.HASH_PEPPER?.trim() || null,
   jwtTtlDays: intEnv("JWT_TTL_DAYS", 7),
   bcryptRounds: intEnv("BCRYPT_ROUNDS", 11),
   /** Sliding-window throttle for failed auth attempts (per email + per IP). */

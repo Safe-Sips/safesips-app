@@ -213,6 +213,74 @@ test("SOS escalation records the real delivery outcome", async () => {
   assert.ok(!sent[0].html.includes("<b>Ana</b>"), "raw HTML from the name is not injected");
 });
 
+test("IPs and emails are stored as keyed hashes, not plain sha256", async () => {
+  const { hashIdentifier } = await import("../src/privacyHash.js");
+  const { loginKey, ipKey } = await import("../src/auth/throttle.js");
+  const { sha256 } = await import("../src/util.js");
+  assert.notEqual(hashIdentifier("203.0.113.7"), sha256("203.0.113.7"), "not plain sha256");
+  assert.equal(hashIdentifier("203.0.113.7"), hashIdentifier("203.0.113.7"), "deterministic");
+  assert.ok(!loginKey("ana@test.local").includes("ana@test.local"), "no raw email in throttle key");
+  assert.ok(!ipKey("203.0.113.7").includes("203.0.113.7"));
+});
+
+test("GDPR: export covers the account and omits secrets", async () => {
+  const account = await import("../src/repos/account.js");
+  const sos = await import("../src/repos/sosContacts.js");
+  const user = makeUser("export-me@test.local");
+  sos.createContact(user.id, { name: "Kim", email: "kim@test.local", phone: null, isPrimary: true });
+  checkins.createPlan(user.id, {
+    label: "Night out",
+    intervalMinutes: 60,
+    graceMinutes: 10,
+    question: "q?",
+    answer: "secret",
+    endsAt: null,
+  });
+  const data = account.exportAccountData(user.id)!;
+  assert.equal(data.profile.id, user.id);
+  assert.ok(!("password_hash" in data.profile), "password hash omitted");
+  assert.equal(data.sosContacts.length, 1);
+  assert.equal(data.checkinPlans.length, 1);
+  assert.ok(!("answer_hash" in data.checkinPlans[0]), "security-answer hash omitted");
+  assert.equal(account.exportAccountData("no-such-user"), null);
+});
+
+test("GDPR: account deletion erases the user's data and nobody else's", async () => {
+  const account = await import("../src/repos/account.js");
+  const sos = await import("../src/repos/sosContacts.js");
+  const gone = makeUser("delete-me@test.local");
+  const other = makeUser("keep-me@test.local");
+  const now = Date.now();
+  for (const u of [gone, other]) {
+    sos.createContact(u.id, { name: "C", email: "c@test.local", phone: null, isPrimary: true });
+    reports.createReport(u.id, {
+      lat: 44.4,
+      lng: 26.1,
+      safety: "safe",
+      category: null,
+      note: null,
+      placeLabel: null,
+    });
+  }
+  db.prepare(
+    `INSERT INTO waitlist (id, name, email, email_norm, created_at) VALUES (?, ?, ?, ?, ?)`
+  ).run("wl-gone", "G", "delete-me@test.local", "delete-me@test.local", now);
+
+  assert.deepEqual(account.deleteAccountData(gone.id), { clerkId: null });
+
+  const count = (sql: string, id: string) => (db.prepare(sql).get(id) as { c: number }).c;
+  assert.equal(count(`SELECT COUNT(*) AS c FROM users WHERE id = ?`, gone.id), 0);
+  assert.equal(count(`SELECT COUNT(*) AS c FROM sos_contacts WHERE user_id = ?`, gone.id), 0);
+  assert.equal(count(`SELECT COUNT(*) AS c FROM reports WHERE author_id = ?`, gone.id), 0);
+  assert.equal(count(`SELECT COUNT(*) AS c FROM waitlist WHERE id = ?`, "wl-gone"), 0);
+  // The other user is untouched.
+  assert.equal(count(`SELECT COUNT(*) AS c FROM users WHERE id = ?`, other.id), 1);
+  assert.equal(count(`SELECT COUNT(*) AS c FROM sos_contacts WHERE user_id = ?`, other.id), 1);
+  assert.equal(count(`SELECT COUNT(*) AS c FROM reports WHERE author_id = ?`, other.id), 1);
+  // Deleting again is a no-op.
+  assert.equal(account.deleteAccountData(gone.id), null);
+});
+
 test("forum downvotes do not raise engagement score", async () => {
   const forum = await import("../src/repos/forum.js");
   const stats = await import("../src/repos/stats.js");

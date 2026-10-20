@@ -22,6 +22,7 @@ import {
 } from "./presenceLogic.js";
 import {
   setIo,
+  setUserPresencePurger,
   trackUserSocket,
   untrackUserSocket,
   type SocketData,
@@ -181,6 +182,12 @@ function removePresence(publicId: string, userId?: string): void {
     console.error("Failed to remove presence:", err);
   }
 }
+
+// Account deletion removes the user's circle right away.
+setUserPresencePurger((userId) => {
+  const existing = activeShareByUserId.get(userId);
+  if (existing) removePresence(existing.publicId, userId);
+});
 
 io.on("connection", (socket) => {
   const ip = clientIp(socket);

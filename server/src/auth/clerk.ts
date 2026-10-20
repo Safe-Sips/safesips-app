@@ -29,6 +29,27 @@ function clerkClient() {
   return createClerkClient({ secretKey: config.clerkSecretKey });
 }
 
+/**
+ * Delete the Clerk identity behind an erased account. Without this, Clerk still
+ * holds the email and the next sign-in would recreate an empty local account.
+ * Returns false (never throws) when Clerk isn't configured or the call fails.
+ */
+export async function deleteClerkUser(clerkId: string): Promise<boolean> {
+  const client = clerkClient();
+  if (!client) return false;
+  try {
+    await client.users.deleteUser(clerkId);
+    return true;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(
+      "[clerk] failed to delete Clerk user during account erasure:",
+      err instanceof Error ? err.message : err
+    );
+    return false;
+  }
+}
+
 function authorizedParties(): string[] | undefined {
   // Only enforce azp when explicitly configured — a wrong allowlist rejects
   // valid Netlify/custom-domain sessions.
