@@ -1,0 +1,40 @@
+name: Keep API awake
+
+# Render's free plan puts the API to sleep after 15 minutes without traffic.
+# A sleeping API makes the app slow to open (30-60 s to wake) and, worse,
+# stops the check-in scheduler: missed check-ins wouldn't alert anyone until
+# something woke it. Ping it often enough that it never sleeps. (One service
+# running all month fits in the free plan's 750 instance hours.)
+#
+# GitHub turns scheduled workflows off after 60 days without repository
+# activity, so each run also re-enables this workflow (that resets the clock).
+# Scheduled runs can still be delayed or skipped when GitHub is busy; an
+# external monitor (e.g. UptimeRobot on /health) is a good second line.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping /health
+        run: |
+          for i in 1 2 3; do
+            if curl -fsS --max-time 90 https://safesips-app.onrender.com/health; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "API did not answer /health" >&2
+          exit 1
+      - name: Stay enabled (reset GitHub's 60-day inactivity timer)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/keep-api-awake.yml/enable"

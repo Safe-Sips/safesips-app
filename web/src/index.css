@@ -108,8 +108,8 @@ body {
    (and the fade under it) from the page itself, not theme-color: from a
    fixed/sticky element at the top edge, else the page background. Any light
    source there showed as a light or foggy band over the nav. So: <html> and
-   <body> are navy, the light page colour lives on #root (which grows with the
-   content), and the signed-out nav sticks to the top. (The bottom band a navy
+   <body> are navy and the light page colour lives on #root (which grows with
+   the content). (The bottom band a navy
    background once exposed was the short-viewport bug, fixed above.) */
 html,
 body {
@@ -719,12 +719,7 @@ body {
   letter-spacing: 0.5px;
   font-size: 20px;
 }
-.nav-logo {
-  display: block;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-}
+
 .nav-links {
   display: flex;
   gap: 6px;
@@ -853,12 +848,7 @@ body {
   display: flex;
   flex-direction: column;
 }
-/* Keeps a navy bar at the top edge while the page scrolls: iOS 26 colours the
-   status bar from it (see the note on html/body). */
-.auth-layout > .nav {
-  position: sticky;
-  top: 0;
-}
+
 .clerk-auth-controls {
   display: flex;
   align-items: center;
@@ -898,9 +888,10 @@ body {
   width: 100%;
   max-width: 100%;
 }
+/* Sign-in / sign-up pages are just the Clerk form: give it the width. */
 @media (max-width: 480px) {
-  .clerk-card {
-    padding: 18px 14px;
+  .auth-page {
+    padding: 16px 12px;
   }
 }
 .auth-brand {
@@ -932,6 +923,14 @@ body {
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid var(--panel-border);
+  font-size: 13px;
+  color: var(--muted);
+}
+.auth-emergency-quiet {
+  margin-top: 14px;
+  padding-top: 0;
+  border-top: none;
+  text-align: center;
   font-size: 13px;
   color: var(--muted);
 }

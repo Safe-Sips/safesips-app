@@ -203,6 +203,57 @@ export interface ContactsOverviewDTO {
   protecting: ProtecteeDTO[];
 }
 
+/* -------------------------------- Friends ------------------------------- */
+/*
+ * Friends are SafeSips users who accepted each other's request. Friends can
+ * see each other's profile, and ask each other to be an emergency contact.
+ */
+
+/** Someone I'm friends with. `id` is the friendship id (to remove it). */
+export interface FriendDTO {
+  id: string;
+  userId: string;
+  displayName: string;
+  since: number;
+}
+
+/** A friend request someone sent me. */
+export interface FriendRequestDTO {
+  id: string;
+  fromDisplayName: string;
+  createdAt: number;
+}
+
+/** A request I sent that's still waiting. Their name stays hidden until they accept. */
+export interface OutgoingFriendRequestDTO {
+  id: string;
+  /** What I typed (email or code). */
+  label: string;
+  createdAt: number;
+}
+
+export interface FriendsOverviewDTO {
+  /** My SafeSips code (the same one used for emergency contacts). */
+  myCode: string;
+  friends: FriendDTO[];
+  incoming: FriendRequestDTO[];
+  outgoing: OutgoingFriendRequestDTO[];
+}
+
+/** A friend's profile, visible only to their friends. */
+export interface FriendProfileDTO {
+  userId: string;
+  /** Friendship id (to remove the friend). */
+  friendshipId: string;
+  displayName: string;
+  memberSince: number;
+  friendsSince: number;
+  /** Public activity only (no check-in history). */
+  counts: { reports: number; threads: number; posts: number; upvotesReceived: number };
+  /** Whether they're my emergency contact: none, asked, or accepted. */
+  emergencyContact: "none" | "pending" | "accepted";
+}
+
 /** An alert I received because someone I protect missed a check-in. */
 export interface CheckinAlertDTO {
   id: string;

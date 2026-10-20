@@ -7,6 +7,7 @@ const LINKS = [
   { to: "/", label: "Map", end: true },
   { to: "/forum", label: "Forum", end: false },
   { to: "/checkins", label: "Check-in", end: false },
+  { to: "/friends", label: "Friends", end: false },
   { to: "/alerts", label: "Alerts", end: false },
   { to: "/first-aid", label: "First aid", end: false },
 ];

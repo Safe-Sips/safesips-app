@@ -35,6 +35,7 @@ export const SHARE_DURATION_OPTIONS_MS = [
   60 * 60 * 1000,
   3 * 60 * 60 * 1000,
   8 * 60 * 60 * 1000,
+  24 * 60 * 60 * 1000,
 ] as const;
 
 /** Default "share for" choice (1 hour). */
@@ -150,6 +151,8 @@ export interface ServerToClientEvents {
   "alert:new": (data: { alertId: string; ownerDisplayName: string }) => void;
   /** A contact request was received, accepted or removed: refresh contacts. */
   "contacts:changed": () => void;
+  /** Someone sent/accepted/removed a friend request involving me. */
+  "friends:changed": () => void;
 }
 
 /** Events emitted by clients to the server. */

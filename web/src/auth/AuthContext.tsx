@@ -25,6 +25,50 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/**
+ * The last account we loaded, kept on this device per Clerk user. With it the
+ * app opens straight away instead of waiting for /api/me — which can take
+ * many seconds when the API has to wake up — and refreshes in the background.
+ */
+const CACHE_PREFIX = "safesips.me.";
+
+function readCachedUser(clerkId: string | undefined): UserDTO | null {
+  if (!clerkId) return null;
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + clerkId);
+    return raw ? (JSON.parse(raw) as UserDTO) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedUser(clerkId: string | undefined, user: UserDTO | null): void {
+  if (!clerkId) return;
+  try {
+    if (user) localStorage.setItem(CACHE_PREFIX + clerkId, JSON.stringify(user));
+    else localStorage.removeItem(CACHE_PREFIX + clerkId);
+  } catch {
+    /* storage unavailable (private mode): just no fast start */
+  }
+}
+
+/** Forget every remembered account on this device (no one is signed in). */
+function clearCachedUsers(): void {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(CACHE_PREFIX)) localStorage.removeItem(key);
+    }
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+/** The server rejected this account/session, as opposed to being unreachable. */
+function isAuthRejection(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 401 || err.status === 403);
+}
+
 async function waitForClerkToken(
   getToken: () => Promise<string | null>,
   attempts = 8
@@ -48,6 +92,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!isLoaded) return;
     if (!isSignedIn) {
+      // Signed out (here, on another device, or the session expired): don't
+      // leave the account's name and email behind on this device.
+      clearCachedUsers();
       setTokenGetter(null);
       setUser(null);
       setSyncError(null);
@@ -55,7 +102,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     setTokenGetter(() => getToken());
-    setSyncing(true);
+    const clerkId = clerkUser?.id;
+    const cached = readCachedUser(clerkId);
+    if (cached) {
+      // Open the app now; the sync below only refreshes it.
+      setUser(cached);
+      setSyncing(false);
+    } else {
+      setSyncing(true);
+    }
     setSyncError(null);
     let active = true;
     void (async () => {
@@ -63,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const token = await waitForClerkToken(() => getToken());
         if (!token) {
           if (active) {
+            writeCachedUser(clerkId, null);
             setUser(null);
             setSyncError(
               "Clerk did not return a session token. Refresh, or confirm VITE_CLERK_PUBLISHABLE_KEY is set on Netlify."
@@ -72,11 +128,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         const { user: appUser } = await api.me();
         if (active) {
+          writeCachedUser(clerkId, appUser);
           setUser(appUser);
           setSyncError(null);
         }
       } catch (err) {
         if (!active) return;
+        // API unreachable/waking up: keep using the remembered account (the
+        // map shows its own connection state). Only a rejection signs us out.
+        if (cached && !isAuthRejection(err)) return;
+        writeCachedUser(clerkId, null);
         setUser(null);
         if (err instanceof ApiError) {
           setSyncError(err.message);
@@ -102,11 +163,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [syncing]);
 
   const logout = useCallback(async () => {
+    writeCachedUser(clerkUser?.id, null);
     setUser(null);
     setSyncError(null);
     setTokenGetter(null);
     await signOut({ redirectUrl: "/login" });
-  }, [signOut]);
+  }, [signOut, clerkUser?.id]);
 
   const refresh = useCallback(async () => {
     setSyncing(true);
@@ -121,16 +183,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       const { user: appUser } = await api.me();
+      writeCachedUser(clerkUser?.id, appUser);
       setUser(appUser);
       setSyncError(null);
     } catch (err) {
+      // Unreachable: keep the account we have. Rejected: sign out of the app.
+      if (!isAuthRejection(err) && readCachedUser(clerkUser?.id)) return;
+      writeCachedUser(clerkUser?.id, null);
       setUser(null);
       if (err instanceof ApiError) setSyncError(err.message);
       else setSyncError("Could not reach the SafeSips API.");
     } finally {
       setSyncing(false);
     }
-  }, [getToken]);
+  }, [getToken, clerkUser?.id]);
 
   const loading = !isLoaded || (isSignedIn && syncing);
 

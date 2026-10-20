@@ -130,6 +130,12 @@ export function emitContactsChanged(userId: string): void {
   for (const socketId of socketsByUser.get(userId) ?? []) io.to(socketId).emit("contacts:changed");
 }
 
+/** Tell a user's open apps their friends list changed. */
+export function emitFriendsChanged(userId: string): void {
+  if (!io) return;
+  for (const socketId of socketsByUser.get(userId) ?? []) io.to(socketId).emit("friends:changed");
+}
+
 /** Push a check-in prompt to a specific user's live sockets (if any). */
 export function emitCheckinDue(
   userId: string,

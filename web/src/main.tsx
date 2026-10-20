@@ -3,6 +3,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
+import { warmUpApi } from "./api";
 import { AuthProvider } from "./auth/AuthContext";
 // Self-hosted brand font (no Google Fonts request: works offline and doesn't
 // send visitors' IPs to a third party). Includes Latin Extended for Romanian.
@@ -24,6 +25,8 @@ if (import.meta.env.PROD && "serviceWorker" in navigator) {
     });
   });
 }
+
+warmUpApi();
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Root element #root not found in DOM");

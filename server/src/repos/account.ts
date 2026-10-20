@@ -36,6 +36,7 @@ export interface AccountExport {
   sosContacts: Row[];
   emergencyContacts: Row[];
   emergencyContactFor: Row[];
+  friends: Row[];
   alertsReceived: Row[];
   pushDevices: Row[];
   checkinPlans: Row[];
@@ -76,6 +77,15 @@ export function exportAccountData(userId: string): AccountExport | null {
          FROM checkin_alerts a JOIN users o ON o.id = a.owner_id WHERE a.contact_user_id = ?`,
       userId
     ),
+    friends: all(
+      `SELECT f.id, f.status, f.created_at, f.responded_at,
+              CASE WHEN f.requester_id = ? THEN 'sent' ELSE 'received' END AS direction,
+              CASE WHEN f.status = 'accepted' OR f.requester_id <> ? THEN o.display_name ELSE f.invite_label END AS person
+         FROM friendships f
+         LEFT JOIN users o ON o.id = CASE WHEN f.requester_id = ? THEN f.addressee_id ELSE f.requester_id END
+        WHERE f.requester_id = ? OR f.addressee_id = ?`,
+      userId, userId, userId, userId, userId
+    ),
     pushDevices: all(`SELECT id, created_at FROM push_subscriptions WHERE user_id = ?`, userId),
     checkinPlans: omit(all(`SELECT * FROM checkin_plans WHERE user_id = ?`, userId), [
       "answer_hash",
@@ -103,6 +113,8 @@ const deleteTx = db.transaction((userId: string, emailNorm: string) => {
   db.prepare(`DELETE FROM waitlist WHERE email_norm = ?`).run(emailNorm);
   // Pending emergency-contact invites addressed to this email (not yet linked).
   db.prepare(`DELETE FROM emergency_links WHERE contact_user_id IS NULL AND invite_email_norm = ?`).run(emailNorm);
+  // Friend requests sent to this email (not yet linked to an account).
+  db.prepare(`DELETE FROM friendships WHERE addressee_id IS NULL AND invite_email_norm = ?`).run(emailNorm);
   db.prepare(`DELETE FROM auth_attempts WHERE key = ?`).run(loginKey(emailNorm));
   // Everything else references users(id) ON DELETE CASCADE: reports, votes,
   // forum threads/posts (and replies inside the user's threads), activity,

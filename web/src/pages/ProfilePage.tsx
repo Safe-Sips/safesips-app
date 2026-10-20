@@ -1,15 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  badgeForScore,
-  nextBadge,
   type ActivityDTO,
   type ActivityKind,
   type UserStatsDTO,
 } from "@safesips/shared";
 import { api, ApiError } from "../api";
 import { useAuth } from "../auth/AuthContext";
-import BadgeChip from "../components/BadgeChip";
 import { timeAgo } from "../format";
 
 const ACTIVITY_LABEL: Record<ActivityKind, string> = {
@@ -160,52 +157,16 @@ export default function ProfilePage() {
     };
   }, []);
 
-  const progress = stats ? nextBadge(stats.score) : null;
-  const pct =
-    progress && progress.ceil > progress.floor
-      ? Math.min(
-          100,
-          Math.round(
-            ((stats!.score - progress.floor) /
-              (progress.ceil - progress.floor)) *
-              100
-          )
-        )
-      : 100;
-
   return (
     <div className="page profile-page">
       <div className="page-head">
         <h1>{user?.displayName}</h1>
-        {stats && <BadgeChip tier={badgeForScore(stats.score)} />}
       </div>
 
       {error && <p className="error">{error}</p>}
 
       {stats && (
         <>
-          <section className="card">
-            <div className="profile-score">
-              <div>
-                <span className="profile-score-num">{stats.score}</span>
-                <span className="muted"> reputation points</span>
-              </div>
-              {progress?.next ? (
-                <p className="muted">
-                  {progress.needed} more to reach{" "}
-                  <strong className={`badge-text badge-${progress.next}`}>
-                    {progress.next}
-                  </strong>
-                </p>
-              ) : (
-                <p className="muted">Top tier reached 🏆</p>
-              )}
-            </div>
-            <div className="progress-track">
-              <div className="progress-fill" style={{ width: `${pct}%` }} />
-            </div>
-          </section>
-
           <section className="card">
             <h2>Your history</h2>
             <div className="stat-grid">
@@ -225,7 +186,7 @@ export default function ProfilePage() {
         {activity.length === 0 ? (
           <p className="muted">
             No activity yet. <Link to="/">Report a place on the map</Link> or{" "}
-            <Link to="/forum">join the forum</Link> to start earning badges.
+            <Link to="/forum">join the forum</Link>.
           </p>
         ) : (
           <ul className="activity-feed">
