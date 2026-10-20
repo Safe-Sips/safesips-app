@@ -50,8 +50,9 @@ Beyond the anonymous live map, SafeSips now has account-based features backed by
   hospital, fire station, fuel, pharmacy, 24/7 spots) via an Overpass proxy.
 - **Check-ins & SOS** — schedule recurring check-ins with a security question; a
   server-side scheduler alerts **all** your emergency contacts if you miss one
-  (works even if the app is closed): a **text** via Twilio (`TWILIO_*`) and/or an
-  **email** via SMTP (`SMTP_*`), with your approximate shared area if you were
+  (works even if the app is closed): a **text** — sent from your own Android
+  phone + SIM via the SMS Gateway for Android app (`SMS_GATEWAY_*`), or via
+  Twilio (`TWILIO_*`) — and/or an **email** via SMTP (`SMTP_*`), with your approximate shared area if you were
   sharing. Phone numbers are stored in E.164 form (`0722…` is read as +40).
   Texts retry transient failures and are capped per number, per user (tests)
   and globally per day (`SMS_*`). Each contact has a **Send test alert**

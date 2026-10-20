@@ -4,9 +4,12 @@ import { hashIdentifier } from "./privacyHash.js";
 import { genId, nowMs } from "./util.js";
 
 /**
- * Text messages for SOS alerts, sent through Twilio's REST API (one HTTPS
- * request; no SDK). Off unless TWILIO_* is configured — callers then record
- * an honest "not configured" failure instead of pretending it was sent.
+ * Text messages for SOS alerts, sent either
+ *  - from your own Android phone + SIM via the "SMS Gateway for Android" app
+ *    (sms-gate.app) and its cloud relay, or
+ *  - through Twilio's REST API.
+ * Each is one HTTPS request (no SDK). Off unless one is configured — callers
+ * then record an honest "not configured" failure instead of pretending.
  */
 
 export type SmsKind = "alert" | "test";
@@ -22,8 +25,64 @@ export class SmsError extends Error {
 }
 
 export interface SmsTransport {
-  /** Resolves when the gateway accepted the message; throws SmsError otherwise. */
-  send(to: string, body: string): Promise<void>;
+  /**
+   * Resolves when the provider accepted the message (optionally with a status
+   * note for the user); throws SmsError otherwise. `urgent` = a real SOS alert.
+   */
+  send(to: string, body: string, opts?: { urgent: boolean }): Promise<string | void>;
+}
+
+/** HTTP status → SmsError, retrying only what can succeed later. */
+async function providerError(res: Response, name: string): Promise<SmsError> {
+  let detail = `HTTP ${res.status}`;
+  try {
+    const j = (await res.json()) as { code?: number | string; message?: string };
+    detail = [detail, j.code, j.message].filter(Boolean).join(" ");
+  } catch {
+    /* non-JSON error body */
+  }
+  return new SmsError(
+    `${name} rejected the message (${detail}).`,
+    res.status === 429 || res.status >= 500
+  );
+}
+
+/**
+ * Your own phone: "SMS Gateway for Android" cloud API.
+ * POST {base}/messages, Basic auth (username/password from the app's Home tab),
+ * body { phoneNumbers, textMessage: { text }, ttl, priority }; 202 = queued.
+ */
+function androidGatewayTransport(cfg: NonNullable<typeof config.smsGateway>): SmsTransport {
+  const url = `${cfg.baseUrl.replace(/\/+$/, "")}/messages`;
+  const auth = `Basic ${Buffer.from(`${cfg.username}:${cfg.password}`).toString("base64")}`;
+  return {
+    async send(to, body, opts) {
+      const urgent = opts?.urgent ?? false;
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          method: "POST",
+          headers: { Authorization: auth, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phoneNumbers: [to],
+            textMessage: { text: body },
+            // If the phone is offline, don't deliver a stale SOS hours later.
+            ttl: urgent ? 2 * 60 * 60 : 10 * 60,
+            // >= 100 skips the app's own send-rate limiting for real alerts.
+            priority: urgent ? 100 : 0,
+          }),
+          signal: AbortSignal.timeout(15_000),
+        });
+      } catch (err) {
+        throw new SmsError(
+          `Couldn't reach the SMS gateway: ${err instanceof Error ? err.message : String(err)}`,
+          true
+        );
+      }
+      if (res.ok) return "Text queued on your SafeSips phone.";
+      throw await providerError(res, "The phone SMS gateway");
+    },
+  };
 }
 
 function twilioTransport(cfg: NonNullable<typeof config.twilio>): SmsTransport {
@@ -54,17 +113,7 @@ function twilioTransport(cfg: NonNullable<typeof config.twilio>): SmsTransport {
         );
       }
       if (res.ok) return;
-      let detail = `HTTP ${res.status}`;
-      try {
-        const j = (await res.json()) as { code?: number; message?: string };
-        detail = [detail, j.code, j.message].filter(Boolean).join(" ");
-      } catch {
-        /* non-JSON error body */
-      }
-      throw new SmsError(
-        `The SMS provider rejected the message (${detail}).`,
-        res.status === 429 || res.status >= 500
-      );
+      throw await providerError(res, "The SMS provider");
     },
   };
 }
@@ -75,7 +124,11 @@ let transportInit = false;
 function getSmsTransport(): SmsTransport | null {
   if (transportInit) return transport;
   transportInit = true;
-  transport = config.twilio ? twilioTransport(config.twilio) : null;
+  const wantTwilio = config.smsProvider === "twilio";
+  const wantAndroid = config.smsProvider === "android";
+  if (config.smsGateway && !wantTwilio) transport = androidGatewayTransport(config.smsGateway);
+  else if (config.twilio && !wantAndroid) transport = twilioTransport(config.twilio);
+  else transport = null;
   return transport;
 }
 
@@ -160,9 +213,9 @@ export async function sendSms(opts: {
   for (const delay of retryDelaysMs) {
     if (delay > 0) await new Promise((r) => setTimeout(r, delay));
     try {
-      await t.send(opts.to, opts.body);
+      const note = await t.send(opts.to, opts.body, { urgent: opts.kind === "alert" });
       logSend(opts.userId, toHash, opts.kind, "sent");
-      return { ok: true, detail: "Text sent." };
+      return { ok: true, detail: note || "Text sent." };
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
       if (!(err instanceof SmsError) || !err.retryable) break;
