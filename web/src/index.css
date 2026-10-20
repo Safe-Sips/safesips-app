@@ -36,7 +36,9 @@ body {
     var(--bg);
   background-attachment: fixed;
   color: var(--text);
-  font-family: "Nunito", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  /* The single app typeface (brand body font), self-hosted via @fontsource. */
+  font-family: "Nunito Variable", "Nunito", system-ui, -apple-system, Segoe UI,
+    Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
