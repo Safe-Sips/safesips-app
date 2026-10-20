@@ -30,6 +30,25 @@ function clerkClient() {
 }
 
 /**
+ * The account's profile picture as Clerk has it (null if they never set
+ * one), or ok:false if Clerk can't be asked.
+ */
+export async function fetchClerkImageUrl(
+  clerkId: string
+): Promise<{ ok: true; imageUrl: string | null } | { ok: false }> {
+  const client = clerkClient();
+  if (!client) return { ok: false };
+  try {
+    const u = await client.users.getUser(clerkId);
+    return { ok: true, imageUrl: u.hasImage ? u.imageUrl : null };
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn("[clerk] couldn't read profile picture:", err instanceof Error ? err.message : err);
+    return { ok: false };
+  }
+}
+
+/**
  * Delete the Clerk identity behind an erased account. Without this, Clerk still
  * holds the email and the next sign-in would recreate an empty local account.
  * Returns false (never throws) when Clerk isn't configured or the call fails.

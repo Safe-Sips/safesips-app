@@ -144,7 +144,10 @@ export default function FriendProfilePage() {
               </button>
             ) : (
               <div className="data-actions">
-                <span>Remove {profile.displayName} from your friends?</span>
+                <span>
+                  Remove {profile.displayName} from your friends? They won't be able to send you
+                  friend requests unless you add them again.
+                </span>
                 <button className="btn btn-danger" type="button" disabled={busy} onClick={unfriend}>
                   Remove
                 </button>

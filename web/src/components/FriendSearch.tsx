@@ -17,12 +17,14 @@ export default function FriendSearch({ onChange }: { onChange: (o: FriendsOvervi
   // Search as you type (debounced); ignore answers to older queries.
   useEffect(() => {
     const q = query.trim();
+    // Every change invalidates answers still on the way for older queries.
+    const id = ++latest.current;
     if (q.length < MIN_CHARS) {
       setResults(null);
       setError(null);
+      setLoading(false);
       return;
     }
-    const id = ++latest.current;
     const t = window.setTimeout(async () => {
       setLoading(true);
       try {

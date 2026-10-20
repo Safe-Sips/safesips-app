@@ -21,6 +21,8 @@ interface AuthContextValue {
   syncError: string | null;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
+  /** Update fields of the signed-in user after a settings change. */
+  patchUser: (patch: Partial<UserDTO>) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -65,8 +67,9 @@ function clearCachedUsers(): void {
 }
 
 /**
- * Keep the server's copy of my profile picture in step with Clerk, so friends
- * see it. Best effort: a failure just leaves the old picture.
+ * When my Clerk picture changes, ask the server to refresh its copy (it reads
+ * the picture from Clerk itself), so friends see it. Best effort: a failure
+ * just leaves the old picture.
  */
 async function syncAvatar(user: UserDTO, clerkImage: string | null): Promise<UserDTO> {
   if ((user.imageUrl ?? null) === clerkImage) return user;
@@ -215,9 +218,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loading = !isLoaded || (isSignedIn && syncing);
 
+  const patchUser = useCallback(
+    (patch: Partial<UserDTO>) => {
+      setUser((u) => {
+        if (!u) return u;
+        const next = { ...u, ...patch };
+        writeCachedUser(clerkUser?.id, next);
+        return next;
+      });
+    },
+    [clerkUser?.id]
+  );
+
   const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, syncError, logout, refresh }),
-    [user, loading, syncError, logout, refresh]
+    () => ({ user, loading, syncError, logout, refresh, patchUser }),
+    [user, loading, syncError, logout, refresh, patchUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

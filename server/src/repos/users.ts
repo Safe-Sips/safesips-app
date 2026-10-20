@@ -1,6 +1,6 @@
 import type { UserDTO } from "@safesips/shared";
 import { db } from "../db.js";
-import { genId, normalizeEmail, nowMs } from "../util.js";
+import { foldName, genId, normalizeEmail, nowMs } from "../util.js";
 
 export interface UserRow {
   id: string;
@@ -12,15 +12,17 @@ export interface UserRow {
   status: string;
   clerk_id: string | null;
   image_url?: string | null;
+  discoverable?: number;
+  search_notice_seen?: number;
   created_at: number;
   updated_at: number;
 }
 
 const insertUser = db.prepare(
   `INSERT INTO users
-     (id, email, email_norm, password_hash, display_name, email_verified, status, clerk_id, created_at, updated_at)
+     (id, email, email_norm, password_hash, display_name, name_search, email_verified, status, clerk_id, created_at, updated_at)
    VALUES
-     (@id, @email, @email_norm, @password_hash, @display_name, @email_verified, @status, @clerk_id, @created_at, @updated_at)`
+     (@id, @email, @email_norm, @password_hash, @display_name, @name_search, @email_verified, @status, @clerk_id, @created_at, @updated_at)`
 );
 const selectByEmail = db.prepare(`SELECT * FROM users WHERE email_norm = ?`);
 const selectById = db.prepare(`SELECT * FROM users WHERE id = ?`);
@@ -29,7 +31,7 @@ const updateVerified = db.prepare(
   `UPDATE users SET email_verified = 1, updated_at = ? WHERE id = ?`
 );
 const updateClerkId = db.prepare(
-  `UPDATE users SET clerk_id = ?, email_verified = ?, display_name = ?, updated_at = ? WHERE id = ?`
+  `UPDATE users SET clerk_id = ?, email_verified = ?, display_name = ?, name_search = ?, updated_at = ? WHERE id = ?`
 );
 
 const updateImage = db.prepare(`UPDATE users SET image_url = ?, updated_at = ? WHERE id = ?`);
@@ -79,21 +81,18 @@ export function upsertUserFromClerk(params: {
   const now = nowMs();
   const existingByClerk = findUserByClerkId(params.clerkId);
   if (existingByClerk) {
-    updateClerkId.run(
-      params.clerkId,
-      params.emailVerified ? 1 : 0,
-      params.displayName.trim() || existingByClerk.display_name,
-      now,
-      existingByClerk.id
-    );
+    const name = params.displayName.trim() || existingByClerk.display_name;
+    updateClerkId.run(params.clerkId, params.emailVerified ? 1 : 0, name, foldName(name), now, existingByClerk.id);
     return findUserByClerkId(params.clerkId)!;
   }
   const existingByEmail = findUserByEmail(params.email);
   if (existingByEmail) {
+    const name = params.displayName.trim() || existingByEmail.display_name;
     updateClerkId.run(
       params.clerkId,
       params.emailVerified ? 1 : existingByEmail.email_verified,
-      params.displayName.trim() || existingByEmail.display_name,
+      name,
+      foldName(name),
       now,
       existingByEmail.id
     );
@@ -111,7 +110,7 @@ export function upsertUserFromClerk(params: {
     created_at: now,
     updated_at: now,
   };
-  insertUser.run(row);
+  insertUser.run({ ...row, name_search: foldName(row.display_name) });
   return findUserById(row.id)!;
 }
 
@@ -133,7 +132,7 @@ export function createUser(params: {
     created_at: now,
     updated_at: now,
   };
-  insertUser.run(row);
+  insertUser.run({ ...row, name_search: foldName(row.display_name) });
   return row;
 }
 
@@ -149,5 +148,7 @@ export function toUserDTO(row: UserRow): UserDTO {
     emailVerified: row.email_verified === 1,
     createdAt: row.created_at,
     imageUrl: row.image_url ?? null,
+    discoverable: row.discoverable !== 0,
+    searchNoticePending: row.search_notice_seen === 0,
   };
 }

@@ -204,6 +204,8 @@ export const api = {
     request<{ results: UserSearchResultDTO[] }>(`/api/friends/search?q=${encodeURIComponent(q)}`),
   setDiscoverable: (discoverable: boolean) =>
     request<FriendsOverviewDTO>("/api/friends/settings", { method: "PUT", body: { discoverable } }),
+  dismissSearchNotice: () =>
+    request<FriendsOverviewDTO>("/api/friends/settings", { method: "PUT", body: { searchNoticeSeen: true } }),
   acceptFriend: (id: string) =>
     request<FriendsOverviewDTO>(`/api/friends/${encodeURIComponent(id)}/accept`, { method: "POST", body: {} }),
   removeFriend: (id: string) =>

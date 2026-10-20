@@ -773,3 +773,92 @@ test("friend search: similar names, opt-out respected, add from results", async 
   assert.equal(friends.getFriendsOverview(hidden.id).discoverable, false);
   void marian; void ana;
 });
+
+test("friend search hides names made from the email; renames stay searchable", async () => {
+  const friends = await import("../src/repos/friends.js");
+  const me = users.createUser({ email: "rv-me@example.com", displayName: "Reviewer", passwordHash: "x" });
+  users.createUser({ email: "Jamld2135@example.com", displayName: "jamld2135", passwordHash: "x" });
+  users.createUser({ email: "x@y.example", displayName: "someone@y.example", passwordHash: "x" });
+  assert.deepEqual(friends.searchUsers(me.id, "jamld"), [], "email-derived name isn't listed");
+  assert.deepEqual(friends.searchUsers(me.id, "someone"), [], "a name that is an email isn't listed");
+  // Renaming through Clerk keeps the folded search name current.
+  const u = users.upsertUserFromClerk({ clerkId: "clerk_rv_1", email: "rv-ren@example.com", displayName: "Old Name", emailVerified: true });
+  users.upsertUserFromClerk({ clerkId: "clerk_rv_1", email: "rv-ren@example.com", displayName: "Ioana Brătescu", emailVerified: true });
+  assert.ok(friends.searchUsers(me.id, "bratescu").some((r) => r.userId === u.id));
+  assert.ok(!friends.searchUsers(me.id, "old name").some((r) => r.userId === u.id));
+});
+
+test("friend search: an exact match isn't cut by the candidate cap", async () => {
+  const friends = await import("../src/repos/friends.js");
+  const me = users.createUser({ email: "cap-me@example.com", displayName: "Cap Tester", passwordHash: "x" });
+  for (let i = 0; i < 320; i++) {
+    users.createUser({ email: `cap-${i}@example.com`, displayName: `Ximena Marx ${i}`, passwordHash: "x" });
+  }
+  const target = users.createUser({ email: "cap-target@example.com", displayName: "Maria Zzz", passwordHash: "x" });
+  // 320 names share "ma" (typo-match candidates); the real match still makes it.
+  const results = friends.searchUsers(me.id, "maria");
+  assert.ok(results.some((r) => r.userId === target.id), "Maria Zzz is found");
+  assert.ok(!results.slice(0, 3).some((r) => r.displayName.startsWith("Ximena")), "starts-with matches rank first");
+});
+
+test("declining is private and stops repeat requests; adding back clears it", async () => {
+  const friends = await import("../src/repos/friends.js");
+  const pest = users.createUser({ email: "dc-pest@example.com", displayName: "Pest One", passwordHash: "x" });
+  const her = users.createUser({ email: "dc-her@example.com", displayName: "Her Two", passwordHash: "x" });
+  const herCode = friends.getFriendsOverview(her.id).myCode;
+
+  // Code + email requests show once; one Decline handles both.
+  assert.ok(friends.requestFriend(pest.id, herCode).ok);
+  assert.ok(friends.requestFriend(pest.id, "dc-her@example.com").ok);
+  const req = friends.getFriendsOverview(her.id).incoming;
+  assert.equal(req.length, 1);
+  assert.deepEqual(friends.removeFriendship(her.id, req[0].id), { other: null }, "the requester isn't nudged");
+  assert.equal(friends.getFriendsOverview(her.id).incoming.length, 0, "both requests gone");
+  assert.equal(friends.getFriendsOverview(pest.id).outgoing.length, 2, "his side still says waiting");
+
+  // Re-sending, by any route, reaches nobody.
+  const again = friends.requestFriendByUserId(pest.id, her.id);
+  assert.ok(again.ok && again.notify === null, "no notification");
+  for (const o of friends.getFriendsOverview(pest.id).outgoing) friends.removeFriendship(pest.id, o.id);
+  const fresh = friends.requestFriend(pest.id, herCode);
+  assert.ok(fresh.ok && fresh.notify === null, "cancel + re-send is silent too");
+  assert.equal(friends.getFriendsOverview(her.id).incoming.length, 0);
+  assert.equal(friends.searchUsers(her.id, "pest")[0]?.relation, "none", "her search doesn't show a request");
+
+  // She changes her mind: adding him accepts his request.
+  const yes = friends.requestFriendByUserId(her.id, pest.id);
+  assert.ok(yes.ok && friends.areFriends(her.id, pest.id));
+
+  // Unfriending also keeps his later requests quiet.
+  const f = friends.getFriendsOverview(her.id).friends[0];
+  assert.equal(friends.removeFriendship(her.id, f.id)?.other, pest.id);
+  const after = friends.requestFriendByUserId(pest.id, her.id);
+  assert.ok(after.ok && after.notify === null);
+  assert.equal(friends.getFriendsOverview(her.id).incoming.length, 0);
+});
+
+test("opted-out people can't be reached by id through an old request of mine", async () => {
+  const friends = await import("../src/repos/friends.js");
+  const a = users.createUser({ email: "oo-a@example.com", displayName: "Opt A", passwordHash: "x" });
+  const z = users.createUser({ email: "oo-z@example.com", displayName: "Opt Z", passwordHash: "x" });
+  friends.requestFriend(a.id, "oo-z@example.com");
+  friends.setDiscoverable(z.id, false);
+  assert.equal(friends.requestFriendByUserId(a.id, z.id).ok, false);
+  // But if Z asked A, A can answer by id.
+  friends.requestFriendByUserId(z.id, a.id);
+  assert.ok(friends.requestFriendByUserId(a.id, z.id).ok && friends.areFriends(a.id, z.id));
+});
+
+test("name-search notice: pending until seen or a choice is made", async () => {
+  const friends = await import("../src/repos/friends.js");
+  const u1 = users.createUser({ email: "nt-1@example.com", displayName: "Notice One", passwordHash: "x" });
+  const u2 = users.createUser({ email: "nt-2@example.com", displayName: "Notice Two", passwordHash: "x" });
+  const dto = (id: string) => users.toUserDTO(users.findUserById(id)!);
+  assert.equal(dto(u1.id).searchNoticePending, true);
+  assert.equal(dto(u1.id).discoverable, true);
+  friends.markSearchNoticeSeen(u1.id);
+  assert.equal(dto(u1.id).searchNoticePending, false);
+  friends.setDiscoverable(u2.id, false);
+  assert.equal(dto(u2.id).searchNoticePending, false, "choosing counts as seen");
+  assert.equal(dto(u2.id).discoverable, false);
+});

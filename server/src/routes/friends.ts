@@ -11,6 +11,7 @@ import {
   requestFriendByUserId,
   searchUsers,
   setDiscoverable,
+  markSearchNoticeSeen,
   getFriendProfile,
   getFriendsOverview,
   removeFriendship,
@@ -71,7 +72,9 @@ friendsRouter.get(
   })
 );
 
-const settingsSchema = z.object({ discoverable: z.boolean() });
+const settingsSchema = z
+  .object({ discoverable: z.boolean().optional(), searchNoticeSeen: z.literal(true).optional() })
+  .refine((b) => b.discoverable !== undefined || b.searchNoticeSeen, "Nothing to change.");
 
 /** "Let people find me by name" on/off. */
 friendsRouter.put(
@@ -79,7 +82,8 @@ friendsRouter.put(
   asyncHandler(async (req, res) => {
     const body = parseBody(settingsSchema, req, res);
     if (!body) return;
-    setDiscoverable(req.auth!.userId, body.discoverable);
+    if (body.discoverable !== undefined) setDiscoverable(req.auth!.userId, body.discoverable);
+    else markSearchNoticeSeen(req.auth!.userId);
     res.json(getFriendsOverview(req.auth!.userId));
   })
 );

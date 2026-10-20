@@ -1,6 +1,7 @@
 import type Database from "better-sqlite3";
+import { foldName } from "./util.js";
 
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 
 /**
  * Full schema, created idempotently with CREATE TABLE/INDEX IF NOT EXISTS.
@@ -268,6 +269,15 @@ CREATE INDEX IF NOT EXISTS idx_friendships_addressee ON friendships(addressee_id
 CREATE INDEX IF NOT EXISTS idx_friendships_requester ON friendships(requester_id, status);
 CREATE INDEX IF NOT EXISTS idx_friendships_invite_email ON friendships(invite_email_norm);
 
+-- "Keep this person's friend requests quiet": written when someone declines
+-- a request or removes a friend, cleared when they add that person.
+CREATE TABLE IF NOT EXISTS friend_declines (
+  decliner_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  requester_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at    INTEGER NOT NULL,
+  PRIMARY KEY (decliner_id, requester_id)
+);
+
 -- Small key/value store (e.g. auto-generated Web Push VAPID keys).
 CREATE TABLE IF NOT EXISTS app_settings (
   key    TEXT PRIMARY KEY,
@@ -329,6 +339,19 @@ export function runMigrations(db: Database.Database): void {
       // can turn it off on the Friends page.
       db.exec(`ALTER TABLE users ADD COLUMN discoverable INTEGER NOT NULL DEFAULT 1`);
     }
+    if (!userCols.some((c) => c.name === "search_notice_seen")) {
+      // Everyone gets a one-time in-app notice that name search exists.
+      db.exec(`ALTER TABLE users ADD COLUMN search_notice_seen INTEGER NOT NULL DEFAULT 0`);
+    }
+    if (!userCols.some((c) => c.name === "name_search")) {
+      // Folded display name (lower-case, no accents) for friend search.
+      db.exec(`ALTER TABLE users ADD COLUMN name_search TEXT`);
+    }
+    const unfolded = db
+      .prepare(`SELECT id, display_name FROM users WHERE name_search IS NULL`)
+      .all() as Array<{ id: string; display_name: string }>;
+    const setFolded = db.prepare(`UPDATE users SET name_search = ? WHERE id = ?`);
+    for (const u of unfolded) setFolded.run(foldName(u.display_name), u.id);
   });
   apply();
 }
