@@ -5,10 +5,18 @@ name: Keep API awake
 # stops the check-in scheduler: missed check-ins wouldn't alert anyone until
 # something woke it. Ping it often enough that it never sleeps. (One service
 # running all month fits in the free plan's 750 instance hours.)
+#
+# GitHub turns scheduled workflows off after 60 days without repository
+# activity, so each run also re-enables this workflow (that resets the clock).
+# Scheduled runs can still be delayed or skipped when GitHub is busy; an
+# external monitor (e.g. UptimeRobot on /health) is a good second line.
 on:
   schedule:
     - cron: "*/10 * * * *"
   workflow_dispatch:
+
+permissions:
+  actions: write
 
 jobs:
   ping:
@@ -25,3 +33,8 @@ jobs:
           done
           echo "API did not answer /health" >&2
           exit 1
+      - name: Stay enabled (reset GitHub's 60-day inactivity timer)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/keep-api-awake.yml/enable"

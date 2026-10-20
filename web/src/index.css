@@ -926,6 +926,14 @@ body {
   font-size: 13px;
   color: var(--muted);
 }
+.auth-emergency-quiet {
+  margin-top: 14px;
+  padding-top: 0;
+  border-top: none;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
 .auth-loading {
   color: var(--muted);
   font-size: 14px;

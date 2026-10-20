@@ -149,18 +149,23 @@ export function requestContact(ownerId: string, identifier: string): AddResult {
   const target = userByCode.get(code) as { id: string } | undefined;
   if (!target) return { ok: false, error: "No SafeSips user has that code. Check it and try again." };
   if (target.id === ownerId) return { ok: false, error: "That's your own code." };
-  const exists = linkByOwnerContact.get(ownerId, target.id);
+  return linkToUser(ownerId, target.id, formatCode(code));
+}
+
+/** Pending link from owner to an existing user (no-op if one exists). */
+function linkToUser(ownerId: string, targetId: string, label: string): AddResult {
+  const exists = linkByOwnerContact.get(ownerId, targetId);
   if (!exists) {
     insertLink.run({
       id: genId(),
       owner_id: ownerId,
-      contact_user_id: target.id,
+      contact_user_id: targetId,
       invite_email_norm: null,
-      invite_label: formatCode(code),
+      invite_label: label,
       created_at: nowMs(),
     });
   }
-  return { ok: true, message: "Request sent.", notifyUserId: exists ? null : target.id };
+  return { ok: true, message: "Request sent.", notifyUserId: exists ? null : targetId };
 }
 
 /**
@@ -173,18 +178,7 @@ export function requestContactForUser(ownerId: string, targetId: string): AddRes
   if ((countRecentRequests.get(ownerId, since) as { c: number }).c >= MAX_REQUESTS_PER_DAY) {
     return { ok: false, error: "You've sent a lot of requests today. Try again tomorrow." };
   }
-  const exists = linkByOwnerContact.get(ownerId, targetId);
-  if (!exists) {
-    insertLink.run({
-      id: genId(),
-      owner_id: ownerId,
-      contact_user_id: targetId,
-      invite_email_norm: null,
-      invite_label: "Friend",
-      created_at: nowMs(),
-    });
-  }
-  return { ok: true, message: "Request sent.", notifyUserId: exists ? null : targetId };
+  return linkToUser(ownerId, targetId, "Friend");
 }
 
 export function getOverview(userId: string): ContactsOverviewDTO {

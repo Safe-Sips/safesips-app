@@ -1,5 +1,6 @@
 import { SignUp, useAuth as useClerkAuth } from "@clerk/react";
 import { Navigate } from "react-router-dom";
+import EmergencyHelpLink from "../components/EmergencyHelpLink";
 
 /** Just Clerk's sign-up form, centred on the page. */
 export default function RegisterPage() {
@@ -17,6 +18,7 @@ export default function RegisterPage() {
             Loading sign-up…
           </p>
         )}
+        <EmergencyHelpLink />
       </div>
     </main>
   );

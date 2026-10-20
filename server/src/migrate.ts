@@ -239,20 +239,27 @@ CREATE INDEX IF NOT EXISTS idx_alerts_contact ON checkin_alerts(contact_user_id,
 CREATE INDEX IF NOT EXISTS idx_alerts_occ ON checkin_alerts(occurrence_id);
 
 -- Friends: a request from one user to another; accepted = friends both ways.
--- One row per pair of users, whichever of them asked first.
+-- One row per pair of users, whichever of them asked first. A request by
+-- email is stored whether or not the address has an account (so the sender
+-- can't tell): addressee_id stays NULL until someone with that email accepts.
 CREATE TABLE IF NOT EXISTS friendships (
-  id            TEXT PRIMARY KEY,
-  requester_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  addressee_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  invite_label  TEXT NOT NULL,
-  status        TEXT NOT NULL DEFAULT 'pending',
-  created_at    INTEGER NOT NULL,
-  responded_at  INTEGER
+  id                TEXT PRIMARY KEY,
+  requester_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  addressee_id      TEXT REFERENCES users(id) ON DELETE CASCADE,
+  invite_email_norm TEXT,
+  invite_label      TEXT NOT NULL,
+  status            TEXT NOT NULL DEFAULT 'pending',
+  created_at        INTEGER NOT NULL,
+  responded_at      INTEGER
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_friendships_pair
-  ON friendships(min(requester_id, addressee_id), max(requester_id, addressee_id));
+  ON friendships(min(requester_id, addressee_id), max(requester_id, addressee_id))
+  WHERE addressee_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_friendships_email
+  ON friendships(requester_id, invite_email_norm) WHERE addressee_id IS NULL;
 CREATE INDEX IF NOT EXISTS idx_friendships_addressee ON friendships(addressee_id, status);
 CREATE INDEX IF NOT EXISTS idx_friendships_requester ON friendships(requester_id, status);
+CREATE INDEX IF NOT EXISTS idx_friendships_invite_email ON friendships(invite_email_norm);
 
 -- Small key/value store (e.g. auto-generated Web Push VAPID keys).
 CREATE TABLE IF NOT EXISTS app_settings (

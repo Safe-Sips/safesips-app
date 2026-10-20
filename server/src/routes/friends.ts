@@ -77,12 +77,12 @@ friendsRouter.delete(
   "/:id",
   asyncHandler(async (req, res) => {
     const me = req.auth!.userId;
-    const other = removeFriendship(me, req.params.id);
-    if (!other) {
+    const removed = removeFriendship(me, req.params.id);
+    if (!removed) {
       res.status(404).json({ error: "Not found." });
       return;
     }
-    emitFriendsChanged(other);
+    if (removed.other) emitFriendsChanged(removed.other);
     res.json(getFriendsOverview(me));
   })
 );

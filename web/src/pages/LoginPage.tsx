@@ -1,5 +1,6 @@
 import { SignIn, useAuth as useClerkAuth } from "@clerk/react";
 import { Navigate } from "react-router-dom";
+import EmergencyHelpLink from "../components/EmergencyHelpLink";
 
 /** Just Clerk's sign-in form, centred on the page. */
 export default function LoginPage() {
@@ -17,6 +18,7 @@ export default function LoginPage() {
             Loading sign-in…
           </p>
         )}
+        <EmergencyHelpLink />
       </div>
     </main>
   );

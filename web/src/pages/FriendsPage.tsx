@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { FriendsOverviewDTO } from "@safesips/shared";
 import { api, ApiError } from "../api";
 import { timeAgo } from "../format";
+import MyCode from "../components/MyCode";
 import { useSocket } from "../socket/SocketProvider";
 
 /** Your friends, requests, and adding someone by SafeSips code or email. */
@@ -14,7 +15,6 @@ export default function FriendsPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -65,17 +65,6 @@ export default function FriendsPage() {
     }
   };
 
-  const copyCode = async () => {
-    if (!overview) return;
-    try {
-      await navigator.clipboard.writeText(overview.myCode);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* clipboard blocked: the code is visible to copy by hand */
-    }
-  };
-
   return (
     <div className="page friends-page">
       <div className="page-head">
@@ -91,13 +80,7 @@ export default function FriendsPage() {
         <>
           <section className="card">
             <h2>Add a friend</h2>
-            <p className="my-code">
-              Your SafeSips code: <strong className="code-chip">{overview.myCode}</strong>{" "}
-              <button className="btn btn-ghost btn-sm" type="button" onClick={copyCode}>
-                {copied ? "Copied" : "Copy"}
-              </button>
-              <span className="field-hint"> Give it to friends who want to add you.</span>
-            </p>
+            <MyCode code={overview.myCode} hint="Give it to friends who want to add you." />
             <form className="inline-form" onSubmit={add}>
               <input
                 placeholder="Their SafeSips code or email"

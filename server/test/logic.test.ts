@@ -631,7 +631,7 @@ test("friends: request by code, accept, profile only for friends", async () => {
 
   // Unfriend from either side.
   assert.equal(friends.removeFriendship(cy.id, reqId), null);
-  assert.equal(friends.removeFriendship(bo.id, reqId), ana.id);
+  assert.equal(friends.removeFriendship(bo.id, reqId)?.other, ana.id);
   assert.equal(friends.getFriendProfile(ana.id, bo.id), null);
 });
 
@@ -647,10 +647,37 @@ test("friends: email replies don't reveal accounts; asking back accepts", async 
     known.message.replace("fr-ed@example.com", "X"),
     "same reply whether or not the email has an account"
   );
-  assert.equal(friends.getFriendsOverview(di.id).outgoing.length, 1, "nothing stored for unknown emails");
-  // Ed asks Di back by email → they're friends, and Di is told.
+  const out = friends.getFriendsOverview(di.id).outgoing;
+  assert.equal(out.length, 2, "both stored: the list can't tell which email has an account");
+  assert.deepEqual(out.map((o) => Object.keys(o).sort()), [["createdAt", "id", "label"], ["createdAt", "id", "label"]]);
+  // Ed sees Di's email request and asks back → they're friends, and Di is told.
+  assert.equal(friends.getFriendsOverview(ed.id).incoming[0].fromDisplayName, di.display_name);
   const back = friends.requestFriend(ed.id, "fr-di@example.com");
   assert.ok(back.ok && back.notify?.userId === di.id && back.notify.accepted);
   assert.ok(friends.areFriends(di.id, ed.id));
+  assert.equal(friends.getFriendsOverview(di.id).outgoing.length, 1, "only the unknown-email request is left");
   assert.equal(friends.requestFriend(di.id, "fr-di@example.com").ok, false, "can't friend yourself");
+
+  // Someone who signs up later with that email sees the request and can accept.
+  const late = makeUser("nobody-here@example.com");
+  const req = friends.getFriendsOverview(late.id).incoming;
+  assert.equal(req.length, 1);
+  assert.equal(friends.acceptFriend(late.id, req[0].id), di.id);
+  assert.ok(friends.areFriends(di.id, late.id));
+  assert.equal(friends.getFriendProfile(di.id, late.id)?.displayName, late.display_name);
+});
+
+test("friends: code + email requests from one person show once and merge on accept", async () => {
+  const friends = await import("../src/repos/friends.js");
+  const fi = makeUser("fr-fi@example.com");
+  const gu = makeUser("fr-gu@example.com");
+  friends.requestFriend(fi.id, friends.getFriendsOverview(gu.id).myCode);
+  friends.requestFriend(fi.id, "fr-gu@example.com");
+  const incoming = friends.getFriendsOverview(gu.id).incoming;
+  assert.equal(incoming.length, 1, "one entry per person");
+  assert.equal(friends.acceptFriend(gu.id, incoming[0].id), fi.id);
+  const fiView = friends.getFriendsOverview(fi.id);
+  assert.equal(fiView.friends.length, 1);
+  assert.equal(fiView.outgoing.length, 0, "the other request was dropped");
+  assert.equal(friends.getFriendsOverview(gu.id).incoming.length, 0);
 });

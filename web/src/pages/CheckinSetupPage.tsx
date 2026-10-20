@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ContactsOverviewDTO, PlanDTO } from "@safesips/shared";
 import { api, ApiError } from "../api";
+import MyCode from "../components/MyCode";
 import NotificationsCard from "../components/NotificationsCard";
 import { timeUntil } from "../format";
 import { useSocket } from "../socket/SocketProvider";
@@ -73,7 +74,6 @@ function EmergencyContactsSection({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const run = async (fn: () => Promise<ContactsOverviewDTO>) => {
     setError(null);
@@ -101,16 +101,6 @@ function EmergencyContactsSection({
     }
   };
 
-  const copyCode = async () => {
-    try {
-      await navigator.clipboard.writeText(overview.myCode);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* clipboard blocked: the code is visible to copy by hand */
-    }
-  };
-
   return (
     <section className="card">
       <h2>Emergency contacts</h2>
@@ -119,13 +109,7 @@ function EmergencyContactsSection({
         app if you miss a check-in — after they accept your request.
       </p>
 
-      <p className="my-code">
-        Your SafeSips code: <strong className="code-chip">{overview.myCode}</strong>{" "}
-        <button className="btn btn-ghost btn-sm" type="button" onClick={copyCode}>
-          {copied ? "Copied" : "Copy"}
-        </button>
-        <span className="field-hint"> Give it to people who want to add you.</span>
-      </p>
+      <MyCode code={overview.myCode} hint="Give it to people who want to add you." />
 
       {overview.incoming.length > 0 && (
         <div className="contact-requests" role="region" aria-label="Requests for you">

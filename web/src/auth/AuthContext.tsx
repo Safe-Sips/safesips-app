@@ -52,6 +52,18 @@ function writeCachedUser(clerkId: string | undefined, user: UserDTO | null): voi
   }
 }
 
+/** Forget every remembered account on this device (no one is signed in). */
+function clearCachedUsers(): void {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(CACHE_PREFIX)) localStorage.removeItem(key);
+    }
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 /** The server rejected this account/session, as opposed to being unreachable. */
 function isAuthRejection(err: unknown): boolean {
   return err instanceof ApiError && (err.status === 401 || err.status === 403);
@@ -80,6 +92,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!isLoaded) return;
     if (!isSignedIn) {
+      // Signed out (here, on another device, or the session expired): don't
+      // leave the account's name and email behind on this device.
+      clearCachedUsers();
       setTokenGetter(null);
       setUser(null);
       setSyncError(null);
