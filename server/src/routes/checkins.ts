@@ -43,9 +43,11 @@ checkinsRouter.post(
       });
       return;
     }
-    if (body.graceMinutes >= body.intervalMinutes) {
+    // Equal is fine: each check-in's deadline is when the next one starts, so
+    // they never overlap (e.g. a 1-minute test plan with 1 minute to answer).
+    if (body.graceMinutes > body.intervalMinutes) {
       res.status(400).json({
-        error: "Grace window must be shorter than the check-in interval.",
+        error: "Time to answer can't be longer than the check-in interval.",
         code: "bad_grace",
       });
       return;

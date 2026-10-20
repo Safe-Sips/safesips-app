@@ -217,6 +217,12 @@ function EmergencyContactsSection({
   );
 }
 
+// 1 minute is for trying the feature out: prompts every minute, and contacts
+// are alerted every minute while you don't answer.
+const INTERVAL_OPTIONS = [1, 30, 60, 90, 120];
+const GRACE_OPTIONS = [1, 5, 10, 15, 20];
+const minutesLabel = (m: number) => (m === 1 ? "1 minute" : `${m} minutes`);
+
 function CheckinPlansSection({
   plans,
   hasPrimary,
@@ -341,11 +347,17 @@ function CheckinPlansSection({
             <span>Check in every</span>
             <select
               value={intervalMinutes}
-              onChange={(e) => setIntervalMinutes(Number(e.target.value))}
+              onChange={(e) => {
+                const next = Number(e.target.value);
+                setIntervalMinutes(next);
+                // Time to answer can't be longer than the interval.
+                setGraceMinutes((g) => Math.min(g, next));
+              }}
             >
-              {[30, 60, 90, 120].map((m) => (
+              {INTERVAL_OPTIONS.map((m) => (
                 <option key={m} value={m}>
-                  {m} minutes
+                  {minutesLabel(m)}
+                  {m === 1 ? " (for testing)" : ""}
                 </option>
               ))}
             </select>
@@ -356,9 +368,9 @@ function CheckinPlansSection({
               value={graceMinutes}
               onChange={(e) => setGraceMinutes(Number(e.target.value))}
             >
-              {[5, 10, 15, 20].map((m) => (
+              {GRACE_OPTIONS.filter((m) => m <= intervalMinutes).map((m) => (
                 <option key={m} value={m}>
-                  {m} minutes
+                  {minutesLabel(m)}
                 </option>
               ))}
             </select>
