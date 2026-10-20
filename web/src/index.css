@@ -102,11 +102,16 @@ body,
   }
 }
 
-/* Every page starts with the navy nav. iOS 26 Safari tints the status bar
-   from the page (body colour, or a fixed bar at the very top) and no longer
-   reads theme-color, so without this it paints a light, foggy band over the
-   nav: a navy strip pinned under the status bar. (Not a navy <html>: any gap
-   below a short page would show it as a dark band at the bottom.) */
+/* Every page starts with the navy nav. iOS 26.1+ draws a blur/gradient over
+   the status bar of Home Screen apps installed with the translucent bar,
+   tinted with the document's background colour — light lavender painted a
+   foggy band over the nav. So the document background is navy, and the page
+   colour lives on <body> and the app shell. (The bottom band that a navy
+   <html> once exposed was the short-viewport bug, fixed above.) */
+html {
+  background: var(--nav-bg);
+}
+/* Safari tabs tint the status bar from a fixed bar at the very top. */
 body::before {
   content: "";
   position: fixed;
@@ -119,12 +124,16 @@ body::before {
   pointer-events: none;
 }
 
-body {
+body,
+.shell {
   background:
     radial-gradient(900px 520px at 100% -8%, #ffe2f1 0%, rgba(255, 226, 241, 0) 55%),
     radial-gradient(900px 640px at -8% 108%, #dfe4fb 0%, rgba(223, 228, 251, 0) 55%),
     var(--bg);
   background-attachment: fixed;
+}
+
+body {
   color: var(--text);
   /* The single app typeface (brand body font), self-hosted via @fontsource. */
   font-family: "Nunito Variable", "Nunito", system-ui, -apple-system, Segoe UI,
