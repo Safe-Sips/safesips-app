@@ -18,12 +18,15 @@ import { PresenceStore } from "./presenceStore.js";
 import {
   hasReachedMaxDuration,
   isDeliberateDisconnect,
+  pickHandoverSocket,
   resumeDecision,
 } from "./presenceLogic.js";
 import {
+  emitPresenceMine,
   setIo,
   setUserPresencePurger,
   trackUserSocket,
+  userSocketIds,
   untrackUserSocket,
   type SocketData,
 } from "./realtime.js";
@@ -169,13 +172,18 @@ function clientIp(socket: { handshake: { address: string } }): string {
   return socket.handshake.address;
 }
 
-function removePresence(publicId: string, userId?: string): void {
+/**
+ * Remove a circle. `replacing` = another of the user's sockets is taking it
+ * over right now, so don't tell their sessions "you have no circle" in between.
+ */
+function removePresence(publicId: string, userId?: string, replacing = false): void {
   try {
     if (store.remove(publicId)) {
       io.emit("presence:remove", { publicId });
     }
     if (userId && activeShareByUserId.get(userId)?.publicId === publicId) {
       activeShareByUserId.delete(userId);
+      if (!replacing) emitPresenceMine(userId, null);
     }
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -213,17 +221,28 @@ io.on("connection", (socket) => {
   trackUserSocket(socket.data.userId, socket.id);
 
   socket.emit("presence:self", { publicId });
+
+  // If this user already has a circle (page refresh, app reopened, another tab),
+  // say which one is theirs BEFORE the initial list, so it's never drawn as
+  // someone else's grey circle — even while a refreshed page's old connection
+  // hasn't closed yet and still owns it.
+  const existingShare = activeShareByUserId.get(socket.data.userId);
+  const existingRecord = existingShare
+    ? store.get(existingShare.publicId, Date.now())
+    : undefined;
+  if (existingShare && existingRecord) {
+    socket.emit("presence:mine", { publicId: existingShare.publicId });
+  }
   socket.emit("presence:init", store.active());
 
-  // If this user still has a circle from an earlier connection (page reload,
-  // app reopened), tell them so the UI shows "Sharing" with a Stop button.
-  // Skip this when another live socket of the same user still owns the circle:
-  // resuming there would hijack it and make the two sessions ping-pong the
-  // circle on every heartbeat.
+  // Hand the circle to this connection (UI shows "Sharing" with a Stop button)
+  // only when no other live socket of the user owns it; otherwise the two
+  // sessions would fight over it. If that owner is a refreshed page's stale
+  // connection, the disconnect handler hands the circle over once it closes.
   {
     const now = Date.now();
-    const existing = activeShareByUserId.get(socket.data.userId);
-    const record = existing ? store.get(existing.publicId, now) : undefined;
+    const existing = existingShare;
+    const record = existingRecord;
     const ownerConnected = existing
       ? io.sockets.sockets.has(existing.ownerSocketId)
       : false;
@@ -284,7 +303,7 @@ io.on("connection", (socket) => {
 
       const prevPublicId = existing?.publicId;
       if (prevPublicId && prevPublicId !== publicId) {
-        removePresence(prevPublicId, userId);
+        removePresence(prevPublicId, userId, true);
       }
       const holdMs = result.value.holdMs ?? 0;
       activeShareByUserId.set(userId, {
@@ -302,6 +321,9 @@ io.on("connection", (socket) => {
       );
       socket.data.lastUpdateAt = now;
       io.emit("presence:upsert", record);
+      // All of this user's sessions learn the circle's current id (a session
+      // that was sharing elsewhere stands down instead of fighting over it).
+      emitPresenceMine(userId, publicId);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("Location update failed:", err);
@@ -333,6 +355,26 @@ io.on("connection", (socket) => {
     // longer vanish the moment a phone goes to sleep.
     if (isDeliberateDisconnect(reason)) {
       removePresence(publicId, socket.data.userId);
+      return;
+    }
+
+    // The session that was sending this user's circle dropped (refresh, lost
+    // signal). If another of their sessions is open, let it take over now
+    // instead of leaving the circle frozen until it expires.
+    const share = activeShareByUserId.get(socket.data.userId);
+    const target = pickHandoverSocket({
+      droppedIsOwner: share?.ownerSocketId === socket.id,
+      remainingSocketIds: userSocketIds(socket.data.userId),
+    });
+    const record = share ? store.get(share.publicId, Date.now()) : undefined;
+    if (share && record && target) {
+      const now = Date.now();
+      io.to(target).emit("presence:resume", {
+        publicId: share.publicId,
+        lat: record.lat,
+        lng: record.lng,
+        holdRemainingMs: share.holdUntil ? Math.max(0, share.holdUntil - now) : 0,
+      });
     }
   });
 });

@@ -120,6 +120,13 @@ function usePresenceController(): PresenceApi {
   const [durationMs, setDurationState] = useState<number>(readStoredDuration);
   const [notice, setNotice] = useState<string | null>(null);
   const selfIdRef = useRef<string | null>(null);
+  /**
+   * The publicId of this user's circle, whichever of their sessions sends it
+   * (server `presence:mine`). Differs from selfId while another tab/device —
+   * or a refreshed page's not-yet-closed old connection — is the sender.
+   */
+  const ownIdRef = useRef<string | null>(null);
+  const [ownId, setOwnId] = useState<string | null>(null);
   const maskedRef = useRef<LatLng | null>(null);
   const shareStartedAtRef = useRef<number | null>(null);
   const sharingRef = useRef(false);
@@ -199,14 +206,28 @@ function usePresenceController(): PresenceApi {
         next.delete(publicId);
         return next;
       });
-      // Our own timed share was expired by the server.
-      if (
-        publicId === selfIdRef.current &&
-        holdUntilRef.current &&
-        Date.now() >= holdUntilRef.current - 5_000
-      ) {
+      if (publicId === ownIdRef.current) {
+        ownIdRef.current = null;
+        setOwnId(null);
+      }
+      // The server removed the circle this tab was sending: its timed share
+      // ran out, Stop was pressed on another of the user's sessions, or another
+      // session took over. Stop sending, or a heartbeat would bring it back.
+      if (publicId === selfIdRef.current && sharingRef.current) {
+        const expired =
+          holdUntilRef.current !== null &&
+          Date.now() >= holdUntilRef.current - 5_000;
         stopLocal();
-        setNotice(SHARE_ENDED_NOTICE);
+        if (expired) setNotice(SHARE_ENDED_NOTICE);
+      }
+    };
+    const onMine = ({ publicId }: { publicId: string | null }) => {
+      ownIdRef.current = publicId;
+      setOwnId(publicId);
+      // Another of this user's sessions is now the sender: stand down so the
+      // two don't fight over the circle. This tab keeps showing it as "mine".
+      if (publicId && publicId !== selfIdRef.current && sharingRef.current) {
+        stopLocal();
       }
     };
     const onResume = (data: {
@@ -258,6 +279,7 @@ function usePresenceController(): PresenceApi {
     socket.on("presence:upsert", onUpsert);
     socket.on("presence:remove", onRemove);
     socket.on("presence:resume", onResume);
+    socket.on("presence:mine", onMine);
     socket.on("error:notice", onNotice);
     socket.on("connect", onConnect);
 
@@ -267,6 +289,7 @@ function usePresenceController(): PresenceApi {
       socket.off("presence:upsert", onUpsert);
       socket.off("presence:remove", onRemove);
       socket.off("presence:resume", onResume);
+      socket.off("presence:mine", onMine);
       socket.off("error:notice", onNotice);
       socket.off("connect", onConnect);
     };
@@ -426,16 +449,26 @@ function usePresenceController(): PresenceApi {
   const others = useMemo(
     () =>
       activeRecords(records).filter(
-        (r) => r.publicId !== selfIdRef.current
+        (r) => r.publicId !== selfIdRef.current && r.publicId !== ownIdRef.current
       ),
-    [records, selfId]
+    [records, selfId, ownId]
   );
+
+  // This user's circle while another of their sessions is the one sending it
+  // (e.g. just after a refresh): still drawn and controlled as "mine".
+  const ownElsewhere = useMemo(() => {
+    if (!ownId || ownId === selfId) return null;
+    const r = records.get(ownId);
+    return r && r.expiresAt > Date.now() ? { lat: r.lat, lng: r.lng } : null;
+  }, [records, ownId, selfId]);
 
   const state: PresenceState = {
     connection,
     selfId,
     others,
-    selfPublic,
+    // Drawn as "my circle" whether this tab or another of the user's sessions
+    // is sending it.
+    selfPublic: selfPublic ?? ownElsewhere,
     exact,
     lastUpdateAt,
     sharedUntil,
