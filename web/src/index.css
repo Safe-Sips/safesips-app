@@ -1376,17 +1376,95 @@ select option {
   background: rgba(255, 71, 87, 0.14);
   color: var(--danger);
 }
-/* Check-ins: how each emergency contact is reached + test alerts. */
-.contact-via {
-  display: block;
-  font-size: 12px;
-  color: var(--success);
+/* In-app emergency contacts + alerts. */
+.my-code {
+  margin: 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.code-chip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(24, 33, 60, 0.07);
+}
+.card h3 {
+  margin-top: 16px;
+}
+.contact-requests {
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 4px 12px 8px;
+  margin: 12px 0;
+}
+.notif-card.notif-off {
+  border-color: var(--accent);
+}
+.notif-state {
+  margin: 0;
   font-weight: 700;
 }
-.contact-test {
-  display: block;
-  margin-top: 4px;
+.notif-on {
+  color: var(--success);
 }
+.alert-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  background: rgba(255, 71, 87, 0.12);
+  border-bottom: 2px solid var(--danger);
+  color: var(--text);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.btn-danger-solid {
+  background: var(--danger);
+  color: #ffffff;
+}
+.nav-badge {
+  display: inline-block;
+  min-width: 18px;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+.alert-list {
+  list-style: none;
+  margin: 16px 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.alert-item {
+  padding: 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+}
+.alert-item.is-new {
+  border: 2px solid var(--danger);
+}
+.alert-title {
+  margin: 0;
+  font-size: 16px;
+}
+.alert-meta {
+  margin: 2px 0 6px;
+  font-size: 13px;
+}
+
 .contact-actions {
   display: flex;
   gap: 6px;
@@ -1410,20 +1488,6 @@ select option {
 }
 .danger-zone .field {
   margin: 12px 0 0;
-}
-/* Shown on the check-ins page when SOS alerts can't actually be delivered. */
-.sos-delivery-banner {
-  border: 1px solid var(--danger);
-  background: rgba(255, 71, 87, 0.08);
-  color: var(--text);
-  border-radius: 12px;
-  padding: 12px 14px;
-  margin: 12px 0;
-  font-size: 14px;
-  line-height: 1.45;
-}
-.sos-delivery-banner strong {
-  color: var(--danger);
 }
 .plan-actions {
   display: flex;

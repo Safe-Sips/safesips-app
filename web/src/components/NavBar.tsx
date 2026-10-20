@@ -1,16 +1,19 @@
 import { NavLink } from "react-router-dom";
 import ClerkAuthControls from "../auth/ClerkAuthControls";
 import { useAuth } from "../auth/AuthContext";
+import { useAlerts } from "../hooks/useAlerts";
 
 const LINKS = [
   { to: "/", label: "Map", end: true },
   { to: "/forum", label: "Forum", end: false },
   { to: "/checkins", label: "Check-in", end: false },
+  { to: "/alerts", label: "Alerts", end: false },
   { to: "/first-aid", label: "First aid", end: false },
 ];
 
 export default function NavBar() {
   const { user } = useAuth();
+  const { unread } = useAlerts();
   return (
     <header className="nav">
       <div className="nav-brand">
@@ -27,6 +30,11 @@ export default function NavBar() {
             }
           >
             {l.label}
+            {l.to === "/alerts" && unread > 0 && (
+              <span className="nav-badge" aria-label={`${unread} new`}>
+                {unread}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>

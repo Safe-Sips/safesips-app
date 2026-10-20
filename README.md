@@ -48,16 +48,19 @@ Beyond the anonymous live map, SafeSips now has account-based features backed by
   the rows are kept for the author's history.
 - **Safe havens** — marking a place unsafe surfaces nearby help (police,
   hospital, fire station, fuel, pharmacy, 24/7 spots) via an Overpass proxy.
-- **Check-ins & SOS** — schedule recurring check-ins with a security question; a
-  server-side scheduler alerts **all** your emergency contacts if you miss one
-  (works even if the app is closed): a **text** — sent from your own Android
-  phone + SIM via the SMS Gateway for Android app (`SMS_GATEWAY_*`), or via
-  Twilio (`TWILIO_*`) — and/or an **email** via SMTP (`SMTP_*`), with your approximate shared area if you were
-  sharing. Phone numbers are stored in E.164 form (`0722…` is read as +40).
-  Texts retry transient failures and are capped per number, per user (tests)
-  and globally per day (`SMS_*`). Each contact has a **Send test alert**
-  button. The check-ins page says which channels are live, and every attempt's
-  real outcome is recorded in `checkin_escalations`.
+- **Check-ins & SOS (in-app)** — schedule recurring check-ins with a security
+  question. Your **emergency contacts are other SafeSips users**, added by
+  account email or their **SafeSips code** (`XXXX-XXXX`, on the Check-ins
+  page); they must **accept** before they get your alerts, and either side can
+  remove the link. When a check-in is due you get a **notification** (Web Push,
+  works with the app closed). Miss it, and a server-side scheduler alerts every
+  accepted contact: an entry in their **Alerts** inbox, a live in-app banner,
+  and an urgent push notification — with your approximate (masked) area if you
+  were sharing — plus an email to their account address if SMTP is set. A
+  contact can tap **I'm checking on them**; the others see it and you're told.
+  Push keys are generated automatically (optional `VAPID_*`). On iPhone, web
+  push needs SafeSips added to the Home Screen (iOS 16.4+). Every outcome is
+  recorded in `checkin_escalations`.
 - **Community forum**, **first-aid info** (spiking), and a **waitlist**.
 
 Privacy invariant is preserved: exact presence coordinates never leave the

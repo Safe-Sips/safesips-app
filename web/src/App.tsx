@@ -17,6 +17,7 @@ const NewThreadPage = lazy(() => import("./pages/NewThreadPage"));
 const ForumThreadPage = lazy(() => import("./pages/ForumThreadPage"));
 const CheckinSetupPage = lazy(() => import("./pages/CheckinSetupPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const AlertsPage = lazy(() => import("./pages/AlertsPage"));
 
 function RouteFallback() {
   return (
@@ -53,6 +54,7 @@ export default function App() {
           <Route path="/checkins" element={<CheckinSetupPage />} />
           <Route path="/first-aid" element={<FirstAidPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/alerts" element={<AlertsPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -101,3 +101,49 @@ self.addEventListener("fetch", (event) => {
     fetch(request).catch(async () => (await caches.match(request, MATCH)) || Response.error())
   );
 });
+
+// ── Notifications ──────────────────────────────────────────────────────────
+// Check-in prompts and missed-check-in alerts arrive as Web Push messages
+// ({ title, body, url, tag, requireInteraction }) and work with SafeSips closed.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data ? event.data.text() : "" };
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || "SafeSips", {
+      body: data.body || "",
+      tag: data.tag,
+      renotify: Boolean(data.tag),
+      requireInteraction: Boolean(data.requireInteraction),
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      data: { url: data.url || "/" },
+    })
+  );
+});
+
+// Tapping a notification opens SafeSips on the right page (the check-in
+// question, or the alerts inbox), reusing an open tab when there is one.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || "/", self.location.origin).href;
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const w of windows) {
+        if (new URL(w.url).origin !== self.location.origin) continue;
+        await w.focus();
+        try {
+          await w.navigate(target);
+        } catch {
+          /* uncontrolled tab: focusing is the best we can do */
+        }
+        return;
+      }
+      await self.clients.openWindow(target);
+    })()
+  );
+});

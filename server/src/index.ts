@@ -39,7 +39,9 @@ import { reportsRouter } from "./routes/reports.js";
 import { forumRouter } from "./routes/forum.js";
 import { safeHavensRouter } from "./routes/safeHavens.js";
 import { usersRouter } from "./routes/users.js";
-import { sosContactsRouter } from "./routes/sosContacts.js";
+import { contactsRouter } from "./routes/contacts.js";
+import { alertsRouter } from "./routes/alerts.js";
+import { pushRouter } from "./routes/push.js";
 import { checkinsRouter } from "./routes/checkins.js";
 import { waitlistRouter } from "./routes/waitlist.js";
 
@@ -120,7 +122,9 @@ app.use("/api/reports", reportsRouter);
 app.use("/api/forum", forumRouter);
 app.use("/api/safe-havens", safeHavensRouter);
 app.use("/api/users", usersRouter);
-app.use("/api/sos-contacts", sosContactsRouter);
+app.use("/api/contacts", contactsRouter);
+app.use("/api/alerts", alertsRouter);
+app.use("/api/push", pushRouter);
 app.use("/api/checkins", checkinsRouter);
 app.use("/api/waitlist", waitlistRouter);
 

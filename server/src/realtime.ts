@@ -115,6 +115,21 @@ export function broadcastReportRemoved(id: string): void {
   io?.emit("report:removed", { id });
 }
 
+/** Someone this user protects missed a check-in (their sockets only). */
+export function emitAlertNew(
+  userId: string,
+  data: { alertId: string; ownerDisplayName: string }
+): void {
+  if (!io) return;
+  for (const socketId of socketsByUser.get(userId) ?? []) io.to(socketId).emit("alert:new", data);
+}
+
+/** Contact requests/links changed for this user: their UI should refresh. */
+export function emitContactsChanged(userId: string): void {
+  if (!io) return;
+  for (const socketId of socketsByUser.get(userId) ?? []) io.to(socketId).emit("contacts:changed");
+}
+
 /** Push a check-in prompt to a specific user's live sockets (if any). */
 export function emitCheckinDue(
   userId: string,
