@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import type { LatLngBounds } from "leaflet";
 import {
   isReportExpired,
@@ -8,11 +9,12 @@ import {
   type SafeHavenDTO,
 } from "@safesips/shared";
 import { api, ApiError } from "../api";
+import { timeAgo } from "../format";
 import { useAuth } from "../auth/AuthContext";
 import { useSocket } from "../socket/SocketProvider";
 import { usePresence } from "../hooks/usePresence";
 import Controls from "../components/Controls";
-import MapView, { type FocusPoint } from "../components/MapView";
+import MapView, { type AlertArea, type FocusPoint } from "../components/MapView";
 import SensitiveWarning from "../components/SensitiveWarning";
 import MarkUnsafeDialog from "../components/MarkUnsafeDialog";
 import ReportPanel from "../components/ReportPanel";
@@ -43,8 +45,31 @@ function geolocationErrorMessage(err: GeolocationPositionError): string {
   return "Your device couldn't find your location. Turn on Location / GPS and try again.";
 }
 
+/** Router state from the Alerts page's "See where they were last sharing". */
+function readAlertArea(state: unknown): AlertArea | null {
+  const a = (state as { alertArea?: Partial<AlertArea> } | null)?.alertArea;
+  if (!a || typeof a.lat !== "number" || typeof a.lng !== "number") return null;
+  return { lat: a.lat, lng: a.lng, name: String(a.name ?? "Your contact"), at: Number(a.at) || Date.now() };
+}
+
 export default function MapPage() {
   const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [alertArea, setAlertArea] = useState<AlertArea | null>(() => readAlertArea(location.state));
+  // Opened again from another alert while already on the map.
+  useEffect(() => {
+    const next = readAlertArea(location.state);
+    if (next) {
+      setAlertArea(next);
+      setFocusPoint({ lat: next.lat, lng: next.lng, zoom: 15 });
+    }
+  }, [location.state]);
+  const closeAlertArea = () => {
+    setAlertArea(null);
+    // Drop it from history so a refresh/back doesn't bring it back.
+    navigate(".", { replace: true, state: null });
+  };
   const { socket } = useSocket();
   const { state, publish, stop, clearNotice, setDurationMs } = usePresence();
 
@@ -57,12 +82,15 @@ export default function MapPage() {
 
   // Where the map should recenter (initial entry, "use my location", reporting).
   // This only pans the view — it never shares the location.
-  const [focusPoint, setFocusPoint] = useState<FocusPoint | null>(null);
+  const [focusPoint, setFocusPoint] = useState<FocusPoint | null>(() =>
+    alertArea ? { lat: alertArea.lat, lng: alertArea.lng, zoom: 15 } : null
+  );
 
   // On entry, center the map on the user's current location instead of the
-  // default. View-only: this does NOT share/publish anything.
+  // default (unless we came to look at a contact's alert area). View-only:
+  // this does NOT share/publish anything.
   useEffect(() => {
-    if (!("geolocation" in navigator)) return;
+    if (alertArea || !("geolocation" in navigator)) return;
     navigator.geolocation.getCurrentPosition(
       (pos) =>
         setFocusPoint({
@@ -303,6 +331,7 @@ export default function MapPage() {
         pickMode={reportMode && pendingPoint === null}
         pendingPoint={pendingPoint}
         focusPoint={focusPoint}
+        alertArea={alertArea}
         onPickPoint={(p) => setPendingPoint(p)}
         onSelectReport={(r) => setSelected(r)}
         onBoundsChange={onBoundsChange}
@@ -362,8 +391,20 @@ export default function MapPage() {
         </div>
       )}
 
+      {alertArea && !reportMode && (
+        <div className="report-banner alert-area-banner" role="status">
+          <span>
+            <strong>{alertArea.name}</strong>'s last shared area ({timeAgo(alertArea.at)}) —
+            approximate, not their exact position.
+          </span>
+          <button className="btn btn-ghost btn-sm" onClick={closeAlertArea}>
+            Close
+          </button>
+        </div>
+      )}
+
       {/* Empty map: say so instead of showing a silent, empty map. */}
-      {!reportMode && state.connection === "connected" && state.others.length === 0 && (
+      {!reportMode && !alertArea && state.connection === "connected" && state.others.length === 0 && (
         <p className="map-empty" role="status">
           {state.selfPublic
             ? "You're sharing. No one else is sharing right now."

@@ -89,6 +89,25 @@ body,
   margin: 0;
 }
 
+/* Every page starts with the navy nav. iOS 26 Safari tints the status bar
+   from the page (body colour, or a fixed bar at the very top) and no longer
+   reads theme-color, so without these it paints a light, foggy band over the
+   nav. Navy behind the page + a navy strip pinned under the status bar. */
+html {
+  background: var(--nav-bg);
+}
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: max(1px, env(safe-area-inset-top, 0px));
+  background: var(--nav-bg);
+  z-index: 3000;
+  pointer-events: none;
+}
+
 body {
   background:
     radial-gradient(900px 520px at 100% -8%, #ffe2f1 0%, rgba(255, 226, 241, 0) 55%),
