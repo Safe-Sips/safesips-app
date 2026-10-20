@@ -233,11 +233,16 @@ Notes:
    removed from tab B by the server sweep. With "Share for: 1 hour" the circle
    stays for the full hour instead. Reopening tab A shows "Sharing" again with
    a Stop button.
-7. Live circle: share in tab A on a phone, then walk > 100 m with the app
+7. Refresh tab A while sharing: the circle stays yours (yellow, "Sharing" with
+   Stop) and is never drawn as a grey "someone else" dot. As soon as the old
+   page's connection closes, the refreshed page takes over sending it, with the
+   same Share for end time. With two tabs open, only the most recent one sends
+   the circle; the other still shows it as yours.
+8. Live circle: share in tab A on a phone, then walk > 100 m with the app
    open. Tab B sees the circle jump to the new area (not on every small step);
    standing still produces no new updates. Lock the phone: the circle stays
    at the last position.
-8. Reports: a new report is solid; it fades to ~60 % over 48 h and then stops
+9. Reports: a new report is solid; it fades to ~60 % over 48 h and then stops
    appearing (also for anyone loading the map later).
-9. Repeat across web + mobile to confirm both clients interoperate on the same
+10. Repeat across web + mobile to confirm both clients interoperate on the same
    server.

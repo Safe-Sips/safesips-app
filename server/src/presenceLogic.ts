@@ -43,6 +43,21 @@ export function resumeDecision(opts: {
 }
 
 /**
+ * When a user's socket drops without a deliberate sign-out, decide which of
+ * their other live sockets should take over their circle: the most recently
+ * connected one (typically the page that was just refreshed), or null when the
+ * dropped socket wasn't the owner or no other session is open.
+ */
+export function pickHandoverSocket(opts: {
+  droppedIsOwner: boolean;
+  /** The user's remaining live socket ids, oldest first. */
+  remainingSocketIds: string[];
+}): string | null {
+  if (!opts.droppedIsOwner) return null;
+  return opts.remainingSocketIds[opts.remainingSocketIds.length - 1] ?? null;
+}
+
+/**
  * True when a share that began at `startedAt` has reached the maximum
  * continuous duration and must be force-stopped. Based on an absolute start
  * time carried across reconnects, so the cap is real wall-clock time rather

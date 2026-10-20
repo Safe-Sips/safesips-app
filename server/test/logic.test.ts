@@ -468,3 +468,18 @@ test("live circle moves only on real, accurate, spaced-out movement", () => {
     "resumed share: first good fix places the circle"
   );
 });
+
+test("presence: a dropped owner hands the circle to the user's newest session", async () => {
+  const { pickHandoverSocket } = await import("../src/presenceLogic.js");
+  // Refresh: the old page's socket (the owner) drops; the new page takes over.
+  assert.equal(pickHandoverSocket({ droppedIsOwner: true, remainingSocketIds: ["new-page"] }), "new-page");
+  // Several sessions open: the most recently connected one wins.
+  assert.equal(
+    pickHandoverSocket({ droppedIsOwner: true, remainingSocketIds: ["tab-1", "tab-2"] }),
+    "tab-2"
+  );
+  // The dropped socket wasn't sending the circle: nothing to hand over.
+  assert.equal(pickHandoverSocket({ droppedIsOwner: false, remainingSocketIds: ["tab-1"] }), null);
+  // No other session open: the circle just stays until it expires.
+  assert.equal(pickHandoverSocket({ droppedIsOwner: true, remainingSocketIds: [] }), null);
+});

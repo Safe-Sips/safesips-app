@@ -113,6 +113,14 @@ export interface ServerToClientEvents {
     lng: number;
     holdRemainingMs: number;
   }) => void;
+  /**
+   * Sent only to the owner's own sockets: which publicId is this user's circle
+   * (whichever of their sessions is sending it), or null when they have none.
+   * Lets every tab/device of the user draw it as "mine" rather than as someone
+   * else's — e.g. right after a page refresh, while the old connection hasn't
+   * closed yet and still owns the circle.
+   */
+  "presence:mine": (data: { publicId: string | null }) => void;
   /** Server rejected the last action (validation / rate limit). */
   "error:notice": (data: { code: string; message: string }) => void;
 

@@ -51,6 +51,19 @@ export function untrackUserSocket(userId: string, socketId: string): void {
   if (set.size === 0) socketsByUser.delete(userId);
 }
 
+/** Live socket ids of a user, oldest first. */
+export function userSocketIds(userId: string): string[] {
+  return [...(socketsByUser.get(userId) ?? [])];
+}
+
+/** Tell all of a user's sessions which circle is theirs (null = none). */
+export function emitPresenceMine(userId: string, publicId: string | null): void {
+  if (!io) return;
+  for (const socketId of socketsByUser.get(userId) ?? []) {
+    io.to(socketId).emit("presence:mine", { publicId });
+  }
+}
+
 /** Removes a user's live presence circle; registered by index.ts. */
 let presencePurger: ((userId: string) => void) | null = null;
 
