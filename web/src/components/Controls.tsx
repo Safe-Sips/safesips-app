@@ -118,9 +118,10 @@ function ConnectionNotice({
 }
 
 function sharingHint(sharedUntil: number | null): string {
+  const follows = "Your circle moves with you while SafeSips is open.";
   return sharedUntil
-    ? `Stays on the map until ${clockTime(sharedUntil)}, even if your phone locks or you close the app. Tap Stop to end it sooner.`
-    : "Live: your circle disappears a few minutes after you leave the app. Auto-stops after 24 hours.";
+    ? `${follows} If your phone locks or you close the app it stays where you last were until ${clockTime(sharedUntil)}. Tap Stop to end it sooner.`
+    : `${follows} It disappears a few minutes after you leave the app. Auto-stops after 24 hours.`;
 }
 
 export default function Controls({

@@ -43,7 +43,9 @@ Beyond the anonymous live map, SafeSips now has account-based features backed by
 - **Safety reports** — users mark a place safe/unsafe and **upvote** reports
   (one vote per user). Unlike the masked presence circle, a report is an
   **intentional public publish of an exact point** tied to the author's display
-  name — the UI warns about this explicitly.
+  name — the UI warns about this explicitly. Reports fade from full strength
+  to 60 % over 48 h and then disappear from the map (`shared/src/reports.ts`);
+  the rows are kept for the author's history.
 - **Safe havens** — marking a place unsafe surfaces nearby help (police,
   hospital, fire station, fuel, pharmacy, 24/7 spots) via an Overpass proxy.
 - **Check-ins & SOS** — schedule recurring check-ins with a security question; a
@@ -91,6 +93,15 @@ npm test
    broadcasts it. Exact coordinates never reach the server, other clients, logs,
    URLs, or analytics.
 5. A new random offset is generated on **every** update.
+6. **Live circle:** while sharing with the app open, a low-power location watch
+   (`enableHighAccuracy: false`) moves the circle, but only after a real move of
+   >= 100 m (or the fix's accuracy, if worse) and at most every 15 s
+   (`shouldMoveCircle` in `shared/src/live.ts`). Re-masking on every small fix
+   would let an observer average many masked points back to the true
+   location; moving in big steps prevents that and keeps battery and server
+   load low. Browsers don't give web apps background location, so when the
+   phone locks the circle stays at the last position (a "Share for" time keeps
+   it visible).
 
 ## Configuration
 
@@ -222,5 +233,11 @@ Notes:
    removed from tab B by the server sweep. With "Share for: 1 hour" the circle
    stays for the full hour instead. Reopening tab A shows "Sharing" again with
    a Stop button.
-7. Repeat across web + mobile to confirm both clients interoperate on the same
+7. Live circle: share in tab A on a phone, then walk > 100 m with the app
+   open. Tab B sees the circle jump to the new area (not on every small step);
+   standing still produces no new updates. Lock the phone: the circle stays
+   at the last position.
+8. Reports: a new report is solid; it fades to ~60 % over 48 h and then stops
+   appearing (also for anyone loading the map later).
+9. Repeat across web + mobile to confirm both clients interoperate on the same
    server.

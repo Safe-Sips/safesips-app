@@ -10,11 +10,14 @@ import {
 } from "react";
 import {
   DEFAULT_SHARE_DURATION_MS,
+  distanceMeters,
   LatLng,
+  LIVE_MAX_ACCURACY_M,
   maskLocation,
   PRESENCE_HEARTBEAT_MS,
   PresenceRecord,
   SHARE_MAX_DURATION_MS,
+  shouldMoveCircle,
 } from "@safesips/shared";
 import { useSocket, type ConnectionState } from "../socket/SocketProvider";
 
@@ -24,6 +27,15 @@ const DURATION_KEY = "safesips.shareDurationMs";
 
 /** Minimum gap between two emits we trigger ourselves (server limit is 2 s). */
 const MIN_EMIT_GAP_MS = 3_000;
+
+/*
+ * Live circle: while sharing and the app is on screen, a low-power location
+ * watch moves the circle as you move (rules: shouldMoveCircle in shared/live).
+ * Coarse positioning (no GPS) is plenty for a ~200 m circle and far cheaper on
+ * battery; the watch stops when sharing stops or the app is backgrounded.
+ */
+/** Only redraw the private blue dot for moves at least this big. */
+const LIVE_DOT_STEP_M = 10;
 
 /** Shown when a timed "share for" window runs out, from whichever path notices. */
 const SHARE_ENDED_NOTICE = "Location sharing ended (the time you chose is up).";
@@ -35,6 +47,11 @@ export interface PresenceState {
   others: PresenceRecord[];
   /** This client's own masked public center, if currently sharing. */
   selfPublic: LatLng | null;
+  /**
+   * This device's exact position while sharing (the private blue dot).
+   * Local memory only — never emitted; only `selfPublic` leaves the device.
+   */
+  exact: LatLng | null;
   lastUpdateAt: number | null;
   /**
    * Epoch ms when the current share ends on its own ("share for 1 hour").
@@ -95,6 +112,9 @@ function usePresenceController(): PresenceApi {
   const [selfId, setSelfId] = useState<string | null>(null);
   const [records, setRecords] = useState<Map<string, PresenceRecord>>(new Map());
   const [selfPublic, setSelfPublic] = useState<LatLng | null>(null);
+  const [exact, setExact] = useState<LatLng | null>(null);
+  /** Exact position the current circle was last masked from. */
+  const lastPublishedExactRef = useRef<LatLng | null>(null);
   const [lastUpdateAt, setLastUpdateAt] = useState<number | null>(null);
   const [sharedUntil, setSharedUntil] = useState<number | null>(null);
   const [durationMs, setDurationState] = useState<number>(readStoredDuration);
@@ -112,7 +132,9 @@ function usePresenceController(): PresenceApi {
     maskedRef.current = null;
     shareStartedAtRef.current = null;
     holdUntilRef.current = null;
+    lastPublishedExactRef.current = null;
     setSelfPublic(null);
+    setExact(null);
     setLastUpdateAt(null);
     setSharedUntil(null);
   }, []);
@@ -269,6 +291,8 @@ function usePresenceController(): PresenceApi {
           ? maskLocation(exact.lat, exact.lng)
           : maskedRef.current;
       maskedRef.current = masked;
+      lastPublishedExactRef.current = exact;
+      setExact(exact);
       if (!sharingRef.current) {
         // Starting a new share: start the clock for the chosen duration.
         const now = Date.now();
@@ -321,6 +345,58 @@ function usePresenceController(): PresenceApi {
     return () => window.clearInterval(id);
   }, [selfPublic, emitMasked, stop, endIfExpired]);
 
+  // Live circle: follow the user while sharing and the app is on screen.
+  const sharing = selfPublic !== null;
+  useEffect(() => {
+    if (!sharing || !("geolocation" in navigator)) return;
+    let watchId: number | null = null;
+
+    const onFix = (pos: GeolocationPosition) => {
+      if (!sharingRef.current) return;
+      const { latitude, longitude, accuracy } = pos.coords;
+      if (accuracy > LIVE_MAX_ACCURACY_M) return; // too coarse to be useful
+      const here = { lat: latitude, lng: longitude };
+
+      // Private blue dot (local only): redraw on meaningful moves.
+      setExact((prev) =>
+        prev && distanceMeters(prev, here) < LIVE_DOT_STEP_M ? prev : here
+      );
+
+      const move = shouldMoveCircle({
+        lastPublished: lastPublishedExactRef.current,
+        here,
+        accuracyMeters: accuracy,
+        msSinceLastPublish: Date.now() - lastEmitRef.current,
+      });
+      if (!move || endIfExpired()) return;
+      publish(here); // fresh mask around the new position
+    };
+
+    const start = () => {
+      if (watchId !== null || document.visibilityState !== "visible") return;
+      watchId = navigator.geolocation.watchPosition(
+        onFix,
+        () => {
+          /* transient error: keep the last circle; Update still works */
+        },
+        { enableHighAccuracy: false, maximumAge: 30_000, timeout: 60_000 }
+      );
+    };
+    const stopWatch = () => {
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+    };
+    const onVisibility = () =>
+      document.visibilityState === "visible" ? start() : stopWatch();
+
+    start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      stopWatch();
+    };
+  }, [sharing, publish, endIfExpired]);
+
   // End a timed share exactly on time while the page is open.
   useEffect(() => {
     if (!sharedUntil) return;
@@ -360,6 +436,7 @@ function usePresenceController(): PresenceApi {
     selfId,
     others,
     selfPublic,
+    exact,
     lastUpdateAt,
     sharedUntil,
     durationMs,

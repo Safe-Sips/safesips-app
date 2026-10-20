@@ -1,6 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LatLngBounds } from "leaflet";
-import type { LatLng, ReportDTO, ReportSafety, SafeHavenDTO } from "@safesips/shared";
+import {
+  isReportExpired,
+  type LatLng,
+  type ReportDTO,
+  type ReportSafety,
+  type SafeHavenDTO,
+} from "@safesips/shared";
 import { api, ApiError } from "../api";
 import { useAuth } from "../auth/AuthContext";
 import { useSocket } from "../socket/SocketProvider";
@@ -20,13 +26,6 @@ const ACK_KEY = "safesips.sensitiveAck";
 
 type PendingAction = { kind: "gps" };
 type LegalDoc = "privacy" | "terms" | null;
-
-// Survives MapPage unmount so leaving the Map tab does not drop the private
-// blue-dot / last GPS source. Presence heartbeats live in PresenceProvider.
-const shareSession: { exact: LatLng | null; source: PendingAction | null } = {
-  exact: null,
-  source: null,
-};
 
 /** Turn a GeolocationPositionError into something the user can act on. */
 function geolocationErrorMessage(err: GeolocationPositionError): string {
@@ -49,8 +48,10 @@ export default function MapPage() {
   const { socket } = useSocket();
   const { state, publish, stop, clearNotice, setDurationMs } = usePresence();
 
-  // Exact location lives ONLY on this device; it is never emitted.
-  const [exact, setExact] = useState<LatLng | null>(() => shareSession.exact);
+  // Exact location lives ONLY on this device and is never emitted. It's owned
+  // by PresenceProvider (above the routes) so the live circle keeps following
+  // you while you're on another tab.
+  const exact = state.exact;
   const [geoStatus, setGeoStatus] = useState<string | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
 
@@ -80,10 +81,20 @@ export default function MapPage() {
     () => localStorage.getItem(ACK_KEY) === "1"
   );
   const [pending, setPending] = useState<PendingAction | null>(null);
-  const lastSource = useRef<PendingAction | null>(shareSession.source);
 
   // Reports + safe havens.
   const [reports, setReports] = useState<ReportDTO[]>([]);
+  // Reports fade over 48 h and then vanish. Opacity moves ~0.07%/min, so a
+  // 5-minute tick is plenty (and costs nothing between ticks).
+  const [reportNow, setReportNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setReportNow(Date.now()), 5 * 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+  const visibleReports = useMemo(
+    () => reports.filter((r) => !isReportExpired(r.createdAt, reportNow)),
+    [reports, reportNow]
+  );
   const [selected, setSelected] = useState<ReportDTO | null>(null);
   const [reportMode, setReportMode] = useState(false);
   const [pendingPoint, setPendingPoint] = useState<LatLng | null>(null);
@@ -105,11 +116,7 @@ export default function MapPage() {
   /* --------------------------- presence sharing --------------------------- */
 
   const setExactAndPublish = useCallback(
-    (location: LatLng) => {
-      shareSession.exact = location;
-      setExact(location);
-      publish(location);
-    },
+    (location: LatLng) => publish(location),
     [publish]
   );
 
@@ -123,8 +130,6 @@ export default function MapPage() {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setGeoStatus(null);
-        lastSource.current = { kind: "gps" };
-        shareSession.source = lastSource.current;
         setExactAndPublish({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       },
       (err) => {
@@ -155,32 +160,17 @@ export default function MapPage() {
     if (action?.kind === "gps") runGps();
   }, [pending, runGps]);
 
-  // GPS is the only source, so Update always re-reads it. This also works
-  // after a share was resumed on a fresh page load (no lastSource yet).
+  // Update forces a precise GPS fix right now (the live circle otherwise moves
+  // on its own using low-power positioning). Also works after a resumed share.
   const onUpdate = useCallback(() => {
     runGps();
   }, [runGps]);
 
   const onStop = useCallback(() => {
     stop();
-    shareSession.exact = null;
-    shareSession.source = null;
-    setExact(null);
-    lastSource.current = null;
     setGeoStatus(null);
     setGeoError(null);
   }, [stop]);
-
-  // Sync local exact coords when sharing auto-stops (24 h limit / server expiry).
-  useEffect(() => {
-    if (state.selfPublic === null && exact !== null) {
-      shareSession.exact = null;
-      shareSession.source = null;
-      setExact(null);
-      lastSource.current = null;
-      setGeoStatus(null);
-    }
-  }, [state.selfPublic, exact]);
 
   /* ------------------------------- reports -------------------------------- */
 
@@ -307,7 +297,8 @@ export default function MapPage() {
         exact={exact}
         selfPublic={state.selfPublic}
         others={state.others}
-        reports={reports}
+        reports={visibleReports}
+        reportNow={reportNow}
         havens={havens}
         pickMode={reportMode && pendingPoint === null}
         pendingPoint={pendingPoint}

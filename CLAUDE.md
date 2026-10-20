@@ -38,7 +38,9 @@ Node **>= 18.18**. CI (`.github/workflows/deploy-check.yml`) runs on Node 20 fro
 
 - Exact coordinates stay in **local device memory only**. Only the masked center
   `{ lat, lng }` (`maskLocation()` in `shared/src/mask.ts`) is emitted via `location:update`.
-- A **new** random offset is generated on every update. Never log exact coords, and never
+- A **new** random offset is generated on every update, so the live circle must only
+  move in big steps (`shouldMoveCircle` in `shared/src/live.ts`): re-masking on every small
+  GPS fix would let observers average points back to the true location. Never log exact coords, and never
   put them in URLs, analytics, or any payload.
 - **Exception:** a *safety report* is an intentional public publish of an exact point tied
   to a display name — distinct from presence, and the UI warns about it. Keep them separate.

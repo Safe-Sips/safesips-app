@@ -55,7 +55,7 @@ export default function MarkUnsafeDialog({
           <span aria-hidden="true">⚠️ </span>This publishes the <strong>exact location</strong> you picked,
           publicly, linked to your display name. This is different from the
           private map circle — only share places (a venue, a street), never your
-          home.
+          home. Reports fade and disappear from the map after 48 hours.
         </p>
 
         <p className="muted report-coords">

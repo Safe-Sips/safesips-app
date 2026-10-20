@@ -1,4 +1,4 @@
-import type { ReportDTO, ReportInput, ReportSafety } from "@safesips/shared";
+import { REPORT_VISIBLE_MS, type ReportDTO, type ReportInput, type ReportSafety } from "@safesips/shared";
 import { db } from "../db.js";
 import { genId, nowMs } from "../util.js";
 
@@ -27,16 +27,19 @@ const SELECT_BASE = `
   JOIN users u ON u.id = r.author_id
 `;
 
+// Reports disappear from the map after REPORT_VISIBLE_MS (48 h); rows are
+// kept so authors' history and badges are unaffected. Uses idx_reports_created.
 const selectInBbox = db.prepare(
   `${SELECT_BASE}
    WHERE r.status = 'visible'
+     AND r.created_at > @minCreatedAt
      AND r.lat BETWEEN @minLat AND @maxLat
      AND r.lng BETWEEN @minLng AND @maxLng
    ORDER BY r.created_at DESC
    LIMIT @limit`
 );
 const selectById = db.prepare(
-  `${SELECT_BASE} WHERE r.id = @id AND r.status = 'visible'`
+  `${SELECT_BASE} WHERE r.id = @id AND r.status = 'visible' AND r.created_at > @minCreatedAt`
 );
 const insertReport = db.prepare(
   `INSERT INTO reports
@@ -88,12 +91,21 @@ export function listReportsInBbox(
   bbox: Bbox,
   limit: number
 ): ReportDTO[] {
-  const rows = selectInBbox.all({ ...bbox, viewer: viewerId, limit }) as ReportJoinRow[];
+  const rows = selectInBbox.all({
+    ...bbox,
+    viewer: viewerId,
+    limit,
+    minCreatedAt: nowMs() - REPORT_VISIBLE_MS,
+  }) as ReportJoinRow[];
   return rows.map(rowToDTO);
 }
 
 export function getReportDTO(id: string, viewerId: string): ReportDTO | undefined {
-  const row = selectById.get({ id, viewer: viewerId }) as ReportJoinRow | undefined;
+  const row = selectById.get({
+    id,
+    viewer: viewerId,
+    minCreatedAt: nowMs() - REPORT_VISIBLE_MS,
+  }) as ReportJoinRow | undefined;
   return row ? rowToDTO(row) : undefined;
 }
 
