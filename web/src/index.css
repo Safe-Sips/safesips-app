@@ -91,11 +91,9 @@ body,
 
 /* Every page starts with the navy nav. iOS 26 Safari tints the status bar
    from the page (body colour, or a fixed bar at the very top) and no longer
-   reads theme-color, so without these it paints a light, foggy band over the
-   nav. Navy behind the page + a navy strip pinned under the status bar. */
-html {
-  background: var(--nav-bg);
-}
+   reads theme-color, so without this it paints a light, foggy band over the
+   nav: a navy strip pinned under the status bar. (Not a navy <html>: any gap
+   below a short page would show it as a dark band at the bottom.) */
 body::before {
   content: "";
   position: fixed;
@@ -646,7 +644,10 @@ body {
 .shell {
   display: flex;
   flex-direction: column;
-  height: 100dvh;
+  /* Pinned to the screen edges: on iPhone home-screen apps 100dvh can come up
+     short of the screen and leave an empty band at the bottom. */
+  position: fixed;
+  inset: 0;
   width: 100%;
   overflow: hidden;
 }
@@ -689,10 +690,17 @@ body {
   letter-spacing: 0.5px;
   font-size: 20px;
 }
+.nav-logo {
+  display: block;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+}
 .nav-links {
   display: flex;
   gap: 6px;
   flex: 1;
+  min-width: 0;
   overflow-x: auto;
 }
 .nav-link {
@@ -735,6 +743,13 @@ body {
 }
 .nav-name:hover {
   background: rgba(255, 255, 255, 0.08);
+}
+/* Phones: give the scrolling links the room; the name shrinks first. */
+@media (max-width: 560px) {
+  .nav-name {
+    max-width: 84px;
+    padding: 9px 8px;
+  }
 }
 .nav-name.is-active {
   color: #1a1700;

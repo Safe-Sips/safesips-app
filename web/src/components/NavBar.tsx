@@ -16,9 +16,6 @@ export default function NavBar() {
   const { unread } = useAlerts();
   return (
     <header className="nav">
-      <div className="nav-brand">
-        <span className="nav-title">SafeSips</span>
-      </div>
       <nav className="nav-links" aria-label="Primary">
         {LINKS.map((l) => (
           <NavLink
