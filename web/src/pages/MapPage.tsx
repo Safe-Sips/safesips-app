@@ -13,6 +13,7 @@ import ReportPanel from "../components/ReportPanel";
 import SafeHavenPanel from "../components/SafeHavenPanel";
 import LegalFooter from "../components/LegalFooter";
 import LegalModal from "../components/LegalModal";
+import MapIntro, { hasSeenMapIntro, markMapIntroSeen } from "../components/MapIntro";
 import { PRIVACY_POLICY, TERMS_OF_SERVICE } from "../legal/content";
 
 const ACK_KEY = "safesips.sensitiveAck";
@@ -75,6 +76,12 @@ export default function MapPage() {
   const [havenPoint, setHavenPoint] = useState<LatLng | null>(null);
   const [havens, setHavens] = useState<SafeHavenDTO[]>([]);
   const [legalDoc, setLegalDoc] = useState<LegalDoc>(null);
+  // First visit: explain what the map shows before anyone shares.
+  const [introOpen, setIntroOpen] = useState(() => !hasSeenMapIntro());
+  const closeIntro = useCallback(() => {
+    markMapIntroSeen();
+    setIntroOpen(false);
+  }, []);
 
   const boundsRef = useRef<LatLngBounds | null>(null);
   const fetchTimer = useRef<number | undefined>(undefined);
@@ -314,6 +321,7 @@ export default function MapPage() {
         onStop={onStop}
         onOpenPrivacy={() => setLegalDoc("privacy")}
         onOpenTerms={() => setLegalDoc("terms")}
+        onOpenHowItWorks={() => setIntroOpen(true)}
       />
 
       {/* Report-a-place + find-help controls, or the report-mode banner. */}
@@ -399,7 +407,9 @@ export default function MapPage() {
       <LegalFooter
         onOpenPrivacy={() => setLegalDoc("privacy")}
         onOpenTerms={() => setLegalDoc("terms")}
+        onOpenHowItWorks={() => setIntroOpen(true)}
       />
+      <MapIntro open={introOpen} onClose={closeIntro} />
       <LegalModal
         title="Privacy Policy"
         body={PRIVACY_POLICY}

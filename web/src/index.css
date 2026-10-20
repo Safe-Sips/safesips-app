@@ -331,6 +331,12 @@ body {
   background: rgba(255, 212, 0, 0.25);
   border: 1px solid var(--yellow);
 }
+/* Matches the other-people dots on the map (MapView "other-dot"). */
+.swatch-gray {
+  background: #c5c9d4;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(24, 33, 60, 0.18);
+}
 .swatch-yellow-dim {
   background: rgba(255, 212, 0, 0.12);
   border: 1px dashed var(--yellow);
@@ -755,6 +761,18 @@ body {
   width: 100%;
   margin: 0 auto;
 }
+/* Clerk's card has a fixed width that overflowed (and got clipped) on
+   phones; let it fill the slot instead. */
+.clerk-card .cl-cardBox,
+.clerk-card .cl-card {
+  width: 100%;
+  max-width: 100%;
+}
+@media (max-width: 480px) {
+  .clerk-card {
+    padding: 18px 14px;
+  }
+}
 .auth-brand {
   display: flex;
   align-items: center;
@@ -785,6 +803,101 @@ body {
   padding-top: 14px;
   border-top: 1px solid var(--panel-border);
   font-size: 13px;
+  color: var(--muted);
+}
+.auth-loading {
+  color: var(--muted);
+  font-size: 14px;
+  padding: 32px 0;
+  text-align: center;
+}
+
+/* Logged-out intro beside (desktop) or above (mobile) the sign-in card. */
+.auth-page-split {
+  gap: 40px;
+  flex-wrap: wrap;
+  align-content: center;
+}
+.auth-intro {
+  width: min(420px, 100%);
+}
+.auth-intro-eyebrow {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.auth-intro h2 {
+  margin: 0 0 18px;
+  font-size: 26px;
+  line-height: 1.2;
+}
+.auth-intro-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.auth-intro-list li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.auth-intro-icon {
+  font-size: 20px;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+.auth-intro a {
+  color: var(--accent);
+  font-weight: 700;
+}
+@media (max-width: 860px) {
+  .auth-page-split {
+    gap: 20px;
+  }
+  .auth-intro h2 {
+    font-size: 21px;
+    margin-bottom: 12px;
+  }
+  .auth-intro-list {
+    font-size: 14px;
+    gap: 10px;
+  }
+}
+
+/* One-time "how the map works" explainer. */
+.map-intro {
+  width: min(460px, 100%);
+}
+.map-intro-list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.map-intro-list li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.map-intro-list .legend-swatch {
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+/* Fallback while a lazily-loaded page chunk downloads. */
+.page-loading {
+  padding: 32px;
+  text-align: center;
   color: var(--muted);
 }
 .verify-ok {

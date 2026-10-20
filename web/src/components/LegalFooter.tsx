@@ -3,11 +3,14 @@ import { EMERGENCY_NUMBER } from "../content/firstAid";
 interface LegalFooterProps {
   onOpenPrivacy: () => void;
   onOpenTerms: () => void;
+  /** Reopens the map explainer. */
+  onOpenHowItWorks?: () => void;
 }
 
 export default function LegalFooter({
   onOpenPrivacy,
   onOpenTerms,
+  onOpenHowItWorks,
 }: LegalFooterProps) {
   return (
     <footer className="legal-footer" aria-label="Legal and safety information">
@@ -17,6 +20,14 @@ export default function LegalFooter({
         emergency.
       </p>
       <p className="legal-links">
+        {onOpenHowItWorks && (
+          <>
+            <button type="button" className="legal-link" onClick={onOpenHowItWorks}>
+              How it works
+            </button>
+            <span aria-hidden> · </span>
+          </>
+        )}
         <button type="button" className="legal-link" onClick={onOpenPrivacy}>
           Privacy Policy
         </button>

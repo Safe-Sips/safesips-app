@@ -21,6 +21,8 @@ interface ControlsProps {
   onStop: () => void;
   onOpenPrivacy: () => void;
   onOpenTerms: () => void;
+  /** Reopens the "how the map works" explainer. */
+  onOpenHowItWorks: () => void;
 }
 
 function useIsMobile(breakpoint = 560): boolean {
@@ -115,6 +117,7 @@ export default function Controls({
   onStop,
   onOpenPrivacy,
   onOpenTerms,
+  onOpenHowItWorks,
 }: ControlsProps) {
   const timeSince = useTimeSince(lastUpdateAt);
   const isMobile = useIsMobile();
@@ -179,6 +182,10 @@ export default function Controls({
             an emergency.
           </p>
           <p className="legal-links">
+            <button type="button" className="legal-link" onClick={onOpenHowItWorks}>
+              How it works
+            </button>
+            <span aria-hidden> · </span>
             <button type="button" className="legal-link" onClick={onOpenPrivacy}>
               Privacy Policy
             </button>
