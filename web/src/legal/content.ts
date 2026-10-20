@@ -8,13 +8,13 @@ Last updated: October 2026
 SafeSips ("we", "us") provides a real-time safety map and community features. Using SafeSips requires an account.
 
 Two kinds of location — please read
-• Live presence (the moving circle): your exact GPS position stays on your device. Clients send only a randomized center point within ~50 m of your true location, and other people see only an anonymous ~200 m circle. The circle is never linked to your account identity for other users.
+• Live presence (the moving circle): your exact GPS position stays on your device. Clients send only a randomized center point within ~50 m of your true location, and other people see only an anonymous ~200 m circle. While you share with the app open, the circle follows you in steps of about 100 m, using your device's approximate location. The circle is never linked to your account identity for other users.
 • Safety reports (pins you publish): when you choose to mark a place as safe or unsafe, you intentionally publish that EXACT point, together with your display name, to all users. This is different from the private presence circle — only report places (a venue, a street), never your home.
 
 What we process
 • Account: email address and display name. Sign-in (including passwords and email verification) is handled by our authentication provider, Clerk.
 • Masked presence: a randomized center point + an anonymous per-connection id + timestamps (held in memory only).
-• Safety reports: the exact point you chose, an optional note/tag, your display name, and upvotes.
+• Safety reports: the exact point you chose, an optional note/tag, your display name, and upvotes. Reports are shown on the map for 48 hours, fading as they age, and then hidden; they stay in your account history until you delete them or your account.
 • Forum posts, your activity history (used for badges), and check-in records.
 • SOS contacts: the name, email and optional phone number of people you add. If you miss a check-in, we email your primary contact with your display name and the check-in label so they can check on you. Only add people who agree to be contacted.
 

@@ -401,3 +401,70 @@ test("presence: max-duration cap is measured from an absolute start", async () =
   // Reconnecting (now far past start) still trips the cap: it isn't reset.
   assert.equal(hasReachedMaxDuration(1_000, 1_000 + day * 3, day), true);
 });
+
+test("reports fade from 100% to 60% over 48 h, then expire", () => {
+  const H = 60 * 60 * 1000;
+  const t0 = 1_000_000;
+  assert.equal(shared.reportOpacity(t0, t0), 1);
+  assert.ok(Math.abs(shared.reportOpacity(t0, t0 + 24 * H) - 0.8) < 1e-9, "linear: halfway = 80%");
+  assert.ok(Math.abs(shared.reportOpacity(t0, t0 + 48 * H) - 0.6) < 1e-9);
+  assert.equal(shared.reportOpacity(t0, t0 + 99 * H), 0.6, "never below the floor");
+  assert.equal(shared.reportOpacity(t0 + 5_000, t0), 1, "clock skew can't brighten past 1");
+  assert.equal(shared.isReportExpired(t0, t0 + 48 * H - 1), false);
+  assert.equal(shared.isReportExpired(t0, t0 + 48 * H), true);
+});
+
+test("server stops returning reports older than 48 h", () => {
+  const author = makeUser("aging-author@test.local");
+  const fresh = reports.createReport(author.id, {
+    lat: 45.1, lng: 25.1, safety: "unsafe", category: null, note: null, placeLabel: null,
+  });
+  const old = reports.createReport(author.id, {
+    lat: 45.1, lng: 25.1, safety: "safe", category: null, note: null, placeLabel: null,
+  });
+  db.prepare(`UPDATE reports SET created_at = ? WHERE id = ?`).run(
+    Date.now() - 49 * 60 * 60 * 1000,
+    old.id
+  );
+  const bbox = { minLat: 45, maxLat: 45.2, minLng: 25, maxLng: 25.2 };
+  const ids = reports.listReportsInBbox(author.id, bbox, 100).map((r) => r.id);
+  assert.ok(ids.includes(fresh.id), "fresh report listed");
+  assert.ok(!ids.includes(old.id), "expired report hidden");
+  assert.equal(reports.getReportDTO(old.id, author.id), undefined);
+  // Kept for the author's history: they can still delete it.
+  assert.equal(reports.getReportAuthor(old.id), author.id);
+});
+
+test("distanceMeters is roughly right", () => {
+  const d = shared.distanceMeters({ lat: 44.4268, lng: 26.1025 }, { lat: 44.4278, lng: 26.1025 });
+  assert.ok(d > 105 && d < 117, `0.001° latitude ≈ 111 m, got ${d}`);
+  assert.equal(shared.distanceMeters({ lat: 1, lng: 2 }, { lat: 1, lng: 2 }), 0);
+});
+
+test("live circle moves only on real, accurate, spaced-out movement", () => {
+  const base = { lat: 44.4268, lng: 26.1025 };
+  const north = (m: number) => ({ lat: base.lat + m / 111_320, lng: base.lng });
+  const ok = { lastPublished: base, accuracyMeters: 30, msSinceLastPublish: 60_000 };
+  assert.equal(shared.shouldMoveCircle({ ...ok, here: north(40) }), false, "small move: stay");
+  assert.equal(shared.shouldMoveCircle({ ...ok, here: north(150) }), true, "real move: go");
+  assert.equal(
+    shared.shouldMoveCircle({ ...ok, here: north(150), msSinceLastPublish: 5_000 }),
+    false,
+    "too soon after the last publish"
+  );
+  assert.equal(
+    shared.shouldMoveCircle({ ...ok, here: north(150), accuracyMeters: 900 }),
+    false,
+    "fix too inaccurate"
+  );
+  assert.equal(
+    shared.shouldMoveCircle({ ...ok, here: north(150), accuracyMeters: 300 }),
+    false,
+    "moved less than the fix's own uncertainty (jitter)"
+  );
+  assert.equal(
+    shared.shouldMoveCircle({ ...ok, lastPublished: null, here: north(5) }),
+    true,
+    "resumed share: first good fix places the circle"
+  );
+});

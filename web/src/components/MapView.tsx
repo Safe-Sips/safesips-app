@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CircleMarker,
   MapContainer,
@@ -11,13 +11,15 @@ import {
 import L from "leaflet";
 // Loaded with the (lazy) map chunk instead of on every page.
 import "leaflet/dist/leaflet.css";
-import type {
-  LatLng,
-  PresenceRecord,
-  ReportDTO,
-  SafeHavenDTO,
-  SafeHavenKind,
+import {
+  reportOpacity,
+  type LatLng,
+  type PresenceRecord,
+  type ReportDTO,
+  type SafeHavenDTO,
+  type SafeHavenKind,
 } from "@safesips/shared";
+import { timeAgo } from "../format";
 import PrivacyCircle from "./PrivacyCircle";
 
 /** A place to recenter the map on. Optional zoom overrides the focus zoom. */
@@ -28,7 +30,10 @@ interface MapViewProps {
   exact: LatLng | null;
   selfPublic: LatLng | null;
   others: PresenceRecord[];
+  /** Reports still on the map (expired ones already filtered out). */
   reports: ReportDTO[];
+  /** Clock used to fade reports by age (ticks every few minutes). */
+  reportNow: number;
   havens: SafeHavenDTO[];
   /** When true, a map click picks a point to report. */
   pickMode: boolean;
@@ -106,15 +111,23 @@ const PENDING_ICON = L.divIcon({
   iconAnchor: [16, 30],
 });
 
+/**
+ * Centres the map on you once, when sharing starts. It deliberately does not
+ * follow later moves: the live circle updates while you walk, and snapping the
+ * view back each time would fight you panning around the map.
+ */
 function Recenter({ exact }: { exact: LatLng | null }) {
   const map = useMap();
+  const sharing = exact !== null;
+  const exactRef = useRef(exact);
+  exactRef.current = exact;
   useEffect(() => {
-    if (exact) {
-      map.setView([exact.lat, exact.lng], Math.max(map.getZoom(), FOCUS_ZOOM), {
-        animate: !prefersReducedMotion(),
-      });
-    }
-  }, [exact?.lat, exact?.lng, map]);
+    const here = exactRef.current;
+    if (!sharing || !here) return;
+    map.setView([here.lat, here.lng], Math.max(map.getZoom(), FOCUS_ZOOM), {
+      animate: !prefersReducedMotion(),
+    });
+  }, [sharing, map]);
   return null;
 }
 
@@ -168,6 +181,7 @@ export default function MapView({
   selfPublic,
   others,
   reports,
+  reportNow,
   havens,
   pickMode,
   pendingPoint,
@@ -223,25 +237,31 @@ export default function MapView({
         <PrivacyCircle center={[selfPublic.lat, selfPublic.lng]} isSelf />
       )}
 
-      {/* Safety reports — EXACT, intentionally public points. */}
-      {reports.map((r) => (
-        <CircleMarker
-          key={r.id}
-          center={[r.lat, r.lng]}
-          radius={9}
-          pathOptions={{
-            color: "#ffffff",
-            weight: 2,
-            fillColor: r.safety === "unsafe" ? "#ff4d5e" : "#2ed573",
-            fillOpacity: 0.9,
-          }}
-          eventHandlers={{ click: () => onSelectReport(r) }}
-        >
-          <Tooltip direction="top" offset={[0, -8]}>
-            {r.safety === "unsafe" ? "⚠️ Unsafe" : "✓ Safe"} · {r.voteCount} ▲
-          </Tooltip>
-        </CircleMarker>
-      ))}
+      {/* Safety reports — EXACT, intentionally public points. They fade
+          from full strength to 60% over 48 h, then disappear. */}
+      {reports.map((r) => {
+        const opacity = reportOpacity(r.createdAt, reportNow);
+        return (
+          <CircleMarker
+            key={r.id}
+            center={[r.lat, r.lng]}
+            radius={9}
+            pathOptions={{
+              color: "#ffffff",
+              weight: 2,
+              opacity,
+              fillColor: r.safety === "unsafe" ? "#ff4d5e" : "#2ed573",
+              fillOpacity: 0.9 * opacity,
+            }}
+            eventHandlers={{ click: () => onSelectReport(r) }}
+          >
+            <Tooltip direction="top" offset={[0, -8]}>
+              {r.safety === "unsafe" ? "⚠️ Unsafe" : "✓ Safe"} · {r.voteCount} ▲ ·{" "}
+              {timeAgo(r.createdAt)}
+            </Tooltip>
+          </CircleMarker>
+        );
+      })}
 
       {/* Nearby safe havens. */}
       {havens.map((h) => (

@@ -55,8 +55,8 @@ export default function MapIntro({
             <span className="legend-swatch swatch-yellow" aria-hidden="true" />
             <span>
               <strong>Yellow circle — what others see.</strong> An anonymous
-              ~200 m area around a random point near you, re-randomized on every
-              update.
+              ~200 m area around a random point near you. While SafeSips is
+              open it moves with you, in steps of about 100 m.
             </span>
           </li>
           <li>
