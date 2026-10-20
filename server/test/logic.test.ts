@@ -600,3 +600,57 @@ test("check-ins keep going after a miss (next one is scheduled)", () => {
   assert.equal(next.due_at, now - 70_000 + 60_000, "one interval after the missed one");
   assert.equal(next.deadline_at - next.due_at, 60_000, "with the plan's answer window");
 });
+
+test("friends: request by code, accept, profile only for friends", async () => {
+  const friends = await import("../src/repos/friends.js");
+  const contacts = await import("../src/repos/emergencyContacts.js");
+  const ana = makeUser("fr-ana@example.com");
+  const bo = makeUser("fr-bo@example.com");
+  const cy = makeUser("fr-cy@example.com");
+  const boCode = friends.getFriendsOverview(bo.id).myCode;
+
+  const sent = friends.requestFriend(ana.id, boCode.toLowerCase());
+  assert.ok(sent.ok && sent.notify?.userId === bo.id && !sent.notify.accepted);
+  // Pending: Bo sees the request; Ana sees only what she typed, not his name.
+  assert.equal(friends.getFriendsOverview(bo.id).incoming[0].fromDisplayName, ana.display_name);
+  assert.equal(friends.getFriendsOverview(ana.id).outgoing[0].label, boCode);
+  assert.equal(friends.getFriendProfile(ana.id, bo.id), null, "no profile before accepting");
+
+  const reqId = friends.getFriendsOverview(bo.id).incoming[0].id;
+  assert.equal(friends.acceptFriend(ana.id, reqId), null, "only the addressee can accept");
+  assert.equal(friends.acceptFriend(bo.id, reqId), ana.id);
+  assert.equal(friends.getFriendsOverview(ana.id).friends[0].userId, bo.id);
+  const profile = friends.getFriendProfile(ana.id, bo.id);
+  assert.equal(profile?.displayName, bo.display_name);
+  assert.equal(profile?.emergencyContact, "none");
+  assert.equal(friends.getFriendProfile(cy.id, bo.id), null, "strangers can't see profiles");
+
+  // A friend can be asked to be an emergency contact; it's still a request.
+  assert.ok(contacts.requestContactForUser(ana.id, bo.id).ok);
+  assert.equal(friends.getFriendProfile(ana.id, bo.id)?.emergencyContact, "pending");
+
+  // Unfriend from either side.
+  assert.equal(friends.removeFriendship(cy.id, reqId), null);
+  assert.equal(friends.removeFriendship(bo.id, reqId), ana.id);
+  assert.equal(friends.getFriendProfile(ana.id, bo.id), null);
+});
+
+test("friends: email replies don't reveal accounts; asking back accepts", async () => {
+  const friends = await import("../src/repos/friends.js");
+  const di = makeUser("fr-di@example.com");
+  const ed = makeUser("fr-ed@example.com");
+  const unknown = friends.requestFriend(di.id, "nobody-here@example.com");
+  const known = friends.requestFriend(di.id, "FR-ED@example.com");
+  assert.ok(unknown.ok && known.ok);
+  assert.equal(
+    unknown.message.replace("nobody-here@example.com", "X"),
+    known.message.replace("fr-ed@example.com", "X"),
+    "same reply whether or not the email has an account"
+  );
+  assert.equal(friends.getFriendsOverview(di.id).outgoing.length, 1, "nothing stored for unknown emails");
+  // Ed asks Di back by email → they're friends, and Di is told.
+  const back = friends.requestFriend(ed.id, "fr-di@example.com");
+  assert.ok(back.ok && back.notify?.userId === di.id && back.notify.accepted);
+  assert.ok(friends.areFriends(di.id, ed.id));
+  assert.equal(friends.requestFriend(di.id, "fr-di@example.com").ok, false, "can't friend yourself");
+});

@@ -10,6 +10,8 @@ import type {
   SafeHavenDTO,
   CheckinAlertDTO,
   ContactsOverviewDTO,
+  FriendProfileDTO,
+  FriendsOverviewDTO,
   ThreadDTO,
   ThreadDetailDTO,
   UserDTO,
@@ -22,6 +24,18 @@ const API_BASE = (
   import.meta.env.VITE_SERVER_URL ??
   "http://localhost:4000"
 ).replace(/\/+$/, "");
+
+/**
+ * Fire-and-forget request so a sleeping API host starts waking up while the
+ * page and Clerk are still loading, instead of after sign-in.
+ */
+export function warmUpApi(): void {
+  try {
+    void fetch(`${API_BASE}/health`, { mode: "no-cors", cache: "no-store" }).catch(() => undefined);
+  } catch {
+    /* ignore */
+  }
+}
 
 let authToken: string | null = null;
 type TokenGetter = () => Promise<string | null>;
@@ -176,6 +190,24 @@ export const api = {
     request<ContactsOverviewDTO>(`/api/contacts/${id}/accept`, { method: "POST", body: {} }),
   removeContact: (id: string) =>
     request<ContactsOverviewDTO>(`/api/contacts/${id}`, { method: "DELETE" }),
+
+  // Friends (other SafeSips users) and their profiles
+  friends: () => request<FriendsOverviewDTO>("/api/friends"),
+  addFriend: (identifier: string) =>
+    request<{ message: string; overview: FriendsOverviewDTO }>("/api/friends", {
+      body: { identifier },
+    }),
+  acceptFriend: (id: string) =>
+    request<FriendsOverviewDTO>(`/api/friends/${encodeURIComponent(id)}/accept`, { method: "POST", body: {} }),
+  removeFriend: (id: string) =>
+    request<FriendsOverviewDTO>(`/api/friends/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  friendProfile: (userId: string) =>
+    request<FriendProfileDTO>(`/api/friends/${encodeURIComponent(userId)}/profile`),
+  askFriendAsContact: (userId: string) =>
+    request<FriendProfileDTO>(`/api/friends/${encodeURIComponent(userId)}/emergency-contact`, {
+      method: "POST",
+      body: {},
+    }),
 
   // Alerts I received as someone's emergency contact
   alerts: () => request<{ alerts: CheckinAlertDTO[]; unread: number }>("/api/alerts"),

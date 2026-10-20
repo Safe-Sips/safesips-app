@@ -163,6 +163,30 @@ export function requestContact(ownerId: string, identifier: string): AddResult {
   return { ok: true, message: "Request sent.", notifyUserId: exists ? null : target.id };
 }
 
+/**
+ * Ask a friend (by user id) to be my emergency contact. The caller checks we
+ * are friends. They still have to accept, like any other request.
+ */
+export function requestContactForUser(ownerId: string, targetId: string): AddResult {
+  if (targetId === ownerId) return { ok: false, error: "That's you." };
+  const since = nowMs() - 24 * 60 * 60 * 1000;
+  if ((countRecentRequests.get(ownerId, since) as { c: number }).c >= MAX_REQUESTS_PER_DAY) {
+    return { ok: false, error: "You've sent a lot of requests today. Try again tomorrow." };
+  }
+  const exists = linkByOwnerContact.get(ownerId, targetId);
+  if (!exists) {
+    insertLink.run({
+      id: genId(),
+      owner_id: ownerId,
+      contact_user_id: targetId,
+      invite_email_norm: null,
+      invite_label: "Friend",
+      created_at: nowMs(),
+    });
+  }
+  return { ok: true, message: "Request sent.", notifyUserId: exists ? null : targetId };
+}
+
 export function getOverview(userId: string): ContactsOverviewDTO {
   const email = (userEmailNorm.get(userId) as { email_norm: string } | undefined)?.email_norm ?? "";
   const contacts = (outgoing.all(userId) as Array<{

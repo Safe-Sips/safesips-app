@@ -36,6 +36,7 @@ export interface AccountExport {
   sosContacts: Row[];
   emergencyContacts: Row[];
   emergencyContactFor: Row[];
+  friends: Row[];
   alertsReceived: Row[];
   pushDevices: Row[];
   checkinPlans: Row[];
@@ -75,6 +76,15 @@ export function exportAccountData(userId: string): AccountExport | null {
       `SELECT a.id, o.display_name AS person, a.plan_label, a.area_lat, a.area_lng, a.created_at, a.acknowledged_at
          FROM checkin_alerts a JOIN users o ON o.id = a.owner_id WHERE a.contact_user_id = ?`,
       userId
+    ),
+    friends: all(
+      `SELECT f.id, f.status, f.created_at, f.responded_at,
+              CASE WHEN f.requester_id = ? THEN 'sent' ELSE 'received' END AS direction,
+              CASE WHEN f.status = 'accepted' OR f.addressee_id = ? THEN o.display_name ELSE f.invite_label END AS person
+         FROM friendships f
+         JOIN users o ON o.id = CASE WHEN f.requester_id = ? THEN f.addressee_id ELSE f.requester_id END
+        WHERE f.requester_id = ? OR f.addressee_id = ?`,
+      userId, userId, userId, userId, userId
     ),
     pushDevices: all(`SELECT id, created_at FROM push_subscriptions WHERE user_id = ?`, userId),
     checkinPlans: omit(all(`SELECT * FROM checkin_plans WHERE user_id = ?`, userId), [
