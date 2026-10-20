@@ -1,6 +1,7 @@
 import { config } from "../config.js";
 import { db } from "../db.js";
-import { genId, nowMs, sha256 } from "../util.js";
+import { hashIdentifier } from "../privacyHash.js";
+import { genId, nowMs } from "../util.js";
 
 const insertAttempt = db.prepare(
   `INSERT INTO auth_attempts (id, key, created_at) VALUES (?, ?, ?)`
@@ -10,12 +11,13 @@ const countRecent = db.prepare(
 );
 const deleteOld = db.prepare(`DELETE FROM auth_attempts WHERE created_at <= ?`);
 
+// Throttle keys are stored in auth_attempts, so never keep the raw email or IP.
 export function loginKey(emailNorm: string): string {
-  return `login:${emailNorm}`;
+  return `login:${hashIdentifier(emailNorm)}`;
 }
 
 export function ipKey(ip: string): string {
-  return `ip:${sha256(ip)}`;
+  return `ip:${hashIdentifier(ip)}`;
 }
 
 /** Record one failed auth attempt for a key (email or IP). */

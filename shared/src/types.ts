@@ -15,6 +15,12 @@ export const MASK_RADIUS_METERS = 50;
 /** How often a sharing client re-publishes to keep its presence alive (ms). */
 export const PRESENCE_HEARTBEAT_MS = 45_000;
 
+/**
+ * Emergency number shown in the UI and in SOS alert emails. SafeSips targets
+ * Romania / the EU, where 112 is the universal emergency number.
+ */
+export const EMERGENCY_NUMBER = "112";
+
 /** Maximum continuous sharing duration before auto-stop (ms). */
 export const SHARE_MAX_DURATION_MS = 24 * 60 * 60 * 1000;
 

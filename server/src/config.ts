@@ -119,6 +119,8 @@ export const config = {
 
   // Auth.
   jwtSecret: resolveJwtSecret(),
+  /** Optional dedicated key for hashing IPs/emails (falls back to JWT_SECRET). */
+  hashPepper: process.env.HASH_PEPPER?.trim() || null,
   jwtTtlDays: intEnv("JWT_TTL_DAYS", 7),
   bcryptRounds: intEnv("BCRYPT_ROUNDS", 11),
   /** Sliding-window throttle for failed auth attempts (per email + per IP). */
@@ -154,6 +156,14 @@ export const config = {
   // NEVER enable in production.
   allowTestToken: boolEnv("ALLOW_TEST_TOKEN") && !isProduction,
 };
+
+if (isProduction && !config.smtp) {
+  // eslint-disable-next-line no-console
+  console.error(
+    "[config] SMTP_HOST is not set. SOS alerts for missed check-ins will NOT be emailed " +
+      "(the check-ins page warns users) and verification emails won't send."
+  );
+}
 
 if (isProduction && !config.clerkSecretKey) {
   // eslint-disable-next-line no-console

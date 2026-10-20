@@ -51,6 +51,26 @@ export function untrackUserSocket(userId: string, socketId: string): void {
   if (set.size === 0) socketsByUser.delete(userId);
 }
 
+/** Removes a user's live presence circle; registered by index.ts. */
+let presencePurger: ((userId: string) => void) | null = null;
+
+export function setUserPresencePurger(fn: (userId: string) => void): void {
+  presencePurger = fn;
+}
+
+/**
+ * On account deletion: drop the user's live circle immediately (instead of
+ * waiting for its TTL / "share for" hold) and close their sockets.
+ */
+export function purgeUserRealtime(userId: string): void {
+  presencePurger?.(userId);
+  const set = socketsByUser.get(userId);
+  if (set && io) {
+    for (const socketId of set) io.in(socketId).disconnectSockets(true);
+  }
+  socketsByUser.delete(userId);
+}
+
 /**
  * Broadcast a newly published safety report to everyone. A report intentionally
  * carries an EXACT point + author display name (a deliberate public publish) —

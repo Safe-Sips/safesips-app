@@ -180,6 +180,15 @@ export interface SosContactDTO {
   createdAt: number;
 }
 
+/**
+ * Which channels this server can actually use to alert an SOS contact when a
+ * check-in is missed. The UI must not imply alerts work when these are false.
+ */
+export interface SosDeliveryDTO {
+  email: boolean;
+  sms: boolean;
+}
+
 /* ------------------------------- Check-ins ------------------------------ */
 
 export type CheckinPlanStatus = "active" | "paused" | "ended";

@@ -6,7 +6,7 @@ import {
   type ActivityKind,
   type UserStatsDTO,
 } from "@safesips/shared";
-import { api } from "../api";
+import { api, ApiError } from "../api";
 import { useAuth } from "../auth/AuthContext";
 import BadgeChip from "../components/BadgeChip";
 import { timeAgo } from "../format";
@@ -27,6 +27,114 @@ const COUNT_LABELS: Array<{ key: keyof UserStatsDTO["counts"]; label: string }> 
   { key: "posts", label: "Forum replies" },
   { key: "checkinsCompleted", label: "Check-ins completed" },
 ];
+
+/** GDPR rights: download everything we store, or erase the account. */
+function YourDataSection() {
+  const { logout } = useAuth();
+  const [busy, setBusy] = useState<"export" | "delete" | null>(null);
+  const [confirmText, setConfirmText] = useState("");
+  const [showDelete, setShowDelete] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const download = async () => {
+    setError(null);
+    setBusy("export");
+    try {
+      const data = await api.exportMyData();
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "safesips-data-export.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not export your data.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const remove = async () => {
+    setError(null);
+    setBusy("delete");
+    try {
+      await api.deleteAccount();
+      await logout();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not delete your account.");
+      setBusy(null);
+    }
+  };
+
+  return (
+    <section className="card">
+      <h2>Your data</h2>
+      <p className="muted">
+        Download a copy of everything SafeSips stores about you, or permanently
+        delete your account.
+      </p>
+      <div className="data-actions">
+        <button
+          className="btn btn-ghost"
+          onClick={download}
+          disabled={busy !== null}
+        >
+          {busy === "export" ? "Preparing…" : "Download my data"}
+        </button>
+        {!showDelete && (
+          <button
+            className="btn btn-danger"
+            onClick={() => setShowDelete(true)}
+            disabled={busy !== null}
+          >
+            Delete my account
+          </button>
+        )}
+      </div>
+
+      {showDelete && (
+        <div className="danger-zone">
+          <p>
+            This permanently deletes your account, safety reports, forum posts
+            and threads (including replies inside them), votes, SOS contacts,
+            check-ins and activity. <strong>It can't be undone.</strong>
+          </p>
+          <label className="field">
+            <span>Type DELETE to confirm</span>
+            <input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              autoComplete="off"
+            />
+          </label>
+          <div className="data-actions">
+            <button
+              className="btn btn-danger"
+              onClick={remove}
+              disabled={confirmText !== "DELETE" || busy !== null}
+            >
+              {busy === "delete" ? "Deleting…" : "Permanently delete"}
+            </button>
+            <button
+              className="btn btn-ghost"
+              onClick={() => {
+                setShowDelete(false);
+                setConfirmText("");
+              }}
+              disabled={busy !== null}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {error && <p className="error">{error}</p>}
+    </section>
+  );
+}
 
 export default function ProfilePage() {
   const { user } = useAuth();
@@ -130,6 +238,8 @@ export default function ProfilePage() {
           </ul>
         )}
       </section>
+
+      <YourDataSection />
     </div>
   );
 }

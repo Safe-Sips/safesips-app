@@ -1,6 +1,6 @@
 import type Database from "better-sqlite3";
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 /**
  * Full schema, created idempotently with CREATE TABLE/INDEX IF NOT EXISTS.
@@ -205,6 +205,16 @@ export function runMigrations(db: Database.Database): void {
         SCHEMA_VERSION
       );
     } else if (row.version !== SCHEMA_VERSION) {
+      if (row.version < 3) {
+        // v3: IPs/emails are now stored as keyed hashes (privacyHash.ts).
+        // Drop the legacy unsalted SHA-256 IP hashes (write-only, never
+        // read) and the throttle rows keyed by raw email / unsalted IP.
+        db.exec(`
+          UPDATE sessions SET ip_hash = NULL;
+          UPDATE waitlist SET ip_hash = NULL;
+          DELETE FROM auth_attempts;
+        `);
+      }
       db.prepare("UPDATE schema_version SET version = ?").run(SCHEMA_VERSION);
     }
     const userCols = db

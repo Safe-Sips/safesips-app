@@ -5,7 +5,8 @@ import { asyncHandler, isValidEmail, parseBody } from "../http.js";
 import { verifyCaptcha } from "../auth/captcha.js";
 import { clientIp } from "../auth/middleware.js";
 import { db } from "../db.js";
-import { cleanText, genId, normalizeEmail, nowMs, sha256 } from "../util.js";
+import { hashIdentifier } from "../privacyHash.js";
+import { cleanText, genId, normalizeEmail, nowMs } from "../util.js";
 
 export const waitlistRouter = Router();
 
@@ -51,7 +52,7 @@ waitlistRouter.post(
       country: cleanText(body.country, 80),
       interest: cleanText(body.interest, 40),
       created_at: nowMs(),
-      ip_hash: sha256(ip),
+      ip_hash: hashIdentifier(ip),
     });
     // Always report success — never reveal whether the email already existed.
     res.status(201).json({ ok: true });

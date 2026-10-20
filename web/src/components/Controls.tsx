@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { SHARE_DURATION_OPTIONS_MS } from "@safesips/shared";
+import { EMERGENCY_NUMBER } from "../content/firstAid";
 import type { ConnectionState } from "../hooks/usePresence";
 
 interface ControlsProps {
@@ -174,7 +175,8 @@ export default function Controls({
         <div className="panel-mobile-legal" aria-label="Legal and safety information">
           <p className="legal-emergency">
             SafeSips is <strong>not</strong> an emergency service. Call{" "}
-            <strong>911</strong> (or your local emergency number) in an emergency.
+            <strong>{EMERGENCY_NUMBER}</strong> (or your local emergency number) in
+            an emergency.
           </p>
           <p className="legal-links">
             <button type="button" className="legal-link" onClick={onOpenPrivacy}>

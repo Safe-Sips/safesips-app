@@ -9,19 +9,22 @@ import { db } from "../db.js";
 const qReports = db.prepare(
   `SELECT COUNT(*) AS c FROM reports WHERE author_id = ? AND status = 'visible'`
 );
+// Only upvotes (value > 0) count toward engagement. Forum votes are ±1, so a
+// plain COUNT(*) would make downvotes raise both the voter's and the
+// author's score.
 const qReportVotesGiven = db.prepare(
-  `SELECT COUNT(*) AS c FROM report_votes WHERE user_id = ?`
+  `SELECT COUNT(*) AS c FROM report_votes WHERE user_id = ? AND value > 0`
 );
 const qPostVotesGiven = db.prepare(
-  `SELECT COUNT(*) AS c FROM forum_post_votes WHERE user_id = ?`
+  `SELECT COUNT(*) AS c FROM forum_post_votes WHERE user_id = ? AND value > 0`
 );
 const qReportVotesReceived = db.prepare(
   `SELECT COUNT(*) AS c FROM report_votes v
-   JOIN reports r ON r.id = v.report_id WHERE r.author_id = ?`
+   JOIN reports r ON r.id = v.report_id WHERE r.author_id = ? AND v.value > 0`
 );
 const qPostVotesReceived = db.prepare(
   `SELECT COUNT(*) AS c FROM forum_post_votes v
-   JOIN forum_posts p ON p.id = v.post_id WHERE p.author_id = ?`
+   JOIN forum_posts p ON p.id = v.post_id WHERE p.author_id = ? AND v.value > 0`
 );
 const qThreads = db.prepare(
   `SELECT COUNT(*) AS c FROM forum_threads WHERE author_id = ? AND status = 'visible'`

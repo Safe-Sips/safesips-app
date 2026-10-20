@@ -48,8 +48,11 @@ Beyond the anonymous live map, SafeSips now has account-based features backed by
   hospital, fire station, fuel, pharmacy, 24/7 spots) via an Overpass proxy.
 - **Check-ins & SOS** — schedule recurring check-ins with a security question; a
   server-side scheduler escalates to your primary SOS contact if you miss one
-  (works even if the app is closed). Notifier is a stub today (logs), pluggable
-  to SMS/email later.
+  (works even if the app is closed). The contact is **emailed** via SMTP, so
+  `SMTP_HOST` must be set for alerts to work — without it the check-ins page
+  warns that alerts are not active. SMS is not supported yet, so contacts need
+  an email. Every attempt and its real outcome is recorded in
+  `checkin_escalations`.
 - **Community forum**, **first-aid info** (spiking), and a **waitlist**.
 
 Privacy invariant is preserved: exact presence coordinates never leave the

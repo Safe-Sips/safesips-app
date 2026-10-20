@@ -10,6 +10,7 @@ import type {
   SafeHavenDTO,
   SosContactDTO,
   SosContactInput,
+  SosDeliveryDTO,
   ThreadDTO,
   ThreadDetailDTO,
   UserDTO,
@@ -155,11 +156,20 @@ export const api = {
 
   // Profile
   stats: () => request<UserStatsDTO>("/api/users/me/stats"),
+  /** GDPR export: everything stored about the signed-in account. */
+  exportMyData: () => request<unknown>("/api/users/me/export"),
+  /** GDPR erasure. Irreversible. */
+  deleteAccount: () =>
+    request<{ ok: true; clerkDeleted: boolean }>("/api/users/me", {
+      method: "DELETE",
+      body: { confirm: "DELETE" },
+    }),
   activity: (cursor?: number) =>
     request<ActivityDTO[]>(`/api/users/me/activity${cursor ? `?cursor=${cursor}` : ""}`),
 
   // SOS contacts
   listContacts: () => request<SosContactDTO[]>("/api/sos-contacts"),
+  sosDelivery: () => request<SosDeliveryDTO>("/api/sos-contacts/delivery"),
   createContact: (input: SosContactInput) =>
     request<SosContactDTO>("/api/sos-contacts", { body: input }),
   deleteContact: (id: string) =>

@@ -5,7 +5,8 @@
  * advice. This copy should be reviewed by a qualified person before launch.
  */
 
-export const EMERGENCY_NUMBER = "112";
+// Single source of truth lives in @safesips/shared (also used by SOS emails).
+export { EMERGENCY_NUMBER } from "@safesips/shared";
 
 export interface InfoStep {
   title: string;

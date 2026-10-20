@@ -151,6 +151,160 @@ test("wrong check-in answer is rejected but stays answerable", () => {
   assert.ok(good && good.correct, "correct answer still accepted afterwards");
 });
 
+test("SOS escalation records the real delivery outcome", async () => {
+  const { notifyContact } = await import("../src/notify.js");
+  const mailer = await import("../src/mailer.js");
+  const sos = await import("../src/repos/sosContacts.js");
+  const user = makeUser("sos-owner@test.local");
+  const plan = checkins.createPlan(user.id, {
+    label: null,
+    intervalMinutes: 60,
+    graceMinutes: 10,
+    question: "q?",
+    answer: "a",
+    endsAt: null,
+  });
+  const now = Date.now();
+  const occ = (id: string) => {
+    db.prepare(
+      `INSERT INTO checkin_occurrences (id, plan_id, user_id, due_at, deadline_at, status, prompted_at, created_at)
+       VALUES (?, ?, ?, ?, ?, 'missed', ?, ?)`
+    ).run(id, plan.id, user.id, now, now, now, now);
+    return { occurrenceId: id, personName: "<b>Ana</b>", planLabel: "Club & bar" };
+  };
+  const recorded = (id: string) =>
+    db.prepare(`SELECT channel, status FROM checkin_escalations WHERE occurrence_id = ?`).get(id);
+
+  // No contact at all.
+  let r = await notifyContact(occ("esc-none"), null);
+  assert.deepEqual([r.channel, r.status], ["none", "failed"]);
+  assert.deepEqual(recorded("esc-none"), { channel: "none", status: "failed" });
+
+  // Phone-only contact: no SMS provider, must NOT be reported as sent.
+  const phoneOnly = sos.createContact(user.id, { name: "Pat", email: null, phone: "+40700000000", isPrimary: false });
+  r = await notifyContact(occ("esc-sms"), { ...phoneOnly });
+  assert.deepEqual([r.channel, r.status], ["sms", "failed"]);
+
+  const withEmail = sos.createContact(user.id, { name: "Mo", email: "mo@test.local", phone: null, isPrimary: true });
+
+  // Email contact but SMTP not configured: failed, not silently "sent".
+  mailer.setMailTransport(null);
+  r = await notifyContact(occ("esc-nosmtp"), { ...withEmail });
+  assert.deepEqual([r.channel, r.status], ["email", "failed"]);
+
+  // Email contact with a working transport: actually sent, names the person.
+  const sent: Array<{ to: string; subject: string; text: string; html: string }> = [];
+  mailer.setMailTransport({
+    sendMail: async (m: (typeof sent)[number]) => {
+      sent.push(m);
+      return {};
+    },
+  } as never);
+  r = await notifyContact(occ("esc-ok"), { ...withEmail });
+  mailer.setMailTransport(null);
+  assert.deepEqual([r.channel, r.status], ["email", "sent"]);
+  assert.deepEqual(recorded("esc-ok"), { channel: "email", status: "sent" });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].to, "mo@test.local");
+  assert.match(sent[0].subject, /<b>Ana<\/b> missed a safety check-in/);
+  assert.match(sent[0].text, /call 112/);
+  assert.ok(sent[0].html.includes("&lt;b&gt;Ana&lt;/b&gt;"), "name is HTML-escaped");
+  assert.ok(sent[0].html.includes("Club &amp; bar"), "label is HTML-escaped");
+  assert.ok(!sent[0].html.includes("<b>Ana</b>"), "raw HTML from the name is not injected");
+});
+
+test("IPs and emails are stored as keyed hashes, not plain sha256", async () => {
+  const { hashIdentifier } = await import("../src/privacyHash.js");
+  const { loginKey, ipKey } = await import("../src/auth/throttle.js");
+  const { sha256 } = await import("../src/util.js");
+  assert.notEqual(hashIdentifier("203.0.113.7"), sha256("203.0.113.7"), "not plain sha256");
+  assert.equal(hashIdentifier("203.0.113.7"), hashIdentifier("203.0.113.7"), "deterministic");
+  assert.ok(!loginKey("ana@test.local").includes("ana@test.local"), "no raw email in throttle key");
+  assert.ok(!ipKey("203.0.113.7").includes("203.0.113.7"));
+});
+
+test("GDPR: export covers the account and omits secrets", async () => {
+  const account = await import("../src/repos/account.js");
+  const sos = await import("../src/repos/sosContacts.js");
+  const user = makeUser("export-me@test.local");
+  sos.createContact(user.id, { name: "Kim", email: "kim@test.local", phone: null, isPrimary: true });
+  checkins.createPlan(user.id, {
+    label: "Night out",
+    intervalMinutes: 60,
+    graceMinutes: 10,
+    question: "q?",
+    answer: "secret",
+    endsAt: null,
+  });
+  const data = account.exportAccountData(user.id)!;
+  assert.equal(data.profile.id, user.id);
+  assert.ok(!("password_hash" in data.profile), "password hash omitted");
+  assert.equal(data.sosContacts.length, 1);
+  assert.equal(data.checkinPlans.length, 1);
+  assert.ok(!("answer_hash" in data.checkinPlans[0]), "security-answer hash omitted");
+  assert.equal(account.exportAccountData("no-such-user"), null);
+});
+
+test("GDPR: account deletion erases the user's data and nobody else's", async () => {
+  const account = await import("../src/repos/account.js");
+  const sos = await import("../src/repos/sosContacts.js");
+  const gone = makeUser("delete-me@test.local");
+  const other = makeUser("keep-me@test.local");
+  const now = Date.now();
+  for (const u of [gone, other]) {
+    sos.createContact(u.id, { name: "C", email: "c@test.local", phone: null, isPrimary: true });
+    reports.createReport(u.id, {
+      lat: 44.4,
+      lng: 26.1,
+      safety: "safe",
+      category: null,
+      note: null,
+      placeLabel: null,
+    });
+  }
+  db.prepare(
+    `INSERT INTO waitlist (id, name, email, email_norm, created_at) VALUES (?, ?, ?, ?, ?)`
+  ).run("wl-gone", "G", "delete-me@test.local", "delete-me@test.local", now);
+
+  assert.deepEqual(account.deleteAccountData(gone.id), { clerkId: null });
+
+  const count = (sql: string, id: string) => (db.prepare(sql).get(id) as { c: number }).c;
+  assert.equal(count(`SELECT COUNT(*) AS c FROM users WHERE id = ?`, gone.id), 0);
+  assert.equal(count(`SELECT COUNT(*) AS c FROM sos_contacts WHERE user_id = ?`, gone.id), 0);
+  assert.equal(count(`SELECT COUNT(*) AS c FROM reports WHERE author_id = ?`, gone.id), 0);
+  assert.equal(count(`SELECT COUNT(*) AS c FROM waitlist WHERE id = ?`, "wl-gone"), 0);
+  // The other user is untouched.
+  assert.equal(count(`SELECT COUNT(*) AS c FROM users WHERE id = ?`, other.id), 1);
+  assert.equal(count(`SELECT COUNT(*) AS c FROM sos_contacts WHERE user_id = ?`, other.id), 1);
+  assert.equal(count(`SELECT COUNT(*) AS c FROM reports WHERE author_id = ?`, other.id), 1);
+  // Deleting again is a no-op.
+  assert.equal(account.deleteAccountData(gone.id), null);
+});
+
+test("forum downvotes do not raise engagement score", async () => {
+  const forum = await import("../src/repos/forum.js");
+  const stats = await import("../src/repos/stats.js");
+  const author = makeUser("post-author@test.local");
+  const voter = makeUser("post-voter@test.local");
+  const now = Date.now();
+  db.prepare(
+    `INSERT INTO forum_threads (id, author_id, title, created_at, last_post_at) VALUES (?, ?, ?, ?, ?)`
+  ).run("thr-dv", author.id, "t", now, now);
+  db.prepare(
+    `INSERT INTO forum_posts (id, thread_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)`
+  ).run("post-dv", "thr-dv", author.id, "b", now);
+
+  const before = stats.computeCounts(author.id);
+  forum.setPostVote("post-dv", voter.id, -1);
+  const afterDown = stats.computeCounts(author.id);
+  assert.equal(afterDown.upvotesReceived, before.upvotesReceived, "downvote not counted as received upvote");
+  assert.equal(stats.computeCounts(voter.id).upvotesGiven, 0, "downvote not counted as given upvote");
+
+  forum.setPostVote("post-dv", voter.id, 1);
+  assert.equal(stats.computeCounts(author.id).upvotesReceived, before.upvotesReceived + 1);
+  assert.equal(stats.computeCounts(voter.id).upvotesGiven, 1);
+});
+
 test("presence: live mode expires after the TTL", async () => {
   const { PresenceStore } = await import("../src/presenceStore.js");
   const store = new PresenceStore(300_000);

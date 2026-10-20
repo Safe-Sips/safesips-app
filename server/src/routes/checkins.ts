@@ -35,10 +35,10 @@ checkinsRouter.post(
     if (!body) return;
 
     // A check-in plan is useless without someone to alert. Require a primary
-    // SOS contact before the plan can arm.
-    if (!getPrimaryContact(req.auth!.userId)) {
+    // SOS contact we can actually reach (email is the only alert channel).
+    if (!getPrimaryContact(req.auth!.userId)?.email) {
       res.status(400).json({
-        error: "Add a primary SOS contact before starting check-ins.",
+        error: "Add a primary SOS contact with an email address before starting check-ins.",
         code: "no_sos_contact",
       });
       return;
