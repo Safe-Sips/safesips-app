@@ -89,6 +89,19 @@ body,
   margin: 0;
 }
 
+/* iOS 26 Home Screen apps installed with the translucent status bar (every
+   install from before we dropped it) are laid out one status bar short, and
+   iOS never paints the strip below — the empty band at the bottom (WebKit bug
+   301108). It only does this while the page is no taller than that short
+   viewport; a page at least as tall as the screen gets the full height. So
+   make <html> 100% + the status bar, capped at the screen height (100lvh).
+   With the solid status bar the top inset is 0 and nothing changes. */
+@media (display-mode: standalone) {
+  html {
+    min-height: min(100lvh, calc(100% + env(safe-area-inset-top, 0px)));
+  }
+}
+
 /* Every page starts with the navy nav. iOS 26 Safari tints the status bar
    from the page (body colour, or a fixed bar at the very top) and no longer
    reads theme-color, so without this it paints a light, foggy band over the
@@ -148,7 +161,7 @@ body {
 .panel {
   position: absolute;
   z-index: 1000;
-  bottom: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
   left: 16px;
   width: min(360px, calc(100% - 32px));
   background: var(--panel);
@@ -509,7 +522,8 @@ body {
 
 @media (max-width: 560px) {
   .panel {
-    bottom: 8px;
+    /* Clear the iPhone home indicator. */
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
     left: 8px;
     right: 8px;
     width: auto;
@@ -584,7 +598,7 @@ body {
 .legal-footer {
   position: absolute;
   z-index: 900;
-  bottom: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   right: 16px;
   left: auto;
   max-width: min(420px, calc(100% - 400px));
@@ -1885,7 +1899,7 @@ select option {
   .haven-panel {
     top: auto;
     /* Sit above the mobile control dock (~content-sized, max 28dvh). */
-    bottom: calc(28dvh + 16px);
+    bottom: calc(28dvh + 16px + env(safe-area-inset-bottom, 0px));
     left: 12px;
     right: 12px;
     width: auto;
