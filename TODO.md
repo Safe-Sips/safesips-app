@@ -72,12 +72,15 @@
 - [x] Check-in / dead-man's-switch + SOS escalation (recording)
 - [x] Community forum + badges
 - [x] SQLite persistence, security hardening, unit + smoke tests
-- [ ] Wire real SMS/email for SOS escalation (currently a stub — safety-critical)
-- [ ] Fix engagement-score bug (downvotes currently raise score)
-- [ ] Reconcile 911 vs 112 across the web UI (Romania → 112)
-- [ ] Add forum moderation/delete + GDPR account-deletion endpoint
-- [ ] Salt the IP/token hashes (currently unsalted SHA-256)
-- [ ] Fix the broken CI workflow (wrong `safesips-app/` path)
+- [x] Email alerts for SOS escalation (real outcome recorded; UI warns when SMTP is off)
+- [ ] Configure SMTP in production — SOS alerts depend on it
+- [ ] SMS alerts for SOS escalation (contacts need an email until then)
+- [x] Fix engagement-score bug (downvotes currently raise score)
+- [x] Reconcile 911 vs 112 across the web UI (Romania → 112)
+- [x] GDPR account deletion + data export (Profile → Your data)
+- [ ] Add forum moderation/delete
+- [x] Salt the IP/email hashes (now keyed HMAC-SHA256)
+- [x] Fix the broken CI workflow (wrong `safesips-app/` path)
 - [ ] Host app + API (app.safesips.org / api.safesips.org)
 
 ## 6 · Mobile app
