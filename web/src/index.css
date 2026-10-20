@@ -955,6 +955,52 @@ body {
   flex-shrink: 0;
 }
 
+/* Empty-map notice under the top map buttons. */
+.map-empty {
+  position: absolute;
+  top: 66px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  margin: 0;
+  max-width: min(420px, calc(100% - 24px));
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 6px 18px rgba(24, 33, 60, 0.12);
+  font-size: 13px;
+  color: var(--text);
+  text-align: center;
+  pointer-events: none;
+}
+@media (max-width: 560px) {
+  .map-empty {
+    border-radius: 14px;
+    font-size: 12px;
+  }
+}
+
+/* Empty / error states for lists (forum, etc.). */
+.state-card {
+  margin: 16px 0;
+  padding: 18px;
+  border-radius: var(--radius);
+  border: 1px dashed var(--panel-border);
+  background: var(--panel);
+}
+.state-card .error {
+  margin: 0 0 10px;
+}
+.state-title {
+  margin: 0 0 6px;
+  font-weight: 800;
+  font-size: 16px;
+}
+.state-card .muted {
+  margin: 0 0 12px;
+}
+
 /* Fallback while a lazily-loaded page chunk downloads. */
 .page-loading {
   padding: 32px;

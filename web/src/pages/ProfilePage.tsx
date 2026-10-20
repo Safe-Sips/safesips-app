@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   badgeForScore,
   nextBadge,
@@ -223,8 +224,8 @@ export default function ProfilePage() {
         <h2>Recent activity</h2>
         {activity.length === 0 ? (
           <p className="muted">
-            No activity yet. Report a place or join the forum to start earning
-            badges.
+            No activity yet. <Link to="/">Report a place on the map</Link> or{" "}
+            <Link to="/forum">join the forum</Link> to start earning badges.
           </p>
         ) : (
           <ul className="activity-feed">

@@ -95,6 +95,28 @@ function DurationPicker({
   );
 }
 
+/** Explains why sharing is unavailable and what happens to an active share. */
+function ConnectionNotice({
+  connection,
+  sharing,
+}: {
+  connection: ConnectionState;
+  sharing: boolean;
+}) {
+  if (connection === "connected") return null;
+  if (connection === "connecting") {
+    return <p className="hint">Connecting to SafeSips…</p>;
+  }
+  return (
+    <p className="error">
+      Can't reach SafeSips. Check your internet connection — we'll reconnect
+      automatically.
+      {sharing &&
+        " Others keep seeing your last circle for a few minutes (or until your Share for time ends)."}
+    </p>
+  );
+}
+
 function sharingHint(sharedUntil: number | null): string {
   return sharedUntil
     ? `Stays on the map until ${clockTime(sharedUntil)}, even if your phone locks or you close the app. Tap Stop to end it sooner.`
@@ -174,6 +196,7 @@ export default function Controls({
         {sharing && <p className="hint">{sharingHint(sharedUntil)}</p>}
         {geoStatus && <p className="hint">{geoStatus}</p>}
         {geoError && <p className="error">{geoError}</p>}
+        <ConnectionNotice connection={connection} sharing={sharing} />
         {notice && <p className="error">{notice}</p>}
 
         <div className="panel-mobile-legal" aria-label="Legal and safety information">
@@ -234,6 +257,7 @@ export default function Controls({
 
       {geoStatus && <p className="hint">{geoStatus}</p>}
       {geoError && <p className="error">{geoError}</p>}
+        <ConnectionNotice connection={connection} sharing={sharing} />
       {notice && <p className="error">{notice}</p>}
 
       <div className={`sharing-card ${sharing ? "is-sharing" : ""}`}>

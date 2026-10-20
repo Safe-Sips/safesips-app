@@ -28,6 +28,22 @@ const shareSession: { exact: LatLng | null; source: PendingAction | null } = {
   source: null,
 };
 
+/** Turn a GeolocationPositionError into something the user can act on. */
+function geolocationErrorMessage(err: GeolocationPositionError): string {
+  if (err.code === err.PERMISSION_DENIED) {
+    return (
+      "Location is blocked for SafeSips. To share, allow it: tap the lock or " +
+      "info icon next to the address bar → Site settings → Location → Allow, " +
+      "then try again. On iPhone also check Settings → Privacy & Security → " +
+      "Location Services → Safari Websites."
+    );
+  }
+  if (err.code === err.TIMEOUT) {
+    return "Getting your location took too long. Move near a window or outdoors and try again.";
+  }
+  return "Your device couldn't find your location. Turn on Location / GPS and try again.";
+}
+
 export default function MapPage() {
   const { user } = useAuth();
   const { socket } = useSocket();
@@ -113,11 +129,7 @@ export default function MapPage() {
       },
       (err) => {
         setGeoStatus(null);
-        setGeoError(
-          err.code === err.PERMISSION_DENIED
-            ? "Location permission denied. Enable location access to share."
-            : "Could not get your location. Check permissions and try again."
-        );
+        setGeoError(geolocationErrorMessage(err));
       },
       { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 }
     );
@@ -357,6 +369,15 @@ export default function MapPage() {
             Cancel
           </button>
         </div>
+      )}
+
+      {/* Empty map: say so instead of showing a silent, empty map. */}
+      {!reportMode && state.connection === "connected" && state.others.length === 0 && (
+        <p className="map-empty" role="status">
+          {state.selfPublic
+            ? "You're sharing. No one else is sharing right now."
+            : "No one else is sharing right now. Share your circle so friends can find you."}
+        </p>
       )}
 
       {pendingPoint && (
