@@ -151,6 +151,30 @@ test("wrong check-in answer is rejected but stays answerable", () => {
   assert.ok(good && good.correct, "correct answer still accepted afterwards");
 });
 
+test("forum downvotes do not raise engagement score", async () => {
+  const forum = await import("../src/repos/forum.js");
+  const stats = await import("../src/repos/stats.js");
+  const author = makeUser("post-author@test.local");
+  const voter = makeUser("post-voter@test.local");
+  const now = Date.now();
+  db.prepare(
+    `INSERT INTO forum_threads (id, author_id, title, created_at, last_post_at) VALUES (?, ?, ?, ?, ?)`
+  ).run("thr-dv", author.id, "t", now, now);
+  db.prepare(
+    `INSERT INTO forum_posts (id, thread_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)`
+  ).run("post-dv", "thr-dv", author.id, "b", now);
+
+  const before = stats.computeCounts(author.id);
+  forum.setPostVote("post-dv", voter.id, -1);
+  const afterDown = stats.computeCounts(author.id);
+  assert.equal(afterDown.upvotesReceived, before.upvotesReceived, "downvote not counted as received upvote");
+  assert.equal(stats.computeCounts(voter.id).upvotesGiven, 0, "downvote not counted as given upvote");
+
+  forum.setPostVote("post-dv", voter.id, 1);
+  assert.equal(stats.computeCounts(author.id).upvotesReceived, before.upvotesReceived + 1);
+  assert.equal(stats.computeCounts(voter.id).upvotesGiven, 1);
+});
+
 test("presence: live mode expires after the TTL", async () => {
   const { PresenceStore } = await import("../src/presenceStore.js");
   const store = new PresenceStore(300_000);
