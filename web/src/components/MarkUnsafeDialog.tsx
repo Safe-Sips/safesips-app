@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useDialogA11y } from "../hooks/useDialogA11y";
 import type { LatLng, ReportSafety } from "@safesips/shared";
 
 interface MarkUnsafeDialogProps {
@@ -36,15 +37,22 @@ export default function MarkUnsafeDialog({
   const [note, setNote] = useState("");
 
   const categories = safety === "unsafe" ? UNSAFE_CATEGORIES : SAFE_CATEGORIES;
+  const cardRef = useDialogA11y<HTMLDivElement>(true, onCancel);
 
   return (
-    <div className="modal-backdrop mark-unsafe-backdrop" role="dialog" aria-modal="true">
-      <div className="modal-card mark-unsafe-card">
-        <h2>Report this spot</h2>
+    <div className="modal-backdrop mark-unsafe-backdrop">
+      <div
+        ref={cardRef}
+        className="modal-card mark-unsafe-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mark-unsafe-title"
+      >
+        <h2 id="mark-unsafe-title">Report this spot</h2>
 
         {/* This warning is DISTINCT from the presence sensitive-location notice. */}
         <p className="report-warning">
-          ⚠️ This publishes the <strong>exact location</strong> you picked,
+          <span aria-hidden="true">⚠️ </span>This publishes the <strong>exact location</strong> you picked,
           publicly, linked to your display name. This is different from the
           private map circle — only share places (a venue, a street), never your
           home.
@@ -60,15 +68,17 @@ export default function MarkUnsafeDialog({
             type="button"
             className={`seg-btn${safety === "unsafe" ? " is-on seg-danger" : ""}`}
             onClick={() => setSafety("unsafe")}
+            aria-pressed={safety === "unsafe"}
           >
-            ⚠️ Unsafe
+            <span aria-hidden="true">⚠️ </span>Unsafe
           </button>
           <button
             type="button"
             className={`seg-btn${safety === "safe" ? " is-on seg-safe" : ""}`}
             onClick={() => setSafety("safe")}
+            aria-pressed={safety === "safe"}
           >
-            ✓ Safe
+            <span aria-hidden="true">✓ </span>Safe
           </button>
         </div>
 

@@ -41,9 +41,12 @@ export default function NavBar() {
           >
             {user.displayName}
             {!user.emailVerified && (
-              <span className="nav-dot" title="Email not verified" aria-hidden>
-                ●
-              </span>
+              <>
+                <span className="nav-dot" title="Email not verified" aria-hidden>
+                  ●
+                </span>
+                <span className="sr-only"> (email not verified)</span>
+              </>
             )}
           </NavLink>
         )}

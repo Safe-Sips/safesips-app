@@ -8,7 +8,12 @@
   --muted: #5d6580;
   --yellow: #f2bd00; /* warm accent / map safety zones */
   --blue: #2f7bff;
-  --danger: #e0263c;
+  /* Text colours below pass WCAG AA (4.5:1) on white AND on their own
+     translucent pill/button tints. */
+  --danger: #c81e33;
+  --success: #137a40;
+  /* Keyboard focus ring (18:1 on light surfaces; see .nav override). */
+  --focus: #0e1330;
   --accent: #d6117e; /* hot-pink emphasis & links (readable on light) */
   /* Dark top bar (kept dark by request). */
   --nav-bg: #0e1330;
@@ -20,6 +25,61 @@
 
 * {
   box-sizing: border-box;
+}
+
+/* ---------------------------- Accessibility ----------------------------- */
+
+/* A clearly visible ring for keyboard users (mouse clicks don't show it). */
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+/* Navy wouldn't show on the dark nav bar; use the brand yellow there. */
+.nav :focus-visible {
+  outline-color: #ffd400;
+}
+
+/* Visually hidden but read by screen readers. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* "Skip to main content": hidden until focused with the keyboard. */
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -60px;
+  z-index: 5000;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #ffd400;
+  color: #1a1700;
+  font-weight: 800;
+  text-decoration: none;
+}
+.skip-link:focus {
+  top: 12px;
+}
+
+/* Motion: stop decorative animation and smooth transitions for people who
+   ask their OS to reduce motion (also saves battery on a night out). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 html,
@@ -114,7 +174,7 @@ body {
 }
 .status-connected {
   background: rgba(46, 213, 115, 0.16);
-  color: #1f9d54;
+  color: var(--success);
 }
 .status-connecting {
   background: rgba(255, 212, 0, 0.16);
@@ -193,7 +253,8 @@ body {
   color: var(--muted);
 }
 .address-form input:focus {
-  outline: 2px solid rgba(255, 212, 0, 0.5);
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
 }
 
 .address-suggestions {
@@ -901,7 +962,7 @@ body {
   color: var(--muted);
 }
 .verify-ok {
-  color: #1f9d54;
+  color: var(--success);
 }
 .verify-error {
   color: var(--danger);
@@ -946,7 +1007,8 @@ select option {
 .field select:focus,
 .field textarea:focus,
 .inline-form input:focus {
-  outline: 2px solid rgba(255, 212, 0, 0.5);
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
 }
 .field-hint {
   font-size: 12px;
@@ -1258,7 +1320,7 @@ select option {
 .pill-primary,
 .pill-active {
   background: rgba(46, 213, 115, 0.16);
-  color: #1f9d54;
+  color: var(--success);
 }
 .pill-paused {
   background: rgba(255, 212, 0, 0.16);
@@ -1446,7 +1508,7 @@ select option {
 }
 .report-badge.is-safe {
   background: rgba(46, 213, 115, 0.16);
-  color: #1f9d54;
+  color: var(--success);
 }
 .report-panel h3 {
   margin: 4px 0;
@@ -1516,8 +1578,8 @@ select option {
 }
 .seg-btn.is-on.seg-safe {
   background: rgba(46, 213, 115, 0.16);
-  border-color: #1f9d54;
-  color: #1f9d54;
+  border-color: var(--success);
+  color: var(--success);
 }
 
 .haven-panel-head {

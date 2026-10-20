@@ -129,6 +129,7 @@ export default function Controls({
           <span
             className={`status-pill status-${connection}`}
             title={`Connection: ${connection}`}
+            role="status"
           >
             {connection === "connected"
               ? "Online"
@@ -211,6 +212,7 @@ export default function Controls({
         <span
           className={`status-pill status-${connection}`}
           title={`Connection: ${connection}`}
+          role="status"
         >
           {connection === "connected"
             ? "Online"

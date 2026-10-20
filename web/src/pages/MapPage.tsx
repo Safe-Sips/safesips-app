@@ -334,10 +334,10 @@ export default function MapPage() {
               setReportMode(true);
             }}
           >
-            ＋ Report a place
+            <span aria-hidden="true">＋ </span>Report a place
           </button>
           <button className="help-fab" onClick={findHelpNearMe}>
-            🆘 Help near me
+            <span aria-hidden="true">🆘 </span>Help near me
           </button>
         </div>
       ) : (

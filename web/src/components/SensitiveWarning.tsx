@@ -1,4 +1,5 @@
 import { EMERGENCY_NUMBER } from "../content/firstAid";
+import { useDialogA11y } from "../hooks/useDialogA11y";
 
 interface SensitiveWarningProps {
   open: boolean;
@@ -15,11 +16,18 @@ export default function SensitiveWarning({
   onConfirm,
   onCancel,
 }: SensitiveWarningProps) {
+  const cardRef = useDialogA11y<HTMLDivElement>(open, onCancel);
   if (!open) return null;
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true">
-      <div className="modal-card">
-        <h2>Before you share</h2>
+    <div className="modal-backdrop">
+      <div
+        ref={cardRef}
+        className="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sensitive-warning-title"
+      >
+        <h2 id="sensitive-warning-title">Before you share</h2>
         <p>
           Others will see an approximate <strong>200&nbsp;m area</strong>, not
           your exact position. Even so, please think twice before sharing from a

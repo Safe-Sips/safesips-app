@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useCheckins } from "../hooks/useCheckins";
 import { timeUntil } from "../format";
+import { useDialogA11y } from "../hooks/useDialogA11y";
 
 export default function ActiveCheckinModal() {
   const { active, answer } = useCheckins();
@@ -8,6 +9,8 @@ export default function ActiveCheckinModal() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [, setTick] = useState(0);
+  // No Escape: a check-in has to be answered, not dismissed.
+  const cardRef = useDialogA11y<HTMLDivElement>(!!active);
 
   // Tick every second so the countdown updates.
   useEffect(() => {
@@ -43,10 +46,17 @@ export default function ActiveCheckinModal() {
   };
 
   return (
-    <div className="modal-backdrop checkin-backdrop" role="dialog" aria-modal="true">
-      <div className="modal-card checkin-card">
-        <h2>SafeSips check-in</h2>
-        <p className="muted">
+    <div className="modal-backdrop checkin-backdrop">
+      <div
+        ref={cardRef}
+        className="modal-card checkin-card"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="checkin-title"
+        aria-describedby="checkin-desc"
+      >
+        <h2 id="checkin-title">SafeSips check-in</h2>
+        <p className="muted" id="checkin-desc">
           Answer your security question to confirm you're OK. If you don't answer
           in time, your primary SOS contact will be notified to check on you.
         </p>
@@ -59,7 +69,7 @@ export default function ActiveCheckinModal() {
             <input
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              autoFocus
+              data-autofocus
               required
             />
           </label>

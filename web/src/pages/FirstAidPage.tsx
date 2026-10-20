@@ -20,7 +20,7 @@ export default function FirstAidPage() {
       </div>
 
       <a className="emergency-call" href={`tel:${EMERGENCY_NUMBER}`}>
-        🚨 Emergency? Call {EMERGENCY_NUMBER} now
+        <span aria-hidden="true">🚨 </span>Emergency? Call {EMERGENCY_NUMBER} now
       </a>
 
       <section className="card">
