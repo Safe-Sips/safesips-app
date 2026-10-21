@@ -400,7 +400,11 @@ export function runMigrations(db: Database.Database): void {
     // When this database was first created: /health reports it, so a redeploy
     // that kept the data shows the same time (a wiped one shows a new time).
     db.exec(`CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`);
-    db.prepare(`INSERT OR IGNORE INTO app_meta (key, value) VALUES ('created_at', ?)`).run(String(Date.now()));
+    // A database from before this table existed: date it by its oldest account.
+    const oldest = db.prepare(`SELECT MIN(created_at) AS t FROM users`).get() as { t: number | null };
+    db.prepare(`INSERT OR IGNORE INTO app_meta (key, value) VALUES ('created_at', ?)`).run(
+      String(oldest.t ?? Date.now())
+    );
     const unfolded = db
       .prepare(`SELECT id, display_name FROM users WHERE name_search IS NULL`)
       .all() as Array<{ id: string; display_name: string }>;
