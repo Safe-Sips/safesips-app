@@ -4,7 +4,7 @@ description: >-
   SafeSips monorepo playbook — build, run, test, debug, and deploy the
   shared→server→web→mobile workspaces, and guardrails for the location-privacy
   invariant. Use when building/running/testing/debugging/deploying any part of
-  this repo (npm run dev/build/test, smoke-test, Docker/Netlify release, Expo
+  this repo (npm run dev/build/test, smoke-test, Docker/Render release, Expo
   mobile) or when editing presence/location/socket/masking code.
 ---
 
@@ -87,8 +87,8 @@ available. CodeRabbit reads `.cursor/rules/` for extra project context.
   (`VITE_SERVER_URL=https://api.safesips.org`).
 - Docker: `npm run build && npm run deploy:compose` → web `:8080`, API `:4000`. TLS/WSS nginx
   templates in `deploy/` (`nginx-api.conf`, `nginx-web.conf`).
-- Web also ships via **Netlify**; API + WebSockets target `api.safesips.org`, web
-  `app.safesips.org`.
+- Web ships as a **Render static site** (`render.yaml`) at `app.safesips.org`; the API is the
+  Render service `safesips-app` (https://safesips-app.onrender.com). Netlify is retired.
 - Verify after deploy:
   ```bash
   API_URL=https://api.safesips.org WEB_ORIGIN=https://app.safesips.org npm run smoke-test

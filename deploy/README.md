@@ -17,18 +17,18 @@ Web is exposed on **http://localhost:8080**. Point `app.safesips.org` DNS at thi
 | Service | File / host | Key vars |
 |---------|-------------|----------|
 | API (Render) | Environment Variables + `server/.env.production` | `CLERK_SECRET_KEY` (**required**), `JWT_SECRET`, `CORS_ORIGINS`, `PORT` |
-| Web (Netlify) | Build env + `web/.env.production` | `VITE_CLERK_PUBLISHABLE_KEY` (**required**), `VITE_SERVER_URL` |
+| Web (Render static site, `render.yaml`) | Build env + `web/.env.production` | `VITE_CLERK_PUBLISHABLE_KEY` (**required**), `VITE_SERVER_URL` |
 | Mobile | `mobile/.env.production` | `EXPO_PUBLIC_SERVER_URL` |
 
-### Clerk (Netlify + Render)
+### Clerk (web app + API)
 
 Without these, sign-in succeeds in the browser but `/api/auth/me` returns **401** and the app shows “Could not connect your account”.
 
-1. **Netlify** (Site → Environment variables): set `VITE_CLERK_PUBLISHABLE_KEY` to your Clerk publishable key, then **trigger a new deploy** (Vite bakes this in at build time).
-2. **Render** (Service → Environment): set `CLERK_SECRET_KEY` to the matching Clerk secret key (`sk_test_…` or `sk_live_…`). Redeploy/restart the service.
+1. **Web app** (Render → safesips-web → Environment): set `VITE_CLERK_PUBLISHABLE_KEY` to your Clerk publishable key, then **redeploy** (Vite bakes this in at build time).
+2. **API** (Render → safesips-app → Environment): set `CLERK_SECRET_KEY` to the matching Clerk secret key (`sk_test_…` or `sk_live_…`). Redeploy/restart the service.
 3. Use a **matching pair** from the same Clerk instance (both test or both live).
-4. In the [Clerk Dashboard](https://dashboard.clerk.com/) → Paths / Domains, allow your production web origins (e.g. `https://safesips.org`, `https://your-site.netlify.app`).
-5. If you open the site on a Netlify preview URL, add that origin to Render `CORS_ORIGINS` as well.
+4. In the [Clerk Dashboard](https://dashboard.clerk.com/) → Paths / Domains, allow your production web origins (e.g. `https://app.safesips.org`).
+5. Every web origin you open the app from must also be in the API's `CORS_ORIGINS` (no trailing slash needed).
 
 ## TLS + WSS
 

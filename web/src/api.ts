@@ -45,7 +45,7 @@ export function warmUpApi(): void {
 let authToken: string | null = null;
 type TokenGetter = () => Promise<string | null>;
 let tokenGetter: TokenGetter | null = null;
-let unauthorizedHandler: (() => void) | null = null;
+let unauthorizedHandler: ((err: ApiError) => void) | null = null;
 
 export function setAuthToken(token: string | null): void {
   authToken = token;
@@ -56,10 +56,13 @@ export function setTokenGetter(fn: TokenGetter | null): void {
   tokenGetter = fn;
 }
 
-/** Register a callback fired whenever the API returns 401 (token invalid). */
-export function setUnauthorizedHandler(fn: (() => void) | null): void {
+/** Register a callback fired whenever the API rejects the account (401, or suspended). */
+export function setUnauthorizedHandler(fn: ((err: ApiError) => void) | null): void {
   unauthorizedHandler = fn;
 }
+
+/** Error code the API sends when a moderator suspended this account. */
+export const ACCOUNT_SUSPENDED = "account_suspended";
 
 export class ApiError extends Error {
   status: number;
@@ -89,8 +92,6 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
   });
 
-  if (res.status === 401) unauthorizedHandler?.();
-
   let data: unknown = null;
   const text = await res.text();
   if (text) {
@@ -103,11 +104,13 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
 
   if (!res.ok) {
     const body = data as { error?: string; code?: string } | null;
-    throw new ApiError(
+    const err = new ApiError(
       body?.error ?? `Request failed (${res.status})`,
       res.status,
       body?.code
     );
+    if (res.status === 401 || err.code === ACCOUNT_SUSPENDED) unauthorizedHandler?.(err);
+    throw err;
   }
   return data as T;
 }

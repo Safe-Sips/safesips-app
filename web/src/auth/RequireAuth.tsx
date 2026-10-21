@@ -6,7 +6,7 @@ import { useAuth } from "./AuthContext";
 /** Gate a subtree behind Clerk; redirect to /login otherwise. */
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { isLoaded, isSignedIn } = useClerkAuth();
-  const { user, loading, syncError, refresh } = useAuth();
+  const { user, loading, syncError, suspended, refresh, logout } = useAuth();
   const location = useLocation();
 
   if (!isLoaded || loading) {
@@ -18,6 +18,19 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   }
   if (!isSignedIn) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+  if (!user && suspended) {
+    return (
+      <div className="boot-screen">
+        <p>Your account is suspended</p>
+        <p className="muted" style={{ maxWidth: 480, textAlign: "center" }}>
+          {syncError}
+        </p>
+        <button className="btn btn-ghost" type="button" onClick={() => void logout()}>
+          Sign out
+        </button>
+      </div>
+    );
   }
   if (!user) {
     return (

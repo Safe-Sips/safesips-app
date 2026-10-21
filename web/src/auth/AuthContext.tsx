@@ -13,12 +13,14 @@ import {
   type ReactNode,
 } from "react";
 import type { UserDTO } from "@safesips/shared";
-import { api, ApiError, setTokenGetter, setUnauthorizedHandler } from "../api";
+import { ACCOUNT_SUSPENDED, api, ApiError, setTokenGetter, setUnauthorizedHandler } from "../api";
 
 interface AuthContextValue {
   user: UserDTO | null;
   loading: boolean;
   syncError: string | null;
+  /** A moderator suspended this account (syncError says why). */
+  suspended: boolean;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
   /** Update fields of the signed-in user after a settings change. */
@@ -105,6 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserDTO | null>(null);
   const [syncing, setSyncing] = useState(true);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [suspended, setSuspended] = useState(false);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -115,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setTokenGetter(null);
       setUser(null);
       setSyncError(null);
+      setSuspended(false);
       setSyncing(false);
       return;
     }
@@ -138,7 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             writeCachedUser(clerkId, null);
             setUser(null);
             setSyncError(
-              "Clerk did not return a session token. Refresh, or confirm VITE_CLERK_PUBLISHABLE_KEY is set on Netlify."
+              "Sign-in didn't return a session. Refresh the page and try again."
             );
           }
           return;
@@ -149,6 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           writeCachedUser(clerkId, synced);
           setUser(synced);
           setSyncError(null);
+          setSuspended(false);
         }
       } catch (err) {
         if (!active) return;
@@ -159,6 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         if (err instanceof ApiError) {
           setSyncError(err.message);
+          setSuspended(err.code === ACCOUNT_SUSPENDED);
         } else {
           setSyncError("Could not reach the SafeSips API.");
         }
@@ -172,18 +178,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [isLoaded, isSignedIn, getToken, clerkUser?.id, clerkUser?.imageUrl]);
 
   useEffect(() => {
-    setUnauthorizedHandler(() => {
+    setUnauthorizedHandler((err) => {
       // Don't wipe state during the initial sync; the catch path sets syncError.
       if (syncing) return;
       setUser(null);
+      if (err.code === ACCOUNT_SUSPENDED) {
+        // Suspended mid-session: forget the remembered account and say why.
+        writeCachedUser(clerkUser?.id, null);
+        setSyncError(err.message);
+        setSuspended(true);
+      }
     });
     return () => setUnauthorizedHandler(null);
-  }, [syncing]);
+  }, [syncing, clerkUser?.id]);
 
   const logout = useCallback(async () => {
     writeCachedUser(clerkUser?.id, null);
     setUser(null);
     setSyncError(null);
+    setSuspended(false);
     setTokenGetter(null);
     await signOut({ redirectUrl: "/login" });
   }, [signOut, clerkUser?.id]);
@@ -196,7 +209,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!token) {
         setUser(null);
         setSyncError(
-          "Clerk did not return a session token. Refresh, or confirm VITE_CLERK_PUBLISHABLE_KEY is set on Netlify."
+          "Sign-in didn't return a session. Refresh the page and try again."
         );
         return;
       }
@@ -204,13 +217,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       writeCachedUser(clerkUser?.id, appUser);
       setUser(appUser);
       setSyncError(null);
+      setSuspended(false);
     } catch (err) {
       // Unreachable: keep the account we have. Rejected: sign out of the app.
       if (!isAuthRejection(err) && readCachedUser(clerkUser?.id)) return;
       writeCachedUser(clerkUser?.id, null);
       setUser(null);
-      if (err instanceof ApiError) setSyncError(err.message);
-      else setSyncError("Could not reach the SafeSips API.");
+      if (err instanceof ApiError) {
+        setSyncError(err.message);
+        setSuspended(err.code === ACCOUNT_SUSPENDED);
+      } else setSyncError("Could not reach the SafeSips API.");
     } finally {
       setSyncing(false);
     }
@@ -231,8 +247,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, syncError, logout, refresh, patchUser }),
-    [user, loading, syncError, logout, refresh, patchUser]
+    () => ({ user, loading, syncError, suspended, logout, refresh, patchUser }),
+    [user, loading, syncError, suspended, logout, refresh, patchUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
