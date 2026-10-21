@@ -44,6 +44,8 @@ export interface ModerationItemDTO {
   authorName: string;
   authorSuspended: boolean;
   hidden: boolean;
+  /** Its author deleted it (can't be restored). */
+  deleted: boolean;
   flags: number;
   reasons: string[];
   createdAt: number;
@@ -165,6 +167,8 @@ export interface PostDTO {
   /** This viewer's current vote: 1, -1, or 0 (none). */
   viewerVote: number;
   createdAt: number;
+  /** The post that starts the discussion. */
+  isOpener: boolean;
 }
 
 export interface ThreadDetailDTO {

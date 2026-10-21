@@ -127,7 +127,7 @@ export default function ReportPanel({
             disabled={busy}
             onClick={() =>
               moderate(
-                `Block ${report.authorDisplayName}? You won't see their map reports, posts or discussions, and they can't send you friend requests.`,
+                `Block ${report.authorDisplayName}? You won't see their map reports, posts or discussions, they can't send you friend requests, and any friendship or emergency-contact link between you ends.`,
                 () => api.blockUser(report.authorId),
                 () => onBlocked?.(report.authorId)
               )

@@ -71,7 +71,7 @@ export default function AdminPage() {
                 <strong>{it.type === "post" ? "Forum post" : "Map report"}</strong>
                 {it.context ? ` · ${it.context}` : ""}
                 <span className={`pill ${it.hidden ? "pill-paused" : "pill-primary"}`}>
-                  {it.hidden ? "Hidden" : "Visible"}
+                  {it.deleted ? "Deleted by its author" : it.hidden ? "Hidden" : "Visible"}
                 </span>
               </p>
               <p className="report-note">{it.text || <em className="muted">(no text)</em>}</p>
@@ -82,7 +82,7 @@ export default function AdminPage() {
               </p>
               {it.reasons.length > 0 && <p className="hint">Reasons: {it.reasons.join("; ")}</p>}
               <div className="data-actions">
-                {it.hidden ? (
+                {it.deleted ? null : it.hidden ? (
                   <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => act(key, () => api.moderate(it.type, it.id, "restore"))}>
                     Restore
                   </button>

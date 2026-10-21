@@ -135,7 +135,7 @@ export default function PostItem({
                 disabled={busy}
                 onClick={() =>
                   act(
-                    `Block ${post.authorDisplayName}? You won't see their posts, discussions or map reports, and they can't send you friend requests.`,
+                    `Block ${post.authorDisplayName}? You won't see their posts, discussions or map reports, they can't send you friend requests, and any friendship or emergency-contact link between you ends.`,
                     () => api.blockUser(post.authorId),
                     () => onBlocked?.(post.authorId)
                   )

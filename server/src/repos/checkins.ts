@@ -263,18 +263,22 @@ export function pausePlan(userId: string, planId: string): boolean {
  * the plan, or null if it isn't this user's paused plan (or its end time has
  * already passed, in which case it's ended).
  */
-export const resumePlan = db.transaction((userId: string, planId: string): PlanDTO | null => {
+export type ResumeResult = { plan: PlanDTO } | { ended: true } | null;
+
+export const resumePlan = db.transaction((userId: string, planId: string): ResumeResult => {
   const plan = selectPlanById.get(planId) as PlanRow | undefined;
   if (!plan || plan.user_id !== userId || plan.status !== "paused") return null;
   const now = nowMs();
-  if (plan.ends_at != null && plan.ends_at <= now) {
+  // Its end time already passed (or comes before the next check-in): it ends.
+  if (plan.ends_at != null && plan.ends_at <= now + plan.interval_minutes * MINUTE) {
     setPlanStatus.run("ended", plan.id);
-    return null;
+    return { ended: true };
   }
   setPlanStatus.run("active", plan.id);
   scheduleNext({ ...plan, status: "active" }, now);
-  return listPlans(userId).find((p) => p.id === planId) ?? null;
-}) as (userId: string, planId: string) => PlanDTO | null;
+  const dto = listPlans(userId).find((p) => p.id === planId);
+  return dto ? { plan: dto } : null;
+}) as (userId: string, planId: string) => ResumeResult;
 
 /**
  * Change who an active or paused plan alerts (null/empty = everyone). The

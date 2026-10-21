@@ -70,6 +70,20 @@ export function hideReport(id: string): void {
   hideReportStmt.run(id);
 }
 
+const restoreReportStmt = db.prepare(`UPDATE reports SET status = 'visible' WHERE id = ? AND status = 'hidden'`);
+export function restoreReport(id: string): boolean {
+  return restoreReportStmt.run(id).changes > 0;
+}
+
+const setAuthorReports = db.prepare(`UPDATE reports SET status = ? WHERE author_id = ? AND status = ?`);
+/** Suspending an author hides their reports; reinstating brings back exactly those. Returns affected ids. */
+export function setAuthorReportsSuspended(authorId: string, suspended: boolean): string[] {
+  const from = suspended ? "visible" : "suspended";
+  const ids = (db.prepare(`SELECT id FROM reports WHERE author_id = ? AND status = ?`).all(authorId, from) as Array<{ id: string }>).map((r) => r.id);
+  setAuthorReports.run(suspended ? "suspended" : "visible", authorId, from);
+  return ids;
+}
+
 function rowToDTO(row: ReportJoinRow): ReportDTO {
   return {
     id: row.id,

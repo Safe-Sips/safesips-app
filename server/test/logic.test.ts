@@ -892,9 +892,11 @@ test("check-ins: pause, resume, and an ended plan stays ended", () => {
   });
   assert.ok(checkins.pausePlan(user.id, plan.id));
   assert.equal(checkins.listPlans(user.id)[0].nextDueAt, null, "paused: nothing scheduled");
-  const resumed = checkins.resumePlan(user.id, plan.id);
-  assert.equal(resumed?.status, "active");
-  assert.ok(resumed!.nextDueAt! > Date.now() + 29 * 60_000, "next check-in an interval from now");
+  const resumedResult = checkins.resumePlan(user.id, plan.id);
+  assert.ok(resumedResult && "plan" in resumedResult);
+  const resumed = resumedResult.plan;
+  assert.equal(resumed.status, "active");
+  assert.ok(resumed.nextDueAt! > Date.now() + 29 * 60_000, "next check-in an interval from now");
   assert.equal(checkins.resumePlan(user.id, plan.id), null, "already active");
   assert.ok(checkins.endPlan(user.id, plan.id));
   assert.equal(checkins.pausePlan(user.id, plan.id), false, "an ended plan can't be paused back to life");
@@ -982,4 +984,55 @@ test("client IP comes from the proxy, not the proxy's own address", async () => 
   assert.equal(clientIpFrom({ "x-forwarded-for": "203.0.113.9" }, "10.0.0.1"), "203.0.113.9");
   assert.equal(clientIpFrom({ "x-forwarded-for": "6.6.6.6, 203.0.113.9" }, "10.0.0.1"), "203.0.113.9", "a spoofed left entry is ignored");
   assert.equal(clientIpFrom({}, "10.0.0.1"), "10.0.0.1");
+});
+
+test("check-ins: resuming after the end time says it ended", () => {
+  const user = makeUser("resume-ended@test.local");
+  const plan = checkins.createPlan(user.id, {
+    label: "Short", intervalMinutes: 30, graceMinutes: 5, question: "q?", answer: "a", endsAt: Date.now() + 10 * 60_000,
+  });
+  checkins.pausePlan(user.id, plan.id);
+  assert.deepEqual(checkins.resumePlan(user.id, plan.id), { ended: true });
+  assert.equal(checkins.listPlans(user.id).length, 0, "it's ended");
+});
+
+test("moderation: unblocking lets requests through; blocking ends emergency links", async () => {
+  const friends = await import("../src/repos/friends.js");
+  const contacts = await import("../src/repos/emergencyContacts.js");
+  const mod = await import("../src/repos/moderation.js");
+  const a = users.createUser({ email: "ub-a@test.local", displayName: "Unblock A", passwordHash: "x" });
+  const b = users.createUser({ email: "ub-b@test.local", displayName: "Unblock B", passwordHash: "x" });
+  contacts.requestContactForUser(a.id, b.id);
+  contacts.acceptRequest(b.id, contacts.getOverview(b.id).incoming[0].id);
+  assert.equal(contacts.listAcceptedContacts(a.id).length, 1);
+  mod.blockUser(a.id, b.id);
+  assert.equal(contacts.listAcceptedContacts(a.id).length, 0, "B no longer gets A's alerts");
+  mod.unblockUser(a.id, b.id);
+  const r = friends.requestFriendByUserId(b.id, a.id);
+  assert.ok(r.ok && r.notify?.userId === a.id, "B's request reaches A again");
+  assert.equal(friends.getFriendsOverview(a.id).incoming.length, 1);
+});
+
+test("moderation: deleted content can't be restored; suspension hides and restores", async () => {
+  const forum = await import("../src/repos/forum.js");
+  const reports = await import("../src/repos/reports.js");
+  const author = makeUser("susp-author@test.local");
+  const reader = makeUser("susp-reader@test.local");
+  const { threadId } = forum.createThread(reader.id, { title: "Thread", body: "opener", category: "general" });
+  const reply = forum.createPost(author.id, threadId, "reply");
+  forum.removePost(reply, "deleted");
+  assert.equal(forum.moderatePost(reply, "restore"), "deleted");
+
+  const reply2 = forum.createPost(author.id, threadId, "another reply");
+  const rep = reports.createReport(author.id, { lat: 2, lng: 2, safety: "unsafe", category: null, note: "n", placeLabel: null });
+  const sees = () => (forum.getThreadDetail(threadId, reader.id)?.posts ?? []).some((p) => p.id === reply2);
+  forum.setAuthorSuspended(author.id, true);
+  assert.deepEqual(reports.setAuthorReportsSuspended(author.id, true), [rep.id]);
+  assert.equal(sees(), false, "suspended author's posts are hidden");
+  assert.equal(reports.getReportDTO(rep.id, reader.id), undefined, "and their reports");
+  forum.setAuthorSuspended(author.id, false);
+  reports.setAuthorReportsSuspended(author.id, false);
+  assert.equal(sees(), true, "reinstating brings them back");
+  assert.ok(reports.getReportDTO(rep.id, reader.id));
+  assert.equal(forum.getThreadDetail(threadId, reader.id)?.posts[0].isOpener, true);
 });

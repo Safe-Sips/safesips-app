@@ -19,6 +19,7 @@ interface ThreadJoinRow {
 }
 
 interface PostJoinRow {
+  is_opener: number;
   id: string;
   thread_id: string;
   author_id: string;
@@ -64,6 +65,7 @@ const insertThread = db.prepare(
 
 const POST_SELECT_BASE = `
   SELECT p.id, p.thread_id, p.author_id, p.body, p.created_at,
+         ${OPENER_ID_SQL("p.thread_id")} = p.id AS is_opener,
          u.display_name AS author_name,
          (SELECT COALESCE(SUM(v.value), 0) FROM forum_post_votes v WHERE v.post_id = p.id) AS vote_count,
          COALESCE((SELECT v.value FROM forum_post_votes v WHERE v.post_id = p.id AND v.user_id = @viewer), 0) AS viewer_vote
@@ -136,6 +138,7 @@ function threadToDTO(row: ThreadJoinRow): ThreadDTO {
 
 function postToDTO(row: PostJoinRow): PostDTO {
   return {
+    isOpener: row.is_opener === 1,
     id: row.id,
     threadId: row.thread_id,
     body: row.body,
@@ -177,6 +180,65 @@ export const removePost = db.transaction((postId: string, status: "deleted" | "h
     unbumpThread.run(p.threadId);
   }
 }) as (postId: string, status: "deleted" | "hidden") => void;
+
+const postAnyStatus = db.prepare(
+  `SELECT p.thread_id, p.status AS post_status, t.status AS thread_status,
+          ${OPENER_ID_SQL("p.thread_id")} = p.id AS opener
+     FROM forum_posts p JOIN forum_threads t ON t.id = p.thread_id WHERE p.id = ?`
+);
+const recountThread = db.prepare(
+  `UPDATE forum_threads SET post_count =
+     (SELECT COUNT(*) FROM forum_posts WHERE thread_id = forum_threads.id AND status = 'visible')
+   WHERE id = ?`
+);
+
+/**
+ * A moderator's hide / restore. An opening post stands for its discussion.
+ * Content its author deleted is never restored.
+ */
+export function moderatePost(postId: string, action: "hide" | "restore"): "ok" | "deleted" | "missing" {
+  const row = postAnyStatus.get(postId) as
+    | { thread_id: string; post_status: string; thread_status: string; opener: number }
+    | undefined;
+  if (!row) return "missing";
+  const status = row.opener ? row.thread_status : row.post_status;
+  if (status === "deleted" || (!row.opener && row.thread_status === "deleted")) return "deleted";
+  const next = action === "hide" ? "hidden" : "visible";
+  if (row.opener) setThreadStatus.run(next, row.thread_id);
+  else setPostStatus.run(next, postId);
+  recountThread.run(row.thread_id);
+  return "ok";
+}
+
+const hideAuthorPosts = db.prepare(
+  `UPDATE forum_posts SET status = 'suspended' WHERE author_id = ? AND status = 'visible'`
+);
+const hideAuthorThreads = db.prepare(
+  `UPDATE forum_threads SET status = 'suspended' WHERE author_id = ? AND status = 'visible'`
+);
+const showAuthorPosts = db.prepare(
+  `UPDATE forum_posts SET status = 'visible' WHERE author_id = ? AND status = 'suspended'`
+);
+const showAuthorThreads = db.prepare(
+  `UPDATE forum_threads SET status = 'visible' WHERE author_id = ? AND status = 'suspended'`
+);
+const recountAll = db.prepare(
+  `UPDATE forum_threads SET post_count =
+     (SELECT COUNT(*) FROM forum_posts WHERE thread_id = forum_threads.id AND status = 'visible')
+   WHERE id IN (SELECT thread_id FROM forum_posts WHERE author_id = ?)`
+);
+
+/** Suspending an author takes their posts and discussions down; reinstating brings back exactly those. */
+export const setAuthorSuspended = db.transaction((authorId: string, suspended: boolean): void => {
+  if (suspended) {
+    hideAuthorPosts.run(authorId);
+    hideAuthorThreads.run(authorId);
+  } else {
+    showAuthorPosts.run(authorId);
+    showAuthorThreads.run(authorId);
+  }
+  recountAll.run(authorId);
+}) as (authorId: string, suspended: boolean) => void;
 
 export function getThreadAuthor(threadId: string): string | undefined {
   return (threadAuthor.get(threadId) as { author_id: string } | undefined)?.author_id;

@@ -150,7 +150,7 @@ export default function FriendProfilePage() {
                   onClick={async () => {
                     if (
                       !window.confirm(
-                        `Block ${profile.displayName}? This also removes them as a friend. You won't see their posts or map reports, and they can't send you friend requests.`
+                        `Block ${profile.displayName}? This removes them as a friend and ends any emergency-contact link between you. You won't see their posts or map reports, and they can't send you friend requests.`
                       )
                     )
                       return;

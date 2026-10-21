@@ -22,7 +22,9 @@ forumRouter.get(
   asyncHandler(async (req, res) => {
     const q = parseQuery(listQuery, req, res);
     if (!q) return;
-    const before = q.cursor ?? nowMs() + 1;
+    // Inclusive cursor, so discussions bumped in the same millisecond as the
+    // last one on the previous page aren't skipped (the app drops repeats).
+    const before = q.cursor !== undefined ? q.cursor + 1 : nowMs() + 1;
     res.json(forum.listThreads(before, PAGE_LIMIT, req.auth!.userId));
   })
 );

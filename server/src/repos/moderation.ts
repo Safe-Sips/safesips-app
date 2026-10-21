@@ -44,6 +44,11 @@ const dropFriendships = db.prepare(
   `DELETE FROM friendships
     WHERE (requester_id = @a AND addressee_id = @b) OR (requester_id = @b AND addressee_id = @a)`
 );
+const dropEmergencyLinks = db.prepare(
+  `DELETE FROM emergency_links
+    WHERE (owner_id = @a AND contact_user_id = @b) OR (owner_id = @b AND contact_user_id = @a)`
+);
+const clearDecline = db.prepare(`DELETE FROM friend_declines WHERE decliner_id = ? AND requester_id = ?`);
 const declineFriendRequests = db.prepare(
   `INSERT OR REPLACE INTO friend_declines (decliner_id, requester_id, created_at) VALUES (?, ?, ?)`
 );
@@ -79,13 +84,17 @@ export function flagContent(
 export const blockUser = db.transaction((blockerId: string, blockedId: string): void => {
   insertBlock.run(blockerId, blockedId, nowMs());
   dropFriendships.run({ a: blockerId, b: blockedId });
+  // Neither should get the other's check-in alerts (with their location area).
+  dropEmergencyLinks.run({ a: blockerId, b: blockedId });
   // Their friend requests (and any they already sent) stay quiet for me.
   declineFriendRequests.run(blockerId, blockedId, nowMs());
 }) as (blockerId: string, blockedId: string) => void;
 
-export function unblockUser(blockerId: string, blockedId: string): boolean {
+export const unblockUser = db.transaction((blockerId: string, blockedId: string): boolean => {
+  // Their friend requests can reach me again.
+  clearDecline.run(blockerId, blockedId);
   return deleteBlock.run(blockerId, blockedId).changes > 0;
-}
+}) as (blockerId: string, blockedId: string) => boolean;
 
 export function listBlocks(userId: string): Array<{ userId: string; displayName: string; blockedAt: number }> {
   return (selectBlocks.all(userId) as Array<{ user_id: string; display_name: string; created_at: number }>).map(

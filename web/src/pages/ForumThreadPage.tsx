@@ -108,14 +108,14 @@ export default function ForumThreadPage() {
       </div>
 
       <ul className="post-list">
-        {detail.posts.map((p, i) => (
+        {detail.posts.map((p) => (
           <PostItem
             key={p.id}
             post={p}
-            isOpener={i === 0}
+            isOpener={p.isOpener}
             onRemoved={(postId) => {
               // Reporting the opening post hides the whole discussion for you.
-              if (i === 0) {
+              if (p.isOpener) {
                 navigate("/forum", { replace: true });
                 return;
               }

@@ -6,7 +6,8 @@ import { requireAuth } from "../auth/middleware.js";
 import { config } from "../config.js";
 import { db } from "../db.js";
 import { broadcastReportNew, broadcastReportRemoved, purgeUserRealtime } from "../realtime.js";
-import { getReportDTO } from "../repos/reports.js";
+import * as forum from "../repos/forum.js";
+import * as reports from "../repos/reports.js";
 
 /**
  * Moderation queue for the people listed in ADMIN_EMAILS: everything someone
@@ -86,6 +87,7 @@ function toItem(r: FlaggedRow): ModerationItemDTO {
     authorName: r.author_name,
     authorSuspended: r.author_status !== "active",
     hidden: status !== "visible",
+    deleted: status === "deleted" || r.thread_status === "deleted",
     flags: r.flags,
     reasons: (r.reasons ?? "").split(" | ").filter(Boolean),
     createdAt: r.created_at,
@@ -103,21 +105,6 @@ adminRouter.get(
   })
 );
 
-const setPost = db.prepare(`UPDATE forum_posts SET status = ? WHERE id = ?`);
-const setThreadOfPost = db.prepare(
-  `UPDATE forum_threads SET status = ? WHERE id = (SELECT thread_id FROM forum_posts WHERE id = ?)`
-);
-const recountThread = db.prepare(
-  `UPDATE forum_threads SET post_count =
-     (SELECT COUNT(*) FROM forum_posts WHERE thread_id = forum_threads.id AND status = 'visible')
-   WHERE id = (SELECT thread_id FROM forum_posts WHERE id = ?)`
-);
-const isOpener = db.prepare(
-  `SELECT (SELECT op0.id FROM forum_posts op0 WHERE op0.thread_id = p.thread_id
-            ORDER BY op0.created_at ASC, op0.rowid ASC LIMIT 1) = p.id AS opener
-     FROM forum_posts p WHERE p.id = ?`
-);
-const setReport = db.prepare(`UPDATE reports SET status = ? WHERE id = ?`);
 const clearFlags = db.prepare(`DELETE FROM content_flags WHERE target_type = ? AND target_id = ?`);
 const setUserStatus = db.prepare(`UPDATE users SET status = ?, updated_at = ? WHERE id = ?`);
 
@@ -133,26 +120,27 @@ adminRouter.post(
   asyncHandler(async (req, res) => {
     const body = parseBody(actionSchema, req, res);
     if (!body) return;
-    if (body.action === "dismiss") {
-      clearFlags.run(body.type, body.id);
-    } else {
-      const status = body.action === "hide" ? "hidden" : "visible";
+    if (body.action !== "dismiss") {
       if (body.type === "post") {
-        const opener = (isOpener.get(body.id) as { opener: number } | undefined)?.opener === 1;
-        if (opener) setThreadOfPost.run(status, body.id);
-        else setPost.run(status, body.id);
-        recountThread.run(body.id);
-      } else {
-        setReport.run(status, body.id);
-        if (status === "hidden") broadcastReportRemoved(body.id);
-        else {
-          const dto = getReportDTO(body.id, req.auth!.userId);
-          if (dto) broadcastReportNew(dto);
+        const result = forum.moderatePost(body.id, body.action);
+        if (result === "deleted") {
+          res.status(409).json({ error: "Its author deleted this, so it can't be restored.", code: "deleted" });
+          return;
         }
+        if (result === "missing") {
+          res.status(404).json({ error: "Not found." });
+          return;
+        }
+      } else if (body.action === "hide") {
+        reports.hideReport(body.id);
+        broadcastReportRemoved(body.id);
+      } else if (reports.restoreReport(body.id)) {
+        const dto = reports.getReportDTO(body.id, req.auth!.userId);
+        if (dto) broadcastReportNew(dto);
       }
-      // A decision was made: these reports are dealt with.
-      if (body.action === "restore") clearFlags.run(body.type, body.id);
     }
+    // Restoring or dismissing settles the reports.
+    if (body.action !== "hide") clearFlags.run(body.type, body.id);
     res.json({ ok: true });
   })
 );
@@ -173,6 +161,16 @@ adminRouter.post(
     if (!changed) {
       res.status(404).json({ error: "User not found." });
       return;
+    }
+    // Their posts, discussions and map reports go down with them (and come
+    // back if they're reinstated).
+    forum.setAuthorSuspended(req.params.id, body.suspended);
+    for (const id of reports.setAuthorReportsSuspended(req.params.id, body.suspended)) {
+      if (body.suspended) broadcastReportRemoved(id);
+      else {
+        const dto = reports.getReportDTO(id, req.auth!.userId);
+        if (dto) broadcastReportNew(dto);
+      }
     }
     if (body.suspended) purgeUserRealtime(req.params.id);
     res.json({ ok: true });

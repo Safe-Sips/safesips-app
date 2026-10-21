@@ -45,7 +45,8 @@ function BlockedPeopleSection() {
       <h2>Blocked people</h2>
       <p className="muted">
         You don't see their posts, discussions or map reports, and they can't
-        send you friend requests.
+        send you friend requests. Unblocking doesn't restore friendships or
+        emergency contacts; add them again if you want.
       </p>
       {error && <p className="error">{error}</p>}
       <ul className="contact-list">

@@ -137,12 +137,16 @@ checkinsRouter.post(
       });
       return;
     }
-    const plan = checkins.resumePlan(req.auth!.userId, req.params.id);
-    if (!plan) {
+    const result = checkins.resumePlan(req.auth!.userId, req.params.id);
+    if (!result) {
       res.status(404).json({ error: "Paused plan not found." });
       return;
     }
-    res.json(plan);
+    if ("ended" in result) {
+      res.status(409).json({ error: "This check-in reached its end time, so it has ended.", code: "plan_ended" });
+      return;
+    }
+    res.json(result.plan);
   })
 );
 
