@@ -160,7 +160,7 @@ export const config = {
         pass: process.env.SMTP_PASS || undefined,
       }
     : null,
-  emailFrom: strEnv("EMAIL_FROM", "SafeSips <no-reply@safesips.app>"),
+  emailFrom: strEnv("EMAIL_FROM", "SafeSips <safesipss@gmail.com>"),
 
   // Check-in scheduler sweep cadence.
   checkinSweepIntervalMs: intEnv("CHECKIN_SWEEP_INTERVAL_MS", 15_000),

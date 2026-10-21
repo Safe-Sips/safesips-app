@@ -77,7 +77,7 @@ Either way you'll need:
   - Location permission text: "while using the app" only (no background).
   - Have a lawyer review the Privacy Policy and Terms, and a medical
     professional review the first-aid page (both say so in the app).
-- **Email:** `support@safesips.app` is used throughout — make sure that inbox
+- **Email:** `safesipss@gmail.com` is used throughout — make sure that inbox
   exists and is read.
 
 ## 3. Nice to have before launch
