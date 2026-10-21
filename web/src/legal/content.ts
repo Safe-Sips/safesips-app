@@ -35,7 +35,7 @@ How long we keep things
 
 Services we use
 • Map tiles: your device loads map images from our map provider (by default OpenStreetMap). "Help nearby" searches go through our server to OpenStreetMap services, without your account details.
-• Clerk (sign-in) stores your email and sign-in details, and a private backup list of your friends' account ids, so friendships survive server maintenance.
+• Clerk (sign-in) stores your email and sign-in details, and a private backup list of the account ids of your friends and emergency contacts, so those connections survive server maintenance.
 • Our email provider sends verification emails.
 • Notifications go through your browser's push service (for example Google, Mozilla or Apple). They're end-to-end encrypted: the push service sees an address for your device, not the message.
 • Our hosting provider handles the network traffic needed to run SafeSips.

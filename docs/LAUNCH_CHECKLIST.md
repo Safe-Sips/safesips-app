@@ -15,10 +15,10 @@ only you can make; everything else is code.
      `DATABASE_PATH=/var/data/safesips.db`.
    - Location shares now survive restarts too (`presence_shares`), but only once
      the database itself persists.
-   - Friendships already survive a wipe: they're backed up to each user's Clerk
-     account and restored at their next sign-in (`server/src/friendBackup.ts`).
-     Everything else (emergency contacts, check-ins, reports, alerts) still
-     needs the disk.
+   - Friendships and accepted emergency contacts already survive a wipe:
+     they're backed up to each user's Clerk account and restored at their next
+     sign-in (`server/src/connectionBackup.ts`). Everything else (check-in
+     plans, reports, forum posts, alerts, pending requests) still needs the disk.
 2. **Production mode on Render (you).** Set `NODE_ENV=production`,
    `JWT_SECRET` (any random 32+ characters — the server refuses to start in
    production without it) and `CLIENT_IP_HEADER=cf-connecting-ip`. Production

@@ -11,6 +11,7 @@ import {
   requestContact,
 } from "../repos/emergencyContacts.js";
 import { findUserById } from "../repos/users.js";
+import { backUpConnections } from "../connectionBackup.js";
 
 /** In-app emergency contacts (other SafeSips users). */
 export const contactsRouter = Router();
@@ -61,6 +62,7 @@ contactsRouter.post(
       res.status(404).json({ error: "Request not found." });
       return;
     }
+    backUpConnections(me, ownerId);
     emitContactsChanged(ownerId);
     void sendPushToUser(ownerId, {
       title: "Emergency contact added",
@@ -83,6 +85,8 @@ contactsRouter.delete(
       return;
     }
     if (removed.other) emitContactsChanged(removed.other);
+    // Only an accepted link was backed up; saving after any removal is harmless.
+    backUpConnections(me, removed.other);
     res.json(getOverview(me));
   })
 );

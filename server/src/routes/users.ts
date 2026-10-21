@@ -8,7 +8,7 @@ import { deleteAccountData, exportAccountData } from "../repos/account.js";
 import { defaultCursor, listActivity } from "../repos/activity.js";
 import { computeStats } from "../repos/stats.js";
 import { cleanAvatarUrl, findUserById, setUserImage } from "../repos/users.js";
-import { backUpFriends } from "../friendBackup.js";
+import { backUpConnections } from "../connectionBackup.js";
 import { blockUser, listBlocks, unblockUser } from "../repos/moderation.js";
 import { emitFriendsChanged } from "../realtime.js";
 import { purgeUserRealtime } from "../realtime.js";
@@ -109,7 +109,7 @@ usersRouter.post(
       return;
     }
     blockUser(me, other);
-    backUpFriends(me, other);
+    backUpConnections(me, other);
     emitFriendsChanged(other);
     res.json({ blocks: listBlocks(me) });
   })
