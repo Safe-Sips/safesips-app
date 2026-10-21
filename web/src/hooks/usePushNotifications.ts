@@ -30,6 +30,9 @@ function isStandalone(): boolean {
   );
 }
 
+/** Fired after notifications are turned on or off, so every screen updates. */
+const CHANGED_EVENT = "safesips:push-changed";
+
 function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   const padding = "=".repeat((4 - (base64.length % 4)) % 4);
   const raw = atob((base64 + padding).replace(/-/g, "+").replace(/_/g, "/"));
@@ -87,21 +90,31 @@ export function usePushNotifications() {
 
   useEffect(() => {
     void refresh();
+    const onChanged = () => void refresh();
+    window.addEventListener(CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(CHANGED_EVENT, onChanged);
   }, [refresh]);
 
-  const enable = useCallback(async () => {
+  /**
+   * Ask for permission and subscribe this device. Call it straight from a tap
+   * (before any other await): browsers only show the prompt for a user action.
+   * Returns where things ended up.
+   */
+  const enable = useCallback(async (): Promise<PushStatus> => {
     setError(null);
     setBusy(true);
     try {
       const reg = await navigator.serviceWorker.getRegistration();
       if (!reg) {
         setStatus("unavailable");
-        return;
+        return "unavailable";
       }
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
-        setStatus(permission === "denied" ? "denied" : "off");
-        return;
+        const next = permission === "denied" ? "denied" : "off";
+        setStatus(next);
+        window.dispatchEvent(new Event(CHANGED_EVENT));
+        return next;
       }
       const key = urlBase64ToUint8Array((await api.pushPublicKey()).publicKey);
       let sub = await reg.pushManager.getSubscription();
@@ -113,8 +126,11 @@ export function usePushNotifications() {
       sub ??= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
       await api.pushSubscribe(sub.toJSON());
       setStatus("on");
+      window.dispatchEvent(new Event(CHANGED_EVENT));
+      return "on";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't turn on notifications.");
+      return "off";
     } finally {
       setBusy(false);
     }
@@ -131,6 +147,7 @@ export function usePushNotifications() {
         await sub.unsubscribe();
       }
       setStatus("off");
+      window.dispatchEvent(new Event(CHANGED_EVENT));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't turn off notifications.");
     } finally {

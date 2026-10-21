@@ -108,7 +108,7 @@ The app has a new address, so on each phone:
 
 1. Open **app.safesips.org** and sign in.
 2. Add it to the Home Screen again, and remove the old icon.
-3. Turn notifications on again (Check-ins page).
+3. Turn notifications on again (tap **Turn on** in the banner the app shows).
 
 Accounts, friends and contacts live on the server, so nothing else is lost.
 
