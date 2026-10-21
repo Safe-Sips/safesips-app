@@ -1475,16 +1475,6 @@ select option {
   padding: 4px 12px 8px;
   margin: 12px 0;
 }
-.notif-card.notif-off {
-  border-color: var(--accent);
-}
-.notif-state {
-  margin: 0;
-  font-weight: 700;
-}
-.notif-on {
-  color: var(--success);
-}
 .alert-banner {
   display: flex;
   align-items: center;

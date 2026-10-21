@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { EMERGENCY_NUMBER } from "@safesips/shared";
-import NotificationsCard from "../components/NotificationsCard";
 import { timeAgo } from "../format";
 import { useAlerts } from "../hooks/useAlerts";
 
@@ -22,7 +21,6 @@ export default function AlertsPage() {
         on it.
       </p>
 
-      <NotificationsCard why="Get alerted the moment someone you look out for misses a check-in, even when SafeSips is closed." />
       {error && <p className="error">{error}</p>}
 
       {alerts.length === 0 ? (

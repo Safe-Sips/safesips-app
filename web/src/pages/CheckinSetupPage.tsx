@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { ContactsOverviewDTO, PlanContactDTO, PlanDTO } from "@safesips/shared";
 import { api, ApiError } from "../api";
 import ContactPicker from "../components/ContactPicker";
-import NotificationsCard from "../components/NotificationsCard";
+import { usePushNotifications } from "../hooks/usePushNotifications";
 import { timeUntil } from "../format";
 import { useSocket } from "../socket/SocketProvider";
 
@@ -54,8 +54,6 @@ export default function CheckinSetupPage() {
         along with your approximate area if you're sharing your location.
       </p>
       {loadError && <p className="error">{loadError}</p>}
-
-      <NotificationsCard why="Get your check-in reminders here, plus alerts if someone you look out for misses theirs." />
 
       {overview && (
         <EmergencyContactsSection overview={overview} onChange={setOverview} />
@@ -325,7 +323,9 @@ function CheckinPlansSection({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [planError, setPlanError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [, setTick] = useState(0);
+  const push = usePushNotifications();
 
   const planAction = async (fn: () => Promise<unknown>, confirmText?: string) => {
     if (confirmText && !window.confirm(confirmText)) return;
@@ -349,10 +349,15 @@ function CheckinPlansSection({
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setNotice(null);
     if (alertIds !== null && alertIds.length === 0) {
       setError("Pick at least one contact to alert.");
       return;
     }
+    // Reminders arrive as notifications. If they're off, ask now: this has to
+    // be the first thing after the tap, or the browser won't show the prompt.
+    let pushNow = push.status;
+    if (pushNow === "off") pushNow = await push.enable();
     setBusy(true);
     try {
       const hours = Number(autoStopHours);
@@ -375,6 +380,11 @@ function CheckinPlansSection({
       setQuestion("");
       setAnswer("");
       setAutoStopHours("");
+      if (pushNow !== "on" && pushNow !== "loading" && pushNow !== "unavailable") {
+        setNotice(
+          "Check-ins started, but notifications are off on this device, so you'll only be reminded while SafeSips is open."
+        );
+      }
       onChange();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't start check-ins. Try again.");
@@ -512,14 +522,43 @@ function CheckinPlansSection({
           <ContactPicker contacts={contacts} selected={alertIds} onChange={setAlertIds} />
         )}
         {error && <p className="error">{error}</p>}
+        <PushHint status={push.status} />
         <button
           className="btn btn-primary"
-          disabled={busy || !hasPrimary || (alertIds !== null && alertIds.length === 0)}
+          disabled={busy || push.busy || !hasPrimary || (alertIds !== null && alertIds.length === 0)}
           type="submit"
         >
-          {busy ? "Starting…" : "Start check-ins"}
+          {busy || push.busy ? "Starting…" : "Start check-ins"}
         </button>
+        {notice && <p className="hint" role="status">{notice}</p>}
       </form>
     </section>
   );
+}
+
+/**
+ * Next to "Start check-ins": what to expect from notifications on this
+ * device. When they're simply off there's nothing to say: tapping Start asks.
+ */
+function PushHint({ status }: { status: ReturnType<typeof usePushNotifications>["status"] }) {
+  if (status === "off") {
+    return <p className="field-hint">SafeSips will ask to send you notifications, so your reminders arrive even when it's closed.</p>;
+  }
+  if (status === "denied") {
+    return (
+      <p className="hint">
+        Notifications are blocked for SafeSips, so you'll only be reminded while it's open. To allow
+        them, open your phone or browser settings → Notifications → SafeSips.
+      </p>
+    );
+  }
+  if (status === "needs-install") {
+    return (
+      <p className="hint">
+        On iPhone, reminders only arrive once SafeSips is on your Home Screen: tap <strong>Share</strong> →{" "}
+        <strong>Add to Home Screen</strong> and open it from there.
+      </p>
+    );
+  }
+  return null;
 }
