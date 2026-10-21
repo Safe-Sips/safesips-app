@@ -383,7 +383,7 @@ export function runMigrations(db: Database.Database): void {
       db.exec(`ALTER TABLE users ADD COLUMN search_notice_seen INTEGER NOT NULL DEFAULT 0`);
     }
     if (!userCols.some((c) => c.name === "friends_restored")) {
-      // 1 once the friend list saved in Clerk was restored (friendBackup.ts).
+      // 1 once the friends and contacts saved in Clerk were restored (connectionBackup.ts).
       db.exec(`ALTER TABLE users ADD COLUMN friends_restored INTEGER NOT NULL DEFAULT 0`);
     }
     if (!userCols.some((c) => c.name === "name_search")) {

@@ -214,3 +214,55 @@ export function listAcceptedContacts(
 export function hasAcceptedContact(ownerId: string): boolean {
   return listAcceptedContacts(ownerId).length > 0;
 }
+
+/* -------------------- Backup (see connectionBackup.ts) -------------------- */
+
+const contactClerkIdsOf = db.prepare(
+  `SELECT u.clerk_id FROM emergency_links l JOIN users u ON u.id = l.contact_user_id
+    WHERE l.owner_id = ? AND l.status = 'accepted' AND u.clerk_id IS NOT NULL ORDER BY u.clerk_id`
+);
+const protectingClerkIdsOf = db.prepare(
+  `SELECT u.clerk_id FROM emergency_links l JOIN users u ON u.id = l.owner_id
+    WHERE l.contact_user_id = ? AND l.status = 'accepted' AND u.clerk_id IS NOT NULL ORDER BY u.clerk_id`
+);
+const acceptedLink = db.prepare(
+  `SELECT 1 AS x FROM emergency_links WHERE owner_id = ? AND contact_user_id = ? AND status = 'accepted'`
+);
+const linksToUser = db.prepare(
+  `SELECT l.id FROM emergency_links l LEFT JOIN users u ON u.id = ?
+    WHERE l.owner_id = ? AND (l.contact_user_id = ? OR (l.contact_user_id IS NULL AND l.invite_email_norm = u.email_norm))`
+);
+
+/** Clerk ids of my accepted emergency contacts. */
+export function contactClerkIds(ownerId: string): string[] {
+  return (contactClerkIdsOf.all(ownerId) as Array<{ clerk_id: string }>).map((r) => r.clerk_id);
+}
+
+/** Clerk ids of the people who have me as an accepted emergency contact. */
+export function protectingClerkIds(contactId: string): string[] {
+  return (protectingClerkIdsOf.all(contactId) as Array<{ clerk_id: string }>).map((r) => r.clerk_id);
+}
+
+export function hasAcceptedLink(ownerId: string, contactId: string): boolean {
+  return acceptedLink.get(ownerId, contactId) !== undefined;
+}
+
+/**
+ * Put back an accepted link from a backup, replacing any pending request
+ * between them. No-op if it's already there.
+ */
+export const restoreContactLink = db.transaction((ownerId: string, contactId: string): boolean => {
+  if (ownerId === contactId || hasAcceptedLink(ownerId, contactId)) return false;
+  for (const r of linksToUser.all(contactId, ownerId, contactId) as Array<{ id: string }>) deleteLink.run(r.id);
+  const id = genId();
+  insertLink.run({
+    id,
+    owner_id: ownerId,
+    contact_user_id: contactId,
+    invite_email_norm: null,
+    invite_label: "Friend",
+    created_at: nowMs(),
+  });
+  acceptLink.run(contactId, nowMs(), id);
+  return true;
+}) as (ownerId: string, contactId: string) => boolean;

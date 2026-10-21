@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import type { UserRow } from "../repos/users.js";
 import { resolveAuthFromToken } from "./clerk.js";
-import { ensureFriendsRestored } from "../friendBackup.js";
+import { ensureConnectionsRestored } from "../connectionBackup.js";
 import { clientIpFrom } from "../clientIp.js";
 
 declare global {
@@ -59,8 +59,9 @@ export function requireAuth(
         });
         return;
       }
-      // First visit since the database was wiped: bring back saved friends.
-      if (!resolved.user.friends_restored) await ensureFriendsRestored(resolved.user);
+      // First visit since the database was wiped: bring back saved friends
+      // and emergency contacts.
+      if (!resolved.user.friends_restored) await ensureConnectionsRestored(resolved.user);
       req.auth = {
         userId: resolved.userId,
         sessionId: resolved.sessionId,

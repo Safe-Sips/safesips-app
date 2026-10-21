@@ -40,7 +40,7 @@ const updateClerkId = db.prepare(
 const updateImage = db.prepare(`UPDATE users SET image_url = ?, updated_at = ? WHERE id = ?`);
 const setFriendsRestored = db.prepare(`UPDATE users SET friends_restored = 1 WHERE id = ?`);
 
-/** Friendships saved in Clerk are now in this database (see friendBackup.ts). */
+/** Friends and contacts saved in Clerk are now in this database (see connectionBackup.ts). */
 export function markFriendsRestored(userId: string): void {
   setFriendsRestored.run(userId);
 }

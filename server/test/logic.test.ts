@@ -1039,16 +1039,19 @@ test("moderation: deleted content can't be restored; suspension hides and restor
   assert.equal(forum.getThreadDetail(threadId, reader.id)?.posts[0].isOpener, true);
 });
 
-/** An in-memory stand-in for the friend lists saved in Clerk. */
-function fakeBackups(saved: Record<string, string[]>, opts: { failReads?: boolean } = {}) {
+type Saved = { friends?: string[]; contacts?: string[]; protecting?: string[] };
+
+/** An in-memory stand-in for the lists saved in Clerk. */
+function fakeBackups(saved: Record<string, Saved>, opts: { failReads?: boolean } = {}) {
   return {
     saved,
     async read(clerkId: string) {
       if (opts.failReads) throw new Error("Clerk is down");
-      return saved[clerkId] ?? [];
+      const s = saved[clerkId] ?? {};
+      return { friends: s.friends ?? [], contacts: s.contacts ?? [], protecting: s.protecting ?? [] };
     },
-    async write(clerkId: string, ids: string[]) {
-      saved[clerkId] = ids;
+    async write(clerkId: string, lists: { friends: string[]; contacts: string[]; protecting: string[] }) {
+      saved[clerkId] = lists;
     },
     async localUser(clerkId: string) {
       // Like Clerk: accounts that exist there get a local row on demand.
@@ -1063,13 +1066,18 @@ function fakeBackups(saved: Record<string, string[]>, opts: { failReads?: boolea
 const clerkUser = (id: string) =>
   users.upsertUserFromClerk({ clerkId: id, email: `${id}@backup.test`, displayName: id, emailVerified: true });
 
-test("friend backup: a wiped database gets friendships back, only when both still agree", async () => {
+test("backup: a wiped database gets friendships back, only when both still agree", async () => {
   const friends = await import("../src/repos/friends.js");
-  const backup = await import("../src/friendBackup.js");
+  const backup = await import("../src/connectionBackup.js");
   const ana = clerkUser("bk_ana");
   // Bo isn't in this (wiped) database yet; Cy unfriended Ana; Di still has her.
-  const store = fakeBackups({ bk_ana: ["bk_bo", "bk_cy", "bk_di", "bk_gone"], bk_bo: ["bk_ana"], bk_cy: [], bk_di: ["bk_ana"] });
-  assert.equal(await backup.restoreFriends(ana, store), true);
+  const store = fakeBackups({
+    bk_ana: { friends: ["bk_bo", "bk_cy", "bk_di", "bk_gone"] },
+    bk_bo: { friends: ["bk_ana"] },
+    bk_cy: {},
+    bk_di: { friends: ["bk_ana"] },
+  });
+  assert.equal(await backup.restoreConnections(ana, store), true);
   const bo = users.findUserByClerkId("bk_bo")!;
   const di = users.findUserByClerkId("bk_di")!;
   assert.ok(friends.areFriends(ana.id, bo.id), "Bo is back (his account is recreated from Clerk)");
@@ -1077,34 +1085,66 @@ test("friend backup: a wiped database gets friendships back, only when both stil
   assert.equal(friends.areFriends(ana.id, users.findUserByClerkId("bk_cy")!.id), false, "Cy's unfriend stands");
   assert.equal(users.findUserByClerkId("bk_gone"), undefined, "deleted accounts are skipped");
   assert.equal(users.findUserById(ana.id)?.friends_restored, 1);
-  assert.equal(await backup.restoreFriends(users.findUserById(ana.id)!, store), true, "running it again is harmless");
+  assert.equal(await backup.restoreConnections(users.findUserById(ana.id)!, store), true, "running it again is harmless");
   assert.equal(friends.getFriendsOverview(ana.id).friends.length, 2);
 });
 
-test("friend backup: Clerk down leaves the user to retry; saves never overwrite an unrestored list", async () => {
+test("backup: emergency contacts come back both ways, unless either side ended it", async () => {
+  const ec = await import("../src/repos/emergencyContacts.js");
+  const backup = await import("../src/connectionBackup.js");
+  const own = clerkUser("bk_own");
+  // Own's contacts: Kim (still agrees), Lee (stepped down). Own looks out for Max
+  // (who still lists Own) and Ned (who removed Own).
+  const store = fakeBackups({
+    bk_own: { contacts: ["bk_kim", "bk_lee"], protecting: ["bk_max", "bk_ned"] },
+    bk_kim: { protecting: ["bk_own"] },
+    bk_lee: { protecting: [] },
+    bk_max: { contacts: ["bk_own"] },
+    bk_ned: { contacts: [] },
+  });
+  assert.equal(await backup.restoreConnections(own, store), true);
+  const id = (c: string) => users.findUserByClerkId(c)!.id;
+  assert.ok(ec.hasAcceptedLink(own.id, id("bk_kim")), "Kim is Own's contact again");
+  assert.equal(ec.hasAcceptedLink(own.id, id("bk_lee")), false, "Lee's step-down stands");
+  assert.ok(ec.hasAcceptedLink(id("bk_max"), own.id), "Own looks out for Max again");
+  assert.equal(ec.hasAcceptedLink(id("bk_ned"), own.id), false, "Ned's removal stands");
+  assert.deepEqual(ec.listAcceptedContacts(own.id).map((c) => c.id), [id("bk_kim")], "and Kim gets Own's alerts");
+});
+
+test("backup: Clerk down leaves the user to retry; saves never overwrite an unrestored list", async () => {
   const friends = await import("../src/repos/friends.js");
-  const backup = await import("../src/friendBackup.js");
+  const ec = await import("../src/repos/emergencyContacts.js");
+  const backup = await import("../src/connectionBackup.js");
   const eve = clerkUser("bk_eve");
-  assert.equal(await backup.restoreFriends(eve, fakeBackups({}, { failReads: true })), false);
+  assert.equal(await backup.restoreConnections(eve, fakeBackups({}, { failReads: true })), false);
   assert.equal(users.findUserById(eve.id)?.friends_restored, 0, "not marked: tried again later");
 
-  // Fay (restored) and Gus (not yet) were friends before the wipe. Fay unfriends
-  // Gus before he signs in: his restore must not bring her back.
+  // Fay (restored) and Gus (not yet) were friends, and Gus was Fay's contact,
+  // before the wipe. Fay unfriends Gus and removes him as a contact before he
+  // signs in: his restore must undo neither, and must keep his other friend.
   const fay = clerkUser("bk_fay");
   const gus = clerkUser("bk_gus");
   users.markFriendsRestored(fay.id);
-  const store = fakeBackups({ bk_fay: ["bk_gus"], bk_gus: ["bk_fay", "bk_hal"], bk_hal: ["bk_gus"] });
-  backup.setFriendBackupStore(store);
+  const store = fakeBackups({
+    bk_fay: { friends: ["bk_gus"], contacts: ["bk_gus"] },
+    bk_gus: { friends: ["bk_fay", "bk_hal"], protecting: ["bk_fay"] },
+    bk_hal: { friends: ["bk_gus"] },
+  });
+  backup.setConnectionBackupStore(store);
   try {
     friends.restoreFriendship(fay.id, gus.id);
+    ec.restoreContactLink(fay.id, gus.id);
     const f = friends.getFriendsOverview(fay.id).friends[0];
     const removed = friends.removeFriendship(fay.id, f.id);
-    backup.backUpFriends(fay.id, removed?.unfriended);
-    await backup.friendBackupsSettled();
-    assert.deepEqual(store.saved.bk_fay, [], "Fay's list is saved without Gus");
-    assert.equal(friends.areFriends(fay.id, gus.id), false, "and Gus's restore didn't undo it");
-    assert.deepEqual(store.saved.bk_gus, ["bk_hal"], "Gus keeps his other friend (restored first, then saved)");
+    const link = ec.getOverview(fay.id).contacts[0];
+    ec.removeLink(fay.id, link.id);
+    backup.backUpConnections(fay.id, removed?.unfriended);
+    await backup.connectionBackupsSettled();
+    assert.deepEqual(store.saved.bk_fay, { friends: [], contacts: [], protecting: [] }, "Fay's lists are saved without Gus");
+    assert.equal(friends.areFriends(fay.id, gus.id), false, "Gus's restore didn't bring the friendship back");
+    assert.equal(ec.hasAcceptedLink(fay.id, gus.id), false, "or the contact link");
+    assert.deepEqual(store.saved.bk_gus.friends, ["bk_hal"], "Gus keeps his other friend (restored first, then saved)");
   } finally {
-    backup.setFriendBackupStore(undefined);
+    backup.setConnectionBackupStore(undefined);
   }
 });

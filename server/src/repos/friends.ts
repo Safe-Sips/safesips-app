@@ -390,7 +390,7 @@ const friendClerkIdsOf = db.prepare(
     ORDER BY u.clerk_id`
 );
 
-/** My friends' Clerk ids: what friendBackup.ts saves. */
+/** My friends' Clerk ids: what connectionBackup.ts saves. */
 export function friendClerkIds(me: string): string[] {
   return (friendClerkIdsOf.all({ me }) as Array<{ clerk_id: string }>).map((r) => r.clerk_id);
 }
