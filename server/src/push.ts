@@ -61,7 +61,7 @@ function vapidSubject(): string {
   } catch {
     /* not a URL */
   }
-  return "mailto:support@safesips.app";
+  return "mailto:safesipss@gmail.com";
 }
 
 function vapidKeys(): { publicKey: string; privateKey: string } {

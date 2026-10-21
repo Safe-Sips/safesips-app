@@ -26,7 +26,7 @@ const NOMINATIM_SEARCH = "https://nominatim.openstreetmap.org/search";
 const PHOTON_SEARCH = "https://photon.komoot.io/api/";
 
 const USER_AGENT =
-  "SafeSips/1.0 (privacy-preserving safety map; contact: support@safesips.app)";
+  "SafeSips/1.0 (privacy-preserving safety map; contact: safesipss@gmail.com)";
 const CACHE_TTL_MS = 5 * 60_000;
 const MAX_RESULTS = 30;
 const DEFAULT_RADIUS = 1500;

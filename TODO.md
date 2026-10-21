@@ -60,7 +60,7 @@
 - [ ] Fix/qualify the `<0.2%` and `<5 s` public claims (label theoretical)
 - [ ] Update legal drafts — they still describe the *removed* live-map service
 - [ ] Fix the dead "Research Paper" footer link
-- [ ] Decide on a single support email (jamld2135@gmail.com vs support@safesips.app)
+- [x] Single support email: safesipss@gmail.com
 - [ ] Merge the two parallel waitlists (site Google Sheet + app SQLite)
 
 ## 5 · Safety app — v2.0 web

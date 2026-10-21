@@ -5,7 +5,7 @@ export interface GeocodeResult extends LatLng {
 }
 
 const NOMINATIM_USER_AGENT =
-  "SafeSips/1.0 (privacy map prototype; contact: support@safesips.app)";
+  "SafeSips/1.0 (privacy map prototype; contact: safesipss@gmail.com)";
 
 const GEOCODE_TIMEOUT_MS = 10_000;
 export const MAX_ADDRESS_LENGTH = 500;

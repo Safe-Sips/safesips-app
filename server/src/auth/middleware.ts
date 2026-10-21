@@ -35,7 +35,7 @@ const AUTH_ERROR_MESSAGE: Record<string, string> = {
   clerk_user_unavailable: "Could not load your Clerk user profile.",
   bad_token: "Invalid or expired session.",
   account_suspended:
-    "Your SafeSips account is suspended for breaking the community rules. If you think this is a mistake, email support@safesips.app.",
+    "Your SafeSips account is suspended for breaking the community rules. If you think this is a mistake, email safesipss@gmail.com.",
 };
 
 /** Reject the request unless it carries a valid Clerk or legacy token. */

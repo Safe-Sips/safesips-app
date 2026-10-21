@@ -53,7 +53,7 @@ Age
 • You must be at least 16 to use SafeSips.
 
 Contact
-• Privacy questions: support@safesips.app
+• Privacy questions: safesipss@gmail.com
 
 This summary is here for transparency. A full policy for your jurisdiction should be reviewed by a qualified lawyer.
 `.trim();
@@ -80,7 +80,7 @@ Community rules (zero tolerance)
 • No harassment, threats, hate, sexual content, stalking, doxxing or naming private individuals, and nothing illegal or deliberately false.
 • Don't use SafeSips to track, frighten or mislead anyone, or try to identify the people behind anonymous circles.
 • You can report posts and map reports, and block people, at any time. Content that several people report is hidden automatically, and we review reports and remove content or accounts that break these rules, usually within 24 hours.
-• To report something urgently, email support@safesips.app.
+• To report something urgently, email safesipss@gmail.com.
 
 Service provided "as is"
 • SafeSips is provided without warranties of any kind, express or implied, including fitness for a particular purpose.
@@ -97,7 +97,7 @@ Governing law
 • These terms are governed by the laws that apply to SafeSips, unless your local consumer protections say otherwise.
 
 Contact
-• Legal or support questions: support@safesips.app
+• Legal or support questions: safesipss@gmail.com
 
 This summary isn't legal advice. Have it reviewed by a qualified lawyer before relying on it.
 `.trim();
