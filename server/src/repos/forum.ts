@@ -5,6 +5,7 @@ import type {
 } from "@safesips/shared";
 import { db } from "../db.js";
 import { genId, nowMs } from "../util.js";
+import { hiddenForViewerSql } from "./moderation.js";
 
 interface ThreadJoinRow {
   id: string;
@@ -28,12 +29,27 @@ interface PostJoinRow {
   viewer_vote: number;
 }
 
+// The opening post: the thread's first post (by insertion order, so a reply
+// in the same millisecond can't be mistaken for it).
+const OPENER_ID_SQL = (threadCol: string) =>
+  `(SELECT op0.id FROM forum_posts op0 WHERE op0.thread_id = ${threadCol}
+     ORDER BY op0.created_at ASC, op0.rowid ASC LIMIT 1)`;
+
+// A thread is hidden from a viewer who blocked its author or reported its
+// opening post.
 const selectThreads = db.prepare(
   `SELECT t.*, u.display_name AS author_name
    FROM forum_threads t JOIN users u ON u.id = t.author_id
-   WHERE t.status = 'visible' AND t.last_post_at < ?
+   WHERE t.status = 'visible' AND t.last_post_at < @before
+     AND t.author_id NOT IN (SELECT blocked_id FROM user_blocks WHERE blocker_id = @viewer)
+     AND NOT EXISTS (SELECT 1 FROM content_flags f
+                      WHERE f.target_type = 'post' AND f.reporter_id = @viewer
+                        AND f.target_id = ${OPENER_ID_SQL("t.id")})
    ORDER BY t.last_post_at DESC
-   LIMIT ?`
+   LIMIT @limit`
+);
+const blockedBy = db.prepare(
+  `SELECT 1 AS x FROM user_blocks WHERE blocker_id = ? AND blocked_id = ?`
 );
 const selectThreadById = db.prepare(
   `SELECT t.*, u.display_name AS author_name
@@ -57,7 +73,21 @@ const POST_SELECT_BASE = `
 const selectPostsByThread = db.prepare(
   `${POST_SELECT_BASE}
    WHERE p.thread_id = @threadId AND p.status = 'visible'
+   ${hiddenForViewerSql("p.author_id", "post", "p.id")}
    ORDER BY p.created_at ASC`
+);
+const postRow = db.prepare(
+  `SELECT p.id, p.thread_id, p.author_id, ${OPENER_ID_SQL("p.thread_id")} AS opener_id
+     FROM forum_posts p JOIN forum_threads t ON t.id = p.thread_id
+    WHERE p.id = ? AND p.status = 'visible' AND t.status = 'visible'`
+);
+const setPostStatus = db.prepare(`UPDATE forum_posts SET status = ? WHERE id = ?`);
+const setThreadStatus = db.prepare(`UPDATE forum_threads SET status = ? WHERE id = ?`);
+const unbumpThread = db.prepare(
+  `UPDATE forum_threads SET post_count = MAX(post_count - 1, 0) WHERE id = ?`
+);
+const threadAuthor = db.prepare(
+  `SELECT author_id FROM forum_threads WHERE id = ? AND status = 'visible'`
 );
 const selectPostById = db.prepare(
   `${POST_SELECT_BASE} WHERE p.id = @id AND p.status = 'visible'`
@@ -117,9 +147,44 @@ function postToDTO(row: PostJoinRow): PostDTO {
   };
 }
 
-export function listThreads(before: number, limit: number): ThreadDTO[] {
-  const rows = selectThreads.all(before, limit) as ThreadJoinRow[];
+export function listThreads(before: number, limit: number, viewerId: string): ThreadDTO[] {
+  const rows = selectThreads.all({ before, limit, viewer: viewerId }) as ThreadJoinRow[];
   return rows.map(threadToDTO);
+}
+
+/** A visible post with what's needed to moderate it, or undefined. */
+export function getPostForModeration(
+  postId: string
+): { threadId: string; authorId: string; isOpener: boolean } | undefined {
+  const row = postRow.get(postId) as
+    | { id: string; thread_id: string; author_id: string; opener_id: string }
+    | undefined;
+  if (!row) return undefined;
+  return { threadId: row.thread_id, authorId: row.author_id, isOpener: row.id === row.opener_id };
+}
+
+/**
+ * Take a post out of view (status 'deleted' by its author, 'hidden' by
+ * moderation). Hiding a discussion's opening post hides the whole discussion.
+ */
+export const removePost = db.transaction((postId: string, status: "deleted" | "hidden"): void => {
+  const p = getPostForModeration(postId);
+  if (!p) return;
+  if (p.isOpener) {
+    setThreadStatus.run(status, p.threadId);
+  } else {
+    setPostStatus.run(status, postId);
+    unbumpThread.run(p.threadId);
+  }
+}) as (postId: string, status: "deleted" | "hidden") => void;
+
+export function getThreadAuthor(threadId: string): string | undefined {
+  return (threadAuthor.get(threadId) as { author_id: string } | undefined)?.author_id;
+}
+
+/** The author deletes their discussion (it disappears with its replies). */
+export function deleteThread(threadId: string): void {
+  setThreadStatus.run("deleted", threadId);
 }
 
 export function threadExistsById(threadId: string): boolean {
@@ -165,6 +230,8 @@ export function getThreadDetail(
 ): ThreadDetailDTO | undefined {
   const thread = getThreadDTO(threadId);
   if (!thread) return undefined;
+  // Someone I blocked: their discussion is gone for me.
+  if (blockedBy.get(viewerId, thread.authorId)) return undefined;
   const posts = (
     selectPostsByThread.all({ threadId, viewer: viewerId }) as PostJoinRow[]
   ).map(postToDTO);

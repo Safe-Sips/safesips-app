@@ -14,7 +14,7 @@ export default function FirstAidPage() {
     <div className="page firstaid-page">
       <div className="page-head">
         <Link className="back-link" to={user ? "/" : "/login"}>
-          {user ? "← Back to map" : "← Back to login"}
+          {user ? "← Back to map" : "← Back to sign in"}
         </Link>
         <h1>If you've been spiked</h1>
       </div>
@@ -26,8 +26,8 @@ export default function FirstAidPage() {
       <section className="card">
         <h2>First effects to watch for</h2>
         <p className="muted">
-          Spiking can come on fast. Trust your body — if something feels wrong,
-          act early.
+          Spiking can hit fast. Trust your body: if something feels wrong, act
+          early.
         </p>
         <ul className="effects-list">
           {FIRST_EFFECTS.map((e) => (
@@ -66,9 +66,9 @@ export default function FirstAidPage() {
       <section className="card card-quiet">
         <p className="muted">{DISCLAIMER}</p>
         <p className="muted">
-          Tip: if you mark a place as <strong>unsafe</strong> on the map,
-          SafeSips immediately shows nearby help — police, hospital, pharmacy,
-          fuel stations and 24/7 spots.
+          Tip: tap <strong>Help near me</strong> on the map (or report a place as
+          unsafe) to see the nearest police station, hospital, pharmacy, fuel
+          station and 24/7 places.
         </p>
       </section>
     </div>

@@ -109,7 +109,15 @@ export const config = {
   shareMaxDurationMs: intEnv("SHARE_MAX_DURATION_MS", 24 * 60 * 60 * 1000),
   sweepIntervalMs: intEnv("SWEEP_INTERVAL_MS", 5_000),
   minUpdateIntervalMs: intEnv("MIN_UPDATE_INTERVAL_MS", 2_000),
-  maxConnectionsPerIp: intEnv("MAX_CONNECTIONS_PER_IP", 20),
+  // Generous: a group on one venue's Wi-Fi shares a single address.
+  maxConnectionsPerIp: intEnv("MAX_CONNECTIONS_PER_IP", 60),
+  /** Accounts (by email) that can use the moderation queue. */
+  adminEmails: (process.env.ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
+  /** Header the hosting proxy sets to the real client IP (see clientIp.ts). */
+  clientIpHeader: (process.env.CLIENT_IP_HEADER ?? "").trim().toLowerCase(),
 
   // Persistence.
   databasePath: strEnv("DATABASE_PATH", "./data/safesips.db"),

@@ -5,7 +5,7 @@ import { api, ApiError } from "../api";
 import Avatar from "../components/Avatar";
 
 const COUNT_LABELS: Array<{ key: keyof FriendProfileDTO["counts"]; label: string }> = [
-  { key: "reports", label: "Locations reported" },
+  { key: "reports", label: "Places reported" },
   { key: "upvotesReceived", label: "Upvotes received" },
   { key: "threads", label: "Discussions started" },
   { key: "posts", label: "Forum replies" },
@@ -139,9 +139,34 @@ export default function FriendProfilePage() {
 
           <section className="card">
             {!confirmRemove ? (
-              <button className="btn btn-ghost" type="button" onClick={() => setConfirmRemove(true)}>
-                Remove friend
-              </button>
+              <div className="data-actions">
+                <button className="btn btn-ghost" type="button" onClick={() => setConfirmRemove(true)}>
+                  Remove friend
+                </button>
+                <button
+                  className="btn btn-ghost"
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    if (
+                      !window.confirm(
+                        `Block ${profile.displayName}? This also removes them as a friend. You won't see their posts or map reports, and they can't send you friend requests.`
+                      )
+                    )
+                      return;
+                    setBusy(true);
+                    try {
+                      await api.blockUser(profile.userId);
+                      navigate("/friends", { replace: true });
+                    } catch (err) {
+                      setError(err instanceof ApiError ? err.message : "Couldn't block them. Try again.");
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  Block
+                </button>
+              </div>
             ) : (
               <div className="data-actions">
                 <span>

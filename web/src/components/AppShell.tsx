@@ -14,7 +14,7 @@ function VerifyBanner() {
   return (
     <div className="verify-banner">
       <span>
-        Verify your email in the account menu to report locations and post in
+        Verify your email (in your account menu) to post reports and join
         the forum.
       </span>
       <span className="verify-banner-actions">
@@ -72,7 +72,7 @@ function AlertBanner() {
     <div className="alert-banner" role="alert">
       <span>
         <span aria-hidden="true">⚠️ </span>
-        <strong>{first?.ownerDisplayName ?? "Someone you protect"}</strong> missed a safety check-in
+        <strong>{first?.ownerDisplayName ?? "Someone you look out for"}</strong> missed a safety check-in
         {unread > 1 ? ` (+${unread - 1} more)` : ""}.
       </span>
       <Link className="btn btn-sm btn-danger-solid" to="/alerts">

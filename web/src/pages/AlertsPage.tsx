@@ -9,6 +9,7 @@ import { useAlerts } from "../hooks/useAlerts";
 export default function AlertsPage() {
   const { alerts, acknowledge } = useAlerts();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <div className="page alerts-page">
@@ -16,19 +17,20 @@ export default function AlertsPage() {
         <h1>Alerts</h1>
       </div>
       <p className="muted">
-        When someone who added you as their emergency contact misses a check-in,
-        you're alerted here. Try to reach them, and let the others know you're on
-        it.
+        If someone who has you as an emergency contact misses a check-in, you'll
+        see it here. Try to reach them, and let their other contacts know you're
+        on it.
       </p>
 
-      <NotificationsCard why="Get alerted the moment someone you protect misses a check-in, even with SafeSips closed." />
+      <NotificationsCard why="Get alerted the moment someone you look out for misses a check-in, even when SafeSips is closed." />
+      {error && <p className="error">{error}</p>}
 
       {alerts.length === 0 ? (
         <div className="state-card">
           <p className="state-title">No alerts</p>
           <p className="muted">
-            Nobody you protect has missed a check-in. To be someone's emergency
-            contact, give them your SafeSips code from the Check-ins page.
+            No one you look out for has missed a check-in. To become someone's
+            emergency contact, give them your SafeSips code from the Check-ins page.
           </p>
         </div>
       ) : (
@@ -53,8 +55,11 @@ export default function AlertsPage() {
                     disabled={busyId === a.id}
                     onClick={async () => {
                       setBusyId(a.id);
+                      setError(null);
                       try {
                         await acknowledge(a.id);
+                      } catch {
+                        setError("Couldn't update the alert. Check your connection and try again.");
                       } finally {
                         setBusyId(null);
                       }
@@ -77,7 +82,7 @@ export default function AlertsPage() {
               </div>
               <p className="hint">
                 {a.area
-                  ? "The area is approximate (their privacy circle), not an exact position. "
+                  ? "The area is approximate (their privacy circle), not their exact position. "
                   : "They weren't sharing their location at the time. "}
                 Can't reach them and worried? Call <strong>{EMERGENCY_NUMBER}</strong>.
               </p>

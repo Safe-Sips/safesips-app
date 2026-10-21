@@ -862,3 +862,124 @@ test("name-search notice: pending until seen or a choice is made", async () => {
   assert.equal(dto(u2.id).searchNoticePending, false, "choosing counts as seen");
   assert.equal(dto(u2.id).discoverable, false);
 });
+
+test("check-ins: too many wrong answers count as missed", () => {
+  const user = makeUser("wrong-answers@test.local");
+  const plan = checkins.createPlan(user.id, {
+    label: "Guess", intervalMinutes: 60, graceMinutes: 10, question: "pet?", answer: "Rex", endsAt: null,
+  });
+  const now = Date.now();
+  db.prepare(
+    `INSERT INTO checkin_occurrences (id, plan_id, user_id, due_at, deadline_at, status, created_at)
+     VALUES (?, ?, ?, ?, ?, 'prompted', ?)`
+  ).run("occ-guess", plan.id, user.id, now - 1000, now + 600_000, now);
+  for (let i = 1; i < checkins.MAX_WRONG_ANSWERS; i++) {
+    const r = checkins.answerOccurrence(user.id, "occ-guess", `wrong${i}`);
+    assert.equal(r?.correct, false);
+    assert.equal(r?.attemptsLeft, checkins.MAX_WRONG_ANSWERS - i);
+  }
+  const last = checkins.answerOccurrence(user.id, "occ-guess", "still wrong");
+  assert.ok(last?.tooManyAttempts && last.expired, "locked after the last wrong answer");
+  // The right answer no longer helps, and the scheduler escalates it.
+  assert.equal(checkins.answerOccurrence(user.id, "occ-guess", "Rex")?.correct, false);
+  assert.ok(checkins.claimOverdueOccurrences(Date.now()).some((o) => o.occurrenceId === "occ-guess"));
+});
+
+test("check-ins: pause, resume, and an ended plan stays ended", () => {
+  const user = makeUser("pause-resume@test.local");
+  const plan = checkins.createPlan(user.id, {
+    label: "Night", intervalMinutes: 30, graceMinutes: 5, question: "q?", answer: "a", endsAt: null,
+  });
+  assert.ok(checkins.pausePlan(user.id, plan.id));
+  assert.equal(checkins.listPlans(user.id)[0].nextDueAt, null, "paused: nothing scheduled");
+  const resumed = checkins.resumePlan(user.id, plan.id);
+  assert.equal(resumed?.status, "active");
+  assert.ok(resumed!.nextDueAt! > Date.now() + 29 * 60_000, "next check-in an interval from now");
+  assert.equal(checkins.resumePlan(user.id, plan.id), null, "already active");
+  assert.ok(checkins.endPlan(user.id, plan.id));
+  assert.equal(checkins.pausePlan(user.id, plan.id), false, "an ended plan can't be paused back to life");
+  assert.equal(checkins.resumePlan(user.id, plan.id), null);
+});
+
+test("moderation: reporting hides for the reporter, then for everyone", async () => {
+  const forum = await import("../src/repos/forum.js");
+  const mod = await import("../src/repos/moderation.js");
+  const author = makeUser("mod-author@test.local");
+  const readers = [1, 2, 3, 4].map((i) => makeUser(`mod-reader${i}@test.local`));
+  const { threadId } = forum.createThread(author.id, { title: "Bar tips", body: "opener", category: "general" });
+  const replyId = forum.createPost(author.id, threadId, "a nasty reply");
+  const sees = (viewer: string, id: string) =>
+    (forum.getThreadDetail(threadId, viewer)?.posts ?? []).some((p) => p.id === id);
+
+  mod.flagContent(readers[0].id, "post", replyId, "abuse");
+  assert.equal(sees(readers[0].id, replyId), false, "hidden for the person who reported it");
+  assert.equal(sees(readers[1].id, replyId), true, "still visible to others");
+  mod.flagContent(readers[1].id, "post", replyId, null);
+  const third = mod.flagContent(readers[2].id, "post", replyId, null);
+  assert.equal(third, mod.HIDE_AFTER_FLAGS);
+  forum.removePost(replyId, "hidden");
+  assert.equal(sees(readers[3].id, replyId), false, "hidden for everyone at the threshold");
+  assert.equal(forum.getThreadDTO(threadId)?.postCount, 1, "post count drops");
+
+  // Reporting the opening post hides the discussion from that reader's list.
+  const opener = forum.getThreadDetail(threadId, readers[3].id)!.posts[0];
+  mod.flagContent(readers[3].id, "post", opener.id, null);
+  assert.ok(!forum.listThreads(Date.now() + 1, 50, readers[3].id).some((t) => t.id === threadId));
+  assert.ok(forum.listThreads(Date.now() + 1, 50, author.id).some((t) => t.id === threadId));
+});
+
+test("moderation: blocking hides content, ends friendship, silences requests", async () => {
+  const forum = await import("../src/repos/forum.js");
+  const reports = await import("../src/repos/reports.js");
+  const friends = await import("../src/repos/friends.js");
+  const mod = await import("../src/repos/moderation.js");
+  const me = users.createUser({ email: "blk-me@test.local", displayName: "Blocker Person", passwordHash: "x" });
+  const them = users.createUser({ email: "blk-them@test.local", displayName: "Blocked Person", passwordHash: "x" });
+  const { threadId } = forum.createThread(them.id, { title: "Their thread", body: "hi", category: "general" });
+  reports.createReport(them.id, { lat: 44.43, lng: 26.1, safety: "unsafe", category: null, note: "x", placeLabel: null });
+  friends.requestFriendByUserId(them.id, me.id);
+  friends.requestFriendByUserId(me.id, them.id);
+  assert.ok(friends.areFriends(me.id, them.id));
+
+  mod.blockUser(me.id, them.id);
+  const box = { minLat: 44, maxLat: 45, minLng: 26, maxLng: 27 };
+  assert.ok(!forum.listThreads(Date.now() + 1, 50, me.id).some((t) => t.id === threadId));
+  assert.equal(forum.getThreadDetail(threadId, me.id), undefined);
+  assert.ok(!reports.listReportsInBbox(me.id, box, 100).some((r) => r.authorId === them.id));
+  assert.ok(reports.listReportsInBbox(them.id, box, 100).some((r) => r.authorId === them.id), "others still see it");
+  assert.equal(friends.areFriends(me.id, them.id), false, "friendship ended");
+  assert.equal(friends.requestFriendByUserId(them.id, me.id).ok, false, "can't add me by id");
+  assert.ok(!friends.searchUsers(them.id, "blocker").some((r) => r.userId === me.id), "can't find me");
+  assert.deepEqual(mod.listBlocks(me.id).map((b) => b.userId), [them.id]);
+  assert.ok(mod.unblockUser(me.id, them.id));
+  assert.ok(forum.listThreads(Date.now() + 1, 50, me.id).some((t) => t.id === threadId), "visible again after unblocking");
+});
+
+test("moderation: posting limits", async () => {
+  const mod = await import("../src/repos/moderation.js");
+  const reports = await import("../src/repos/reports.js");
+  const u = makeUser("limits@test.local");
+  for (let i = 0; i < 10; i++) {
+    assert.equal(mod.postingLimitError("report", u.id), null);
+    reports.createReport(u.id, { lat: 1, lng: 1, safety: "safe", category: null, note: null, placeLabel: null });
+  }
+  assert.match(mod.postingLimitError("report", u.id) ?? "", /last hour/);
+});
+
+test("push subscriptions only accept real push services", async () => {
+  const push = await import("../src/routes/push.js");
+  assert.ok(push.isPushServiceEndpoint("https://fcm.googleapis.com/fcm/send/abc"));
+  assert.ok(push.isPushServiceEndpoint("https://updates.push.services.mozilla.com/wpush/v2/x"));
+  assert.ok(push.isPushServiceEndpoint("https://web.push.apple.com/QK7"));
+  assert.ok(push.isPushServiceEndpoint("https://wns2-db5p.notify.windows.com/w/?token=1"));
+  assert.equal(push.isPushServiceEndpoint("https://evil.example/collect"), false);
+  assert.equal(push.isPushServiceEndpoint("https://fcm.googleapis.com.evil.example/x"), false);
+  assert.equal(push.isPushServiceEndpoint("http://fcm.googleapis.com/x"), false);
+});
+
+test("client IP comes from the proxy, not the proxy's own address", async () => {
+  const { clientIpFrom } = await import("../src/clientIp.js");
+  assert.equal(clientIpFrom({ "x-forwarded-for": "203.0.113.9" }, "10.0.0.1"), "203.0.113.9");
+  assert.equal(clientIpFrom({ "x-forwarded-for": "6.6.6.6, 203.0.113.9" }, "10.0.0.1"), "203.0.113.9", "a spoofed left entry is ignored");
+  assert.equal(clientIpFrom({}, "10.0.0.1"), "10.0.0.1");
+});

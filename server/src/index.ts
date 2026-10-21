@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import http from "node:http";
+import http, { type IncomingHttpHeaders } from "node:http";
+import { clientIpFrom } from "./clientIp.js";
 import cors from "cors";
 import express, {
   type NextFunction,
@@ -9,12 +10,14 @@ import express, {
 import { Server } from "socket.io";
 import {
   ClientToServerEvents,
+  PUBLIC_RADIUS_METERS,
   ServerToClientEvents,
   validateLocationUpdate,
 } from "@safesips/shared";
 import { config } from "./config.js";
 import { db } from "./db.js";
 import { PresenceStore } from "./presenceStore.js";
+import { forgetExpiredShares, forgetShare, loadShares, saveShare } from "./presencePersistence.js";
 import {
   hasReachedMaxDuration,
   isDeliberateDisconnect,
@@ -45,6 +48,7 @@ import { alertsRouter } from "./routes/alerts.js";
 import { pushRouter } from "./routes/push.js";
 import { checkinsRouter } from "./routes/checkins.js";
 import { waitlistRouter } from "./routes/waitlist.js";
+import { adminRouter } from "./routes/admin.js";
 
 // Touch the db import so the connection opens + migrations run at boot.
 void db;
@@ -100,13 +104,34 @@ const activeShareByUserId = new Map<
   { publicId: string; holdUntil: number; ownerSocketId: string; startedAt: number }
 >();
 
+// Shares that were running before this process started (deploy / restart):
+// put the circles back. The owner's next connection resumes theirs.
+for (const s of loadShares(Date.now())) {
+  store.restore({
+    publicId: s.publicId,
+    lat: s.lat,
+    lng: s.lng,
+    radiusMeters: PUBLIC_RADIUS_METERS,
+    updatedAt: s.updatedAt,
+    expiresAt: s.expiresAt,
+    status: "active",
+  });
+  activeShareByUserId.set(s.userId, {
+    publicId: s.publicId,
+    holdUntil: s.holdUntil,
+    ownerSocketId: "",
+    startedAt: s.startedAt,
+  });
+}
+
 app.get("/health", (_req, res) => {
   try {
     const payload: Record<string, unknown> = {
       status: "ok",
       clerkConfigured: Boolean(config.clerkSecretKey),
     };
-    if (!config.isProduction) {
+    // Only for local dev / CI (how many people share is nobody else's business).
+    if (config.allowTestToken) {
       payload.activeUsers = store.active().length;
     }
     res.json(payload);
@@ -129,6 +154,7 @@ app.use("/api/alerts", alertsRouter);
 app.use("/api/push", pushRouter);
 app.use("/api/checkins", checkinsRouter);
 app.use("/api/waitlist", waitlistRouter);
+app.use("/api/admin", adminRouter);
 
 // JSON error handler (4 args → Express treats this as the error middleware).
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
@@ -175,8 +201,8 @@ io.use((socket, next) => {
 
 const connectionsByIp = new Map<string, number>();
 
-function clientIp(socket: { handshake: { address: string } }): string {
-  return socket.handshake.address;
+function clientIp(socket: { handshake: { address: string; headers: IncomingHttpHeaders } }): string {
+  return clientIpFrom(socket.handshake.headers, socket.handshake.address);
 }
 
 /**
@@ -188,6 +214,7 @@ function removePresence(publicId: string, userId?: string, replacing = false): v
     if (store.remove(publicId)) {
       io.emit("presence:remove", { publicId });
     }
+    forgetShare(publicId);
     if (userId && activeShareByUserId.get(userId)?.publicId === publicId) {
       activeShareByUserId.delete(userId);
       if (!replacing) emitPresenceMine(userId, null);
@@ -334,6 +361,16 @@ io.on("connection", (socket) => {
         holdMs
       );
       socket.data.lastUpdateAt = now;
+      saveShare({
+        userId,
+        publicId,
+        lat: record.lat,
+        lng: record.lng,
+        holdUntil: holdMs > 0 ? now + holdMs : 0,
+        startedAt,
+        updatedAt: now,
+        expiresAt: record.expiresAt,
+      });
       io.emit("presence:upsert", record);
       // All of this user's sessions learn the circle's current id (a session
       // that was sharing elsewhere stands down instead of fighting over it).
@@ -399,6 +436,7 @@ const sweepTimer = setInterval(() => {
     for (const publicId of expired) {
       io.emit("presence:remove", { publicId });
     }
+    forgetExpiredShares(Date.now());
     purgeOldAttempts();
   } catch (err) {
     // eslint-disable-next-line no-console

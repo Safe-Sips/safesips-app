@@ -1,7 +1,7 @@
 import type Database from "better-sqlite3";
 import { foldName } from "./util.js";
 
-const SCHEMA_VERSION = 9;
+const SCHEMA_VERSION = 10;
 
 /**
  * Full schema, created idempotently with CREATE TABLE/INDEX IF NOT EXISTS.
@@ -278,6 +278,45 @@ CREATE TABLE IF NOT EXISTS friend_declines (
   PRIMARY KEY (decliner_id, requester_id)
 );
 
+-- Moderation: someone reported a forum post or a map report. Enough reports
+-- from different people hide it for everyone (see repos/moderation.ts).
+CREATE TABLE IF NOT EXISTS content_flags (
+  target_type  TEXT NOT NULL,
+  target_id    TEXT NOT NULL,
+  reporter_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reason       TEXT,
+  created_at   INTEGER NOT NULL,
+  PRIMARY KEY (target_type, target_id, reporter_id)
+);
+CREATE INDEX IF NOT EXISTS idx_flags_reporter ON content_flags(reporter_id);
+
+-- Blocks: the blocker no longer sees the blocked person's content.
+CREATE TABLE IF NOT EXISTS user_blocks (
+  blocker_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  blocked_id  TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at  INTEGER NOT NULL,
+  PRIMARY KEY (blocker_id, blocked_id)
+);
+
+-- The masked circle of a location share in progress (never the exact
+-- position; it's the same point everyone already sees), so a server restart
+-- doesn't end people's shares. Deleted when the share stops or ends.
+CREATE TABLE IF NOT EXISTS presence_shares (
+  user_id     TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  public_id   TEXT NOT NULL,
+  lat         REAL NOT NULL,
+  lng         REAL NOT NULL,
+  hold_until  INTEGER NOT NULL,
+  started_at  INTEGER NOT NULL,
+  updated_at  INTEGER NOT NULL,
+  expires_at  INTEGER NOT NULL
+);
+
+-- For per-user posting limits.
+CREATE INDEX IF NOT EXISTS idx_reports_author_created ON reports(author_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_threads_author_created ON forum_threads(author_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_posts_author_created ON forum_posts(author_id, created_at);
+
 -- Small key/value store (e.g. auto-generated Web Push VAPID keys).
 CREATE TABLE IF NOT EXISTS app_settings (
   key    TEXT PRIMARY KEY,
@@ -346,6 +385,13 @@ export function runMigrations(db: Database.Database): void {
     if (!userCols.some((c) => c.name === "name_search")) {
       // Folded display name (lower-case, no accents) for friend search.
       db.exec(`ALTER TABLE users ADD COLUMN name_search TEXT`);
+    }
+    const occCols = db
+      .prepare(`PRAGMA table_info(checkin_occurrences)`)
+      .all() as Array<{ name: string }>;
+    if (!occCols.some((c) => c.name === "wrong_attempts")) {
+      // Wrong answers so far (capped: too many counts as a missed check-in).
+      db.exec(`ALTER TABLE checkin_occurrences ADD COLUMN wrong_attempts INTEGER NOT NULL DEFAULT 0`);
     }
     const unfolded = db
       .prepare(`SELECT id, display_name FROM users WHERE name_search IS NULL`)

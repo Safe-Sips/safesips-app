@@ -46,11 +46,15 @@ export function useCheckins() {
   const answer = useCallback(
     async (occurrenceId: string, value: string): Promise<CheckinAnswerResult> => {
       const res = await api.answerCheckin(occurrenceId, value);
-      if (res.correct || res.expired) setActive(null);
+      // An expired / locked check-in stays on screen so its message can be
+      // read; the modal's Close button dismisses it.
+      if (res.correct) setActive(null);
       return res;
     },
     []
   );
 
-  return { active, refresh, answer };
+  const dismiss = useCallback(() => setActive(null), []);
+
+  return { active, refresh, answer, dismiss };
 }

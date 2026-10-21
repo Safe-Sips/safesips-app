@@ -49,15 +49,14 @@ export default function CheckinSetupPage() {
         <h1>Check-ins &amp; SOS</h1>
       </div>
       <p className="muted">
-        Going somewhere unfamiliar? Set up check-ins. SafeSips sends you a
-        notification with a personal question on a schedule — you need to be
-        clear-headed enough to answer. Miss it, and{" "}
-        <strong>your emergency contacts are alerted in SafeSips</strong>, with
-        your approximate area if you're sharing your location at the time.
+        Heading somewhere unfamiliar? Set up check-ins. SafeSips asks you a
+        personal question on a schedule, one you need a clear head to answer. If
+        you miss it, <strong>your emergency contacts are alerted in SafeSips</strong>,
+        along with your approximate area if you're sharing your location.
       </p>
       {loadError && <p className="error">{loadError}</p>}
 
-      <NotificationsCard why="You'll get your check-in prompts here — and alerts if someone you protect misses theirs." />
+      <NotificationsCard why="Get your check-in reminders here, plus alerts if someone you look out for misses theirs." />
 
       {overview && (
         <EmergencyContactsSection overview={overview} onChange={setOverview} />
@@ -79,7 +78,8 @@ function EmergencyContactsSection({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const run = async (fn: () => Promise<ContactsOverviewDTO>) => {
+  const run = async (fn: () => Promise<ContactsOverviewDTO>, confirmText?: string) => {
+    if (confirmText && !window.confirm(confirmText)) return;
     setError(null);
     try {
       onChange(await fn());
@@ -109,11 +109,11 @@ function EmergencyContactsSection({
     <section className="card">
       <h2>Emergency contacts</h2>
       <p className="muted">
-        Your emergency contacts are other SafeSips users. They're alerted in the
-        app if you miss a check-in — after they accept your request.
+        Your emergency contacts are other SafeSips users. Once they accept your
+        request, they're alerted in the app if you miss a check-in.
       </p>
 
-      <MyCode code={overview.myCode} hint="Give it to people who want to add you." />
+      <MyCode code={overview.myCode} hint="Share it with people who want to add you." />
 
       {overview.incoming.length > 0 && (
         <div className="contact-requests" role="region" aria-label="Requests for you">
@@ -140,7 +140,7 @@ function EmergencyContactsSection({
 
       <h3>Your contacts</h3>
       {overview.contacts.length === 0 ? (
-        <p className="muted">No contacts yet. Add someone by their email or SafeSips code.</p>
+        <p className="muted">No contacts yet. Add someone by their email or SafeSips code, or from a friend's profile.</p>
       ) : (
         <ul className="contact-list">
           {overview.contacts.map((c) => (
@@ -155,7 +155,18 @@ function EmergencyContactsSection({
                 {c.displayName && <span className="muted"> {c.inviteLabel}</span>}
               </span>
               <span className="contact-actions">
-                <button className="btn btn-ghost btn-sm" type="button" onClick={() => run(() => api.removeContact(c.id))}>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  type="button"
+                  onClick={() =>
+                    run(
+                      () => api.removeContact(c.id),
+                      c.status === "accepted"
+                        ? `Remove ${c.displayName ?? "this contact"}? They won't be alerted if you miss a check-in.`
+                        : undefined
+                    )
+                  }
+                >
                   Remove
                 </button>
               </span>
@@ -189,10 +200,19 @@ function EmergencyContactsSection({
               <li key={p.id} className="contact-row">
                 <span>
                   <strong>{p.displayName}</strong>
-                  <span className="muted"> — you'll be alerted if they miss a check-in</span>
+                  <span className="muted"> · you're alerted if they miss a check-in</span>
                 </span>
                 <span className="contact-actions">
-                  <button className="btn btn-ghost btn-sm" type="button" onClick={() => run(() => api.removeContact(p.id))}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    type="button"
+                    onClick={() =>
+                      run(
+                        () => api.removeContact(p.id),
+                        `Stop being ${p.displayName}'s emergency contact? You won't be alerted if they miss a check-in.`
+                      )
+                    }
+                  >
                     Stop
                   </button>
                 </span>
@@ -306,7 +326,19 @@ function CheckinPlansSection({
   const [autoStopHours, setAutoStopHours] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [planError, setPlanError] = useState<string | null>(null);
   const [, setTick] = useState(0);
+
+  const planAction = async (fn: () => Promise<unknown>, confirmText?: string) => {
+    if (confirmText && !window.confirm(confirmText)) return;
+    setPlanError(null);
+    try {
+      await fn();
+    } catch (err) {
+      setPlanError(err instanceof ApiError ? err.message : "Something went wrong. Try again.");
+    }
+    onChange();
+  };
 
   // Tick every second so each plan's "next in" countdown updates live.
   const hasCountdown = plans.some((p) => p.nextDueAt);
@@ -347,7 +379,7 @@ function CheckinPlansSection({
       setAutoStopHours("");
       onChange();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not start check-ins.");
+      setError(err instanceof ApiError ? err.message : "Couldn't start check-ins. Try again.");
     } finally {
       setBusy(false);
     }
@@ -355,41 +387,37 @@ function CheckinPlansSection({
 
   return (
     <section className="card">
-      <h2>Active check-in plans</h2>
+      <h2>Your check-ins</h2>
+      {planError && <p className="error">{planError}</p>}
       {plans.length === 0 ? (
-        <p className="muted">No active plans.</p>
+        <p className="muted">No check-ins running.</p>
       ) : (
         <ul className="plan-list">
           {plans.map((p) => (
             <li key={p.id} className="plan-row">
               <div>
                 <strong>{p.label || "Check-in"}</strong>{" "}
-                <span className={`pill pill-${p.status}`}>{p.status}</span>
+                <span className={`pill pill-${p.status}`}>{p.status === "paused" ? "Paused" : "Active"}</span>
                 <div className="muted">
-                  Every {p.intervalMinutes} min · {p.graceMinutes} min to answer
+                  Every {minutesLabel(p.intervalMinutes)} · {minutesLabel(p.graceMinutes)} to answer
                   {p.nextDueAt ? ` · next in ${timeUntil(p.nextDueAt)}` : ""}
                 </div>
                 <div className="muted">“{p.question}”</div>
                 <PlanContactsEditor plan={p} contacts={contacts} onSaved={onChange} />
               </div>
               <div className="plan-actions">
-                {p.status === "active" && (
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={async () => {
-                      await api.pausePlan(p.id);
-                      onChange();
-                    }}
-                  >
+                {p.status === "active" ? (
+                  <button className="btn btn-ghost btn-sm" onClick={() => planAction(() => api.pausePlan(p.id))}>
                     Pause
+                  </button>
+                ) : (
+                  <button className="btn btn-ghost btn-sm" onClick={() => planAction(() => api.resumePlan(p.id))}>
+                    Resume
                   </button>
                 )}
                 <button
                   className="btn btn-danger btn-sm"
-                  onClick={async () => {
-                    await api.endPlan(p.id);
-                    onChange();
-                  }}
+                  onClick={() => planAction(() => api.endPlan(p.id), "End this check-in? You won't get any more reminders for it.")}
                 >
                   End
                 </button>
@@ -401,8 +429,8 @@ function CheckinPlansSection({
 
       {!hasPrimary && (
         <p className="hint">
-          Add an emergency contact above — and wait for them to accept — before
-          starting a plan.
+          Add an emergency contact above and wait for them to accept before you
+          start a check-in.
         </p>
       )}
 
@@ -413,7 +441,7 @@ function CheckinPlansSection({
           <input
             value={label}
             onChange={(e) => setLabel(e.target.value)}
-            placeholder="e.g. Night out downtown"
+            placeholder="e.g. Night out in town"
           />
         </label>
         <div className="field-row">
@@ -450,7 +478,7 @@ function CheckinPlansSection({
             </select>
           </label>
           <label className="field">
-            <span>Auto-stop after (h)</span>
+            <span>Stop after (hours)</span>
             <input
               type="number"
               min={1}
@@ -472,14 +500,14 @@ function CheckinPlansSection({
           />
         </label>
         <label className="field">
-          <span>Answer (kept private, hashed)</span>
+          <span>Answer (kept private, never stored as plain text)</span>
           <input
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
             required
           />
           <small className="field-hint">
-            Case and spacing don't matter when you answer.
+            Capital letters and spaces don't matter.
           </small>
         </label>
         {contacts.length > 1 && (

@@ -34,7 +34,7 @@ export default function FriendSearch({ onChange }: { onChange: (o: FriendsOvervi
           setError(null);
         }
       } catch (err) {
-        if (id === latest.current) setError(err instanceof ApiError ? err.message : "Search failed.");
+        if (id === latest.current) setError(err instanceof ApiError ? err.message : "Search isn't working right now. Try again.");
       } finally {
         if (id === latest.current) setLoading(false);
       }

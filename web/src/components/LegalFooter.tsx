@@ -15,9 +15,8 @@ export default function LegalFooter({
   return (
     <footer className="legal-footer" aria-label="Legal and safety information">
       <p className="legal-emergency">
-        SafeSips is <strong>not</strong> an emergency service. Call{" "}
-        <strong>{EMERGENCY_NUMBER}</strong> (or your local emergency number) in an
-        emergency.
+        SafeSips is <strong>not</strong> an emergency service. In an emergency,
+        call <strong>{EMERGENCY_NUMBER}</strong> or your local emergency number.
       </p>
       <p className="legal-links">
         {onOpenHowItWorks && (

@@ -4,10 +4,30 @@ import type { ThreadDTO } from "@safesips/shared";
 import { api } from "../api";
 import { timeAgo } from "../format";
 
+/** Matches the server's page size (routes/forum.ts PAGE_LIMIT). */
+const PAGE_SIZE = 30;
+
 export default function ForumListPage() {
   const [threads, setThreads] = useState<ThreadDTO[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const loadMore = async () => {
+    const last = threads?.[threads.length - 1];
+    if (!last) return;
+    setLoadingMore(true);
+    try {
+      const next = await api.listThreads(last.lastPostAt);
+      setThreads((t) => [...(t ?? []), ...next.filter((n) => !t?.some((x) => x.id === n.id))]);
+      setHasMore(next.length >= PAGE_SIZE);
+    } catch {
+      setError("Couldn't load more discussions. Try again.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
   const retry = useCallback(() => {
     setError(null);
     setAttempt((n) => n + 1);
@@ -18,7 +38,10 @@ export default function ForumListPage() {
     api
       .listThreads()
       .then((t) => {
-        if (active) setThreads(t);
+        if (active) {
+          setThreads(t);
+          setHasMore(t.length >= PAGE_SIZE);
+        }
       })
       .catch(() => {
         if (active) setError("Couldn't load the forum. Check your connection and try again.");
@@ -37,7 +60,8 @@ export default function ForumListPage() {
         </Link>
       </div>
       <p className="muted">
-        Share tips and look out for each other. Keep it kind and useful.
+        Share tips and look out for each other. Keep it kind and useful, and
+        report anything abusive.
       </p>
 
       {error && (
@@ -79,6 +103,11 @@ export default function ForumListPage() {
           </li>
         ))}
       </ul>
+      {hasMore && (
+        <button className="btn btn-ghost btn-block" type="button" onClick={loadMore} disabled={loadingMore}>
+          {loadingMore ? "Loading…" : "Load more"}
+        </button>
+      )}
     </div>
   );
 }

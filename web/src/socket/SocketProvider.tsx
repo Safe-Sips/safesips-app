@@ -7,7 +7,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useAuth } from "../auth/AuthContext";
 import { createSocket, type AppSocket } from "../socket";
 
 export type ConnectionState = "connecting" | "connected" | "disconnected";
@@ -28,7 +27,6 @@ const SocketContext = createContext<SocketContextValue>({
  */
 export function SocketProvider({ children }: { children: ReactNode }) {
   const { isSignedIn, getToken } = useClerkAuth();
-  const { logout } = useAuth();
   const [socket, setSocket] = useState<AppSocket | null>(null);
   const [connection, setConnection] = useState<ConnectionState>("connecting");
 
@@ -41,13 +39,27 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     setSocket(s);
     setConnection("connecting");
 
-    const onConnect = () => setConnection("connected");
+    // A handshake the server rejects isn't retried by Socket.io, and it can be
+    // transient (the API restarting, Clerk's keys not loaded yet), so retry
+    // with backoff instead of signing the user out. A real sign-out shows up
+    // through Clerk (isSignedIn) and the REST API's 401s.
+    let retryTimer: number | undefined;
+    let retryDelay = 2_000;
+    const onConnect = () => {
+      retryDelay = 2_000;
+      setConnection("connected");
+    };
     const onDisconnect = () => setConnection("disconnected");
     const onReconnectAttempt = () => setConnection("connecting");
     const onConnectError = (err: Error) => {
       setConnection("disconnected");
       if (err.message === "unauthorized") {
-        void logout();
+        window.clearTimeout(retryTimer);
+        retryTimer = window.setTimeout(() => {
+          setConnection("connecting");
+          s.connect();
+        }, retryDelay);
+        retryDelay = Math.min(retryDelay * 2, 60_000);
       }
     };
 
@@ -61,10 +73,11 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       s.off("disconnect", onDisconnect);
       s.io.off("reconnect_attempt", onReconnectAttempt);
       s.off("connect_error", onConnectError);
+      window.clearTimeout(retryTimer);
       s.disconnect();
       setSocket(null);
     };
-  }, [isSignedIn, getToken, logout]);
+  }, [isSignedIn, getToken]);
 
   const value = useMemo<SocketContextValue>(
     () => ({ socket, connection }),

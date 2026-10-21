@@ -4,7 +4,9 @@ import { timeUntil } from "../format";
 import { useDialogA11y } from "../hooks/useDialogA11y";
 
 export default function ActiveCheckinModal() {
-  const { active, answer } = useCheckins();
+  const { active, answer, dismiss } = useCheckins();
+  /** Set once the check-in can no longer be answered (ran out, too many tries). */
+  const [closed, setClosed] = useState(false);
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -23,6 +25,7 @@ export default function ActiveCheckinModal() {
   useEffect(() => {
     setValue("");
     setError(null);
+    setClosed(false);
   }, [active?.id]);
 
   if (!active) return null;
@@ -33,13 +36,20 @@ export default function ActiveCheckinModal() {
     setError(null);
     try {
       const res = await answer(active.id, value);
-      if (res.expired) {
-        setError("This check-in expired — your SOS contact may have been alerted.");
+      if (res.tooManyAttempts || res.expired) setClosed(true);
+      if (res.tooManyAttempts) {
+        setError("Too many wrong answers, so your emergency contacts are being alerted now.");
+      } else if (res.expired) {
+        setError("This check-in has run out, so your emergency contacts may have been alerted.");
       } else if (!res.correct) {
-        setError("That doesn't match. Try again.");
+        setError(
+          res.attemptsLeft != null && res.attemptsLeft <= 2
+            ? `That doesn't match. ${res.attemptsLeft === 1 ? "1 try" : `${res.attemptsLeft} tries`} left before your contacts are alerted.`
+            : "That doesn't match. Try again."
+        );
       }
     } catch {
-      setError("Couldn't submit. Check your connection and try again.");
+      setError("Couldn't send your answer. Check your connection and try again.");
     } finally {
       setBusy(false);
     }
@@ -57,8 +67,8 @@ export default function ActiveCheckinModal() {
       >
         <h2 id="checkin-title">SafeSips check-in</h2>
         <p className="muted" id="checkin-desc">
-          Answer your security question to confirm you're OK. If you don't answer
-          in time, your emergency contacts will be alerted to check on you.
+          Answer your question to show you're OK. If you don't answer in time,
+          your emergency contacts are alerted so they can check on you.
         </p>
         <p className="checkin-deadline">
           Time left: <strong>{timeUntil(active.deadlineAt)}</strong>
@@ -69,14 +79,21 @@ export default function ActiveCheckinModal() {
             <input
               value={value}
               onChange={(e) => setValue(e.target.value)}
+              disabled={closed}
               data-autofocus
               required
             />
           </label>
           {error && <p className="error">{error}</p>}
-          <button className="btn btn-primary btn-block" disabled={busy} type="submit">
-            {busy ? "Checking…" : "I'm OK — submit"}
-          </button>
+          {closed ? (
+            <button className="btn btn-ghost btn-block" type="button" onClick={dismiss}>
+              Close
+            </button>
+          ) : (
+            <button className="btn btn-primary btn-block" disabled={busy} type="submit">
+              {busy ? "Checking…" : "I'm OK"}
+            </button>
+          )}
         </form>
       </div>
     </div>

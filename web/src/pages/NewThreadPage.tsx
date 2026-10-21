@@ -17,7 +17,7 @@ export default function NewThreadPage() {
       const thread = await api.createThread({ title, body });
       navigate(`/forum/${thread.id}`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not post.");
+      setError(err instanceof ApiError ? err.message : "Couldn't post your discussion. Try again.");
     } finally {
       setBusy(false);
     }
@@ -52,6 +52,10 @@ export default function NewThreadPage() {
             required
           />
         </label>
+        <p className="field-hint">
+          Be kind and keep it about places and safety. Don't name or share
+          details about private people. Abusive posts are removed.
+        </p>
         {error && <p className="error">{error}</p>}
         <button className="btn btn-primary" disabled={busy} type="submit">
           {busy ? "Posting…" : "Post discussion"}

@@ -28,6 +28,26 @@ export interface UserDTO {
   discoverable?: boolean;
   /** Show the one-time "people can find you by name" notice. */
   searchNoticePending?: boolean;
+  /** Can use the moderation queue (ADMIN_EMAILS). */
+  isAdmin?: boolean;
+}
+
+/** Something people reported, in the moderation queue. */
+export interface ModerationItemDTO {
+  type: "post" | "report";
+  id: string;
+  /** The post text, or the report's note. */
+  text: string;
+  /** Discussion title, or the report's safety · tag. */
+  context: string;
+  authorId: string;
+  authorName: string;
+  authorSuspended: boolean;
+  hidden: boolean;
+  flags: number;
+  reasons: string[];
+  createdAt: number;
+  lastFlagAt: number;
 }
 
 export interface RegisterInput {
@@ -352,6 +372,10 @@ export interface CheckinAnswerResult {
   /** True when the deadline has already passed (answer no longer accepted). */
   expired: boolean;
   occurrence: CheckinOccurrenceDTO | null;
+  /** Wrong answers left before the check-in counts as missed. */
+  attemptsLeft?: number;
+  /** Too many wrong answers: treated as missed, contacts are being alerted. */
+  tooManyAttempts?: boolean;
 }
 
 /* ------------------------------- Waitlist ------------------------------- */

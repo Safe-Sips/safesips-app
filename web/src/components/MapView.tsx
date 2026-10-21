@@ -31,6 +31,17 @@ export interface AlertArea extends LatLng {
   at: number;
 }
 
+/**
+ * Map tiles. openstreetmap.org's own tile servers are fine for development,
+ * but their usage policy doesn't allow them for apps with real traffic: set
+ * VITE_MAP_TILE_URL (and its attribution) to a tile provider for launch.
+ */
+const TILE_URL =
+  import.meta.env.VITE_MAP_TILE_URL?.trim() || "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const TILE_ATTRIBUTION =
+  import.meta.env.VITE_MAP_TILE_ATTRIBUTION?.trim() ||
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+
 /** A place to recenter the map on. Optional zoom overrides the focus zoom. */
 export type FocusPoint = LatLng & { zoom?: number };
 
@@ -213,11 +224,7 @@ export default function MapView({
       className="map-root"
       preferCanvas={false}
     >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        maxZoom={19}
-      />
+      <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL} maxZoom={19} />
 
       {/* Other users' public privacy circles. */}
       {others.map((record) => (

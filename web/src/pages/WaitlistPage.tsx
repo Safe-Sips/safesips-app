@@ -29,7 +29,7 @@ export default function WaitlistPage() {
       });
       setDone(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not sign up.");
+      setError(err instanceof ApiError ? err.message : "Couldn't add you to the list. Try again.");
     } finally {
       setBusy(false);
     }

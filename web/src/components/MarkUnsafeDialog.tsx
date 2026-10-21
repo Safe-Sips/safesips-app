@@ -52,10 +52,10 @@ export default function MarkUnsafeDialog({
 
         {/* This warning is DISTINCT from the presence sensitive-location notice. */}
         <p className="report-warning">
-          <span aria-hidden="true">⚠️ </span>This publishes the <strong>exact location</strong> you picked,
-          publicly, linked to your display name. This is different from the
-          private map circle — only share places (a venue, a street), never your
-          home. Reports fade and disappear from the map after 48 hours.
+          <span aria-hidden="true">⚠️ </span>Reports are public: everyone sees the <strong>exact spot</strong> you
+          picked and your display name. That's different from your private
+          location circle, so only report places like a venue or a street, never
+          your home. Reports fade and disappear after 48 hours.
         </p>
 
         <p className="muted report-coords">
@@ -67,7 +67,10 @@ export default function MarkUnsafeDialog({
           <button
             type="button"
             className={`seg-btn${safety === "unsafe" ? " is-on seg-danger" : ""}`}
-            onClick={() => setSafety("unsafe")}
+            onClick={() => {
+              setSafety("unsafe");
+              setCategory("");
+            }}
             aria-pressed={safety === "unsafe"}
           >
             <span aria-hidden="true">⚠️ </span>Unsafe
@@ -75,7 +78,10 @@ export default function MarkUnsafeDialog({
           <button
             type="button"
             className={`seg-btn${safety === "safe" ? " is-on seg-safe" : ""}`}
-            onClick={() => setSafety("safe")}
+            onClick={() => {
+              setSafety("safe");
+              setCategory("");
+            }}
             aria-pressed={safety === "safe"}
           >
             <span aria-hidden="true">✓ </span>Safe
@@ -83,7 +89,7 @@ export default function MarkUnsafeDialog({
         </div>
 
         <label className="field">
-          <span>What happened? (optional)</span>
+          <span>{safety === "unsafe" ? "What happened?" : "What was good?"} (optional)</span>
           <select value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="">Choose a tag…</option>
             {categories.map((c) => (
@@ -101,7 +107,7 @@ export default function MarkUnsafeDialog({
             onChange={(e) => setNote(e.target.value)}
             rows={3}
             maxLength={500}
-            placeholder="Anything others should know…"
+            placeholder="Anything others should know? Please don't name people."
           />
         </label>
 
@@ -122,7 +128,7 @@ export default function MarkUnsafeDialog({
               })
             }
           >
-            {busy ? "Publishing…" : "Publish report"}
+            {busy ? "Posting…" : "Post report"}
           </button>
         </div>
       </div>

@@ -5,6 +5,7 @@ import { requireAuth, requireVerified } from "../auth/middleware.js";
 import { nowMs } from "../util.js";
 import { logActivity } from "../repos/activity.js";
 import * as forum from "../repos/forum.js";
+import { flagContent, HIDE_AFTER_FLAGS, postingLimitError } from "../repos/moderation.js";
 
 export const forumRouter = Router();
 forumRouter.use(requireAuth);
@@ -22,7 +23,7 @@ forumRouter.get(
     const q = parseQuery(listQuery, req, res);
     if (!q) return;
     const before = q.cursor ?? nowMs() + 1;
-    res.json(forum.listThreads(before, PAGE_LIMIT));
+    res.json(forum.listThreads(before, PAGE_LIMIT, req.auth!.userId));
   })
 );
 
@@ -38,6 +39,11 @@ forumRouter.post(
   asyncHandler(async (req, res) => {
     const body = parseBody(threadSchema, req, res);
     if (!body) return;
+    const limited = postingLimitError("thread", req.auth!.userId);
+    if (limited) {
+      res.status(429).json({ error: limited, code: "rate_limited" });
+      return;
+    }
     const { threadId } = forum.createThread(req.auth!.userId, {
       title: body.title,
       body: body.body,
@@ -74,6 +80,11 @@ forumRouter.post(
       res.status(404).json({ error: "Thread not found." });
       return;
     }
+    const limited = postingLimitError("post", req.auth!.userId);
+    if (limited) {
+      res.status(429).json({ error: limited, code: "rate_limited" });
+      return;
+    }
     const postId = forum.createPost(req.auth!.userId, req.params.id, body.body);
     const thread = forum.getThreadDTO(req.params.id);
     logActivity(req.auth!.userId, "post_created", postId, thread?.title ?? null);
@@ -102,6 +113,65 @@ forumRouter.post(
     }
     forum.setPostVote(id, req.auth!.userId, body.value);
     res.json({ voteCount: forum.postVoteScore(id), viewerVote: body.value });
+  })
+);
+
+const flagSchema = z.object({ reason: z.string().trim().max(200).optional() });
+
+/** Report a post. Hidden for me now; for everyone once enough people report it. */
+forumRouter.post(
+  "/posts/:id/flag",
+  asyncHandler(async (req, res) => {
+    const body = parseBody(flagSchema, req, res);
+    if (!body) return;
+    const me = req.auth!.userId;
+    const post = forum.getPostForModeration(req.params.id);
+    if (!post) {
+      res.status(404).json({ error: "Post not found." });
+      return;
+    }
+    if (post.authorId === me) {
+      res.status(400).json({ error: "You can delete your own post instead.", code: "own_post" });
+      return;
+    }
+    const flags = flagContent(me, "post", req.params.id, body.reason || null);
+    if (flags >= HIDE_AFTER_FLAGS) {
+      forum.removePost(req.params.id, "hidden");
+      // eslint-disable-next-line no-console
+      console.warn(`[moderation] post ${req.params.id} hidden after ${flags} reports`);
+    }
+    res.json({ ok: true });
+  })
+);
+
+/** Delete my own reply (to delete a discussion, delete the thread). */
+forumRouter.delete(
+  "/posts/:id",
+  asyncHandler(async (req, res) => {
+    const post = forum.getPostForModeration(req.params.id);
+    if (!post || post.authorId !== req.auth!.userId) {
+      res.status(404).json({ error: "Post not found." });
+      return;
+    }
+    if (post.isOpener) {
+      res.status(400).json({ error: "This starts the discussion: delete the discussion instead.", code: "opener" });
+      return;
+    }
+    forum.removePost(req.params.id, "deleted");
+    res.json({ ok: true });
+  })
+);
+
+/** Delete my own discussion (with its replies). */
+forumRouter.delete(
+  "/threads/:id",
+  asyncHandler(async (req, res) => {
+    if (forum.getThreadAuthor(req.params.id) !== req.auth!.userId) {
+      res.status(404).json({ error: "Discussion not found." });
+      return;
+    }
+    forum.deleteThread(req.params.id);
+    res.json({ ok: true });
   })
 );
 
