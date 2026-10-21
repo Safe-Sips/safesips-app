@@ -114,6 +114,18 @@ body {
 html,
 body {
   background-color: var(--nav-bg);
+  /* No rubber-band on the page itself: pulling past the top or bottom showed
+     that navy as a dark band. Scrollable areas inside keep their own bounce. */
+  overscroll-behavior: none;
+}
+/* Signed in, only .shell-main scrolls. Lock the page behind the fixed shell:
+   in Home Screen apps <html> is a status bar taller than the screen (the
+   bottom-band fix above), so the page could scroll and slide the top bar out
+   of view. This changes no heights or backgrounds, so both iOS fixes above
+   still apply. */
+html:has(.shell),
+html:has(.shell) body {
+  overflow: hidden;
 }
 /* Safari tabs tint the status bar from a fixed bar at the very top. */
 body::before {
@@ -804,6 +816,9 @@ body {
   flex: 1;
   position: relative;
   overflow-y: auto;
+  /* Reaching the end of a page mustn't hand the scroll on to the locked page
+     behind it (that's what bounced the navy into view). */
+  overscroll-behavior-y: contain;
 }
 .map-page {
   position: absolute;
