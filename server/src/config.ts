@@ -52,7 +52,8 @@ function parseOrigins(raw: string | undefined): string[] {
   if (raw.trim() === "*") return ["*"];
   return raw
     .split(",")
-    .map((origin) => origin.trim())
+    // Browsers send origins without a trailing slash; tolerate one in config.
+    .map((origin) => origin.trim().replace(/\/+$/, ""))
     .filter(Boolean);
 }
 
