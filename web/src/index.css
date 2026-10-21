@@ -127,6 +127,21 @@ html:has(.shell),
 html:has(.shell) body {
   overflow: hidden;
 }
+/* No page zoom, like a native app: pinching (or zooming out hard after iOS
+   zoomed in) moved the screen out from under the fixed top bar. The map still
+   pinch-zooms (Leaflet handles that gesture itself). */
+html,
+body {
+  touch-action: pan-x pan-y;
+}
+/* iPhone zooms the page in when you tap a text field smaller than 16px. */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em) !important;
+  }
+}
 /* Safari tabs tint the status bar from a fixed bar at the very top. */
 body::before {
   content: "";
@@ -2077,9 +2092,46 @@ select option {
   cursor: pointer;
 }
 
-.friend-search input[type="search"] {
-  width: 100%;
+.search-field {
+  display: grid;
+  gap: 6px;
   margin-bottom: 6px;
+}
+.search-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.search-input-wrap {
+  position: relative;
+  display: block;
+}
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+/* Same look as the app's other fields, with room for the icon. */
+.friend-search input[type="search"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  background: rgba(24, 33, 60, 0.05);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 11px 12px 11px 40px;
+  font: inherit;
+  font-size: 15px;
+}
+.friend-search input[type="search"]:focus {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
 }
 .search-results {
   margin-top: 6px;

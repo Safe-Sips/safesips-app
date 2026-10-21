@@ -62,16 +62,30 @@ export default function FriendSearch({ onChange }: { onChange: (o: FriendsOvervi
   const q = query.trim();
   return (
     <div className="friend-search">
-      <input
-        type="search"
-        placeholder="Search by name"
-        aria-label="Search people by name"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        autoComplete="off"
-      />
-      {q.length > 0 && q.length < MIN_CHARS && (
-        <p className="field-hint">Type at least {MIN_CHARS} letters.</p>
+      <label className="search-field">
+        <span className="search-label">Search by name</span>
+        <span className="search-input-wrap">
+          <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+          <input
+            type="search"
+            placeholder="Their first or last name"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            autoComplete="off"
+            autoCorrect="off"
+            enterKeyHint="search"
+          />
+        </span>
+      </label>
+      {q.length < MIN_CHARS && (
+        <p className="field-hint">
+          {q.length === 0
+            ? "Results show up as you type. Only people who allow it can be found."
+            : `Keep typing: at least ${MIN_CHARS} letters.`}
+        </p>
       )}
       {loading && results === null && <p className="field-hint" role="status">Searching…</p>}
       {results !== null && results.length === 0 && !loading && (
