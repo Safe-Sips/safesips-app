@@ -6,7 +6,9 @@ only you can make; everything else is code.
 
 ## 1. Blockers — do these first
 
-1. **Persistent database (you).** Render's free plan has no disk, so every
+1. ~~**Persistent database (you).**~~ **Done 21 Oct:** Starter plan + disk at
+   `/var/data`. `/health` shows `"storage":"disk"` and a `dataSince` time that
+   stays the same across deploys. (Old note:) Render's free plan has no disk, so every
    deploy or restart wipes the SQLite database: accounts' friends, emergency
    contacts, check-ins, reports and alerts. (Evidence: a SafeSips code and an
    accepted contact disappeared between two deploys on 20 Oct.)
