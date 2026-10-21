@@ -128,6 +128,29 @@ checkinsRouter.post(
 );
 
 checkinsRouter.post(
+  "/plans/:id/resume",
+  asyncHandler(async (req, res) => {
+    if (!hasAcceptedContact(req.auth!.userId)) {
+      res.status(400).json({
+        error: "Add an emergency contact (and wait for them to accept) before resuming check-ins.",
+        code: "no_sos_contact",
+      });
+      return;
+    }
+    const result = checkins.resumePlan(req.auth!.userId, req.params.id);
+    if (!result) {
+      res.status(404).json({ error: "Paused plan not found." });
+      return;
+    }
+    if ("ended" in result) {
+      res.status(409).json({ error: "This check-in reached its end time, so it has ended.", code: "plan_ended" });
+      return;
+    }
+    res.json(result.plan);
+  })
+);
+
+checkinsRouter.post(
   "/plans/:id/end",
   asyncHandler(async (req, res) => {
     if (!checkins.endPlan(req.auth!.userId, req.params.id)) {

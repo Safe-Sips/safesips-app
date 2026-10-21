@@ -2057,3 +2057,21 @@ select option {
   margin-top: 2px;
   flex-shrink: 0;
 }
+
+/* Report / Block / Delete links under posts and map reports. */
+.post-actions,
+.report-moderation {
+  display: flex;
+  gap: 14px;
+  margin-top: 6px;
+  font-size: 13px;
+}
+.report-moderation {
+  gap: 4px;
+  margin-top: 12px;
+  color: var(--muted);
+}
+.post-actions .btn-link,
+.report-moderation .btn-link {
+  color: var(--muted);
+}

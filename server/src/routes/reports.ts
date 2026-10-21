@@ -5,6 +5,7 @@ import { requireAuth, requireVerified } from "../auth/middleware.js";
 import { cleanText } from "../util.js";
 import { logActivity } from "../repos/activity.js";
 import * as reports from "../repos/reports.js";
+import { flagContent, HIDE_AFTER_FLAGS, postingLimitError } from "../repos/moderation.js";
 import { broadcastReportNew, broadcastReportRemoved } from "../realtime.js";
 
 export const reportsRouter = Router();
@@ -56,6 +57,11 @@ reportsRouter.post(
   asyncHandler(async (req, res) => {
     const body = parseBody(createSchema, req, res);
     if (!body) return;
+    const limited = postingLimitError("report", req.auth!.userId);
+    if (limited) {
+      res.status(429).json({ error: limited, code: "rate_limited" });
+      return;
+    }
     const dto = reports.createReport(req.auth!.userId, {
       lat: body.lat,
       lng: body.lng,
@@ -87,6 +93,35 @@ reportsRouter.post(
       logActivity(req.auth!.userId, "report_upvoted", id, null);
     }
     res.json({ voteCount: reports.reportVoteCount(id), viewerHasVoted: true });
+  })
+);
+
+const flagSchema = z.object({ reason: z.string().trim().max(200).optional() });
+
+/** Report a map report. Hidden for me now; for everyone once enough people report it. */
+reportsRouter.post(
+  "/:id/flag",
+  asyncHandler(async (req, res) => {
+    const body = parseBody(flagSchema, req, res);
+    if (!body) return;
+    const me = req.auth!.userId;
+    const author = reports.getReportAuthor(req.params.id);
+    if (!author) {
+      res.status(404).json({ error: "Report not found." });
+      return;
+    }
+    if (author === me) {
+      res.status(400).json({ error: "You can delete your own report instead.", code: "own_report" });
+      return;
+    }
+    const flags = flagContent(me, "report", req.params.id, body.reason || null);
+    if (flags >= HIDE_AFTER_FLAGS) {
+      reports.hideReport(req.params.id);
+      broadcastReportRemoved(req.params.id);
+      // eslint-disable-next-line no-console
+      console.warn(`[moderation] report ${req.params.id} hidden after ${flags} reports`);
+    }
+    res.json({ ok: true });
   })
 );
 

@@ -25,28 +25,26 @@ export default function NotificationsCard({ why }: { why: string }) {
       )}
       {status === "denied" && (
         <p className="error">
-          Notifications are blocked for SafeSips. Allow them in your browser's site
-          settings (the lock or info icon next to the address bar → Notifications),
-          then reload this page.
+          Notifications are blocked for SafeSips. Allow them in your browser (tap the
+          lock or info icon next to the address → Notifications), then reload the page.
         </p>
       )}
       {status === "needs-install" && (
         <p className="error">
-          On iPhone, notifications only work once SafeSips is on your Home Screen:
-          tap <strong>Share</strong> → <strong>Add to Home Screen</strong>, open SafeSips
-          from there, and turn notifications on.
+          On iPhone, notifications only work once SafeSips is on your Home Screen. Tap{" "}
+          <strong>Share</strong> → <strong>Add to Home Screen</strong>, open SafeSips from
+          there, then turn notifications on.
         </p>
       )}
       {status === "unsupported" && (
         <p className="error">
-          This browser can't show SafeSips notifications. Try Chrome, Edge, Firefox
-          or Safari on an up-to-date device.
+          This browser can't show SafeSips notifications. Try an up-to-date Chrome,
+          Edge, Firefox or Safari.
         </p>
       )}
       {status === "unavailable" && (
         <p className="hint">
-          Notifications aren't available in this build (they need the installed /
-          published app).
+          Notifications aren't available in this version of the app.
         </p>
       )}
       {error && <p className="error">{error}</p>}

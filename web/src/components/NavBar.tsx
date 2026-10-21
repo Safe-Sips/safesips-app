@@ -18,7 +18,7 @@ export default function NavBar() {
   return (
     <header className="nav">
       <nav className="nav-links" aria-label="Primary">
-        {LINKS.map((l) => (
+        {[...LINKS, ...(user?.isAdmin ? [{ to: "/admin", label: "Moderation", end: false }] : [])].map((l) => (
           <NavLink
             key={l.to}
             to={l.to}

@@ -12,6 +12,7 @@ import type {
   ContactsOverviewDTO,
   FriendProfileDTO,
   FriendsOverviewDTO,
+  ModerationItemDTO,
   UserSearchResultDTO,
   ThreadDTO,
   ThreadDetailDTO,
@@ -25,6 +26,9 @@ const API_BASE = (
   import.meta.env.VITE_SERVER_URL ??
   "http://localhost:4000"
 ).replace(/\/+$/, "");
+
+/** Path segment from an id (ids come from URLs, so never trust them raw). */
+const enc = encodeURIComponent;
 
 /**
  * Fire-and-forget request so a sleeping API host starts waking up while the
@@ -139,11 +143,13 @@ export const api = {
   createReport: (input: ReportInput) =>
     request<ReportDTO>("/api/reports", { body: input }),
   voteReport: (id: string) =>
-    request<VoteResult>(`/api/reports/${id}/vote`, { method: "POST" }),
+    request<VoteResult>(`/api/reports/${enc(id)}/vote`, { method: "POST" }),
   unvoteReport: (id: string) =>
-    request<VoteResult>(`/api/reports/${id}/vote`, { method: "DELETE" }),
+    request<VoteResult>(`/api/reports/${enc(id)}/vote`, { method: "DELETE" }),
   deleteReport: (id: string) =>
-    request<{ ok: true }>(`/api/reports/${id}`, { method: "DELETE" }),
+    request<{ ok: true }>(`/api/reports/${enc(id)}`, { method: "DELETE" }),
+  flagReport: (id: string) =>
+    request<{ ok: true }>(`/api/reports/${enc(id)}/flag`, { body: {} }),
 
   // Safe havens
   safeHavens: (lat: number, lng: number, radius?: number) =>
@@ -157,16 +163,43 @@ export const api = {
   createThread: (input: { title: string; body: string; category?: string }) =>
     request<ThreadDTO>("/api/forum/threads", { body: input }),
   getThread: (id: string) =>
-    request<ThreadDetailDTO>(`/api/forum/threads/${id}`),
+    request<ThreadDetailDTO>(`/api/forum/threads/${enc(id)}`),
   createPost: (threadId: string, body: string) =>
-    request<PostDTO>(`/api/forum/threads/${threadId}/posts`, { body: { body } }),
+    request<PostDTO>(`/api/forum/threads/${enc(threadId)}/posts`, { body: { body } }),
   votePost: (id: string, value: 1 | -1) =>
-    request<PostVoteResult>(`/api/forum/posts/${id}/vote`, {
+    request<PostVoteResult>(`/api/forum/posts/${enc(id)}/vote`, {
       method: "POST",
       body: { value },
     }),
   unvotePost: (id: string) =>
-    request<PostVoteResult>(`/api/forum/posts/${id}/vote`, { method: "DELETE" }),
+    request<PostVoteResult>(`/api/forum/posts/${enc(id)}/vote`, { method: "DELETE" }),
+  flagPost: (id: string) =>
+    request<{ ok: true }>(`/api/forum/posts/${enc(id)}/flag`, { body: {} }),
+  deletePost: (id: string) =>
+    request<{ ok: true }>(`/api/forum/posts/${enc(id)}`, { method: "DELETE" }),
+  deleteThread: (id: string) =>
+    request<{ ok: true }>(`/api/forum/threads/${enc(id)}`, { method: "DELETE" }),
+
+  // Moderation queue (admins only)
+  moderationQueue: () => request<{ items: ModerationItemDTO[] }>("/api/admin/queue"),
+  moderate: (type: "post" | "report", id: string, action: "hide" | "restore" | "dismiss") =>
+    request<{ ok: true }>("/api/admin/content", { body: { type, id, action } }),
+  setUserSuspended: (userId: string, suspended: boolean) =>
+    request<{ ok: true }>(`/api/admin/users/${enc(userId)}/status`, { body: { suspended } }),
+
+  // Blocking people
+  blocks: () =>
+    request<{ blocks: Array<{ userId: string; displayName: string; blockedAt: number }> }>("/api/users/me/blocks"),
+  blockUser: (userId: string) =>
+    request<{ blocks: Array<{ userId: string; displayName: string; blockedAt: number }> }>(
+      `/api/users/${enc(userId)}/block`,
+      { body: {} }
+    ),
+  unblockUser: (userId: string) =>
+    request<{ blocks: Array<{ userId: string; displayName: string; blockedAt: number }> }>(
+      `/api/users/${enc(userId)}/block`,
+      { method: "DELETE" }
+    ),
 
   // Profile
   stats: () => request<UserStatsDTO>("/api/users/me/stats"),
@@ -245,9 +278,11 @@ export const api = {
       body: { contactUserIds },
     }),
   pausePlan: (id: string) =>
-    request<{ ok: true }>(`/api/checkins/plans/${id}/pause`, { method: "POST" }),
+    request<{ ok: true }>(`/api/checkins/plans/${encodeURIComponent(id)}/pause`, { method: "POST" }),
+  resumePlan: (id: string) =>
+    request<PlanDTO>(`/api/checkins/plans/${encodeURIComponent(id)}/resume`, { method: "POST" }),
   endPlan: (id: string) =>
-    request<{ ok: true }>(`/api/checkins/plans/${id}/end`, { method: "POST" }),
+    request<{ ok: true }>(`/api/checkins/plans/${encodeURIComponent(id)}/end`, { method: "POST" }),
   activeCheckin: () =>
     request<{ occurrence: CheckinOccurrenceDTO | null }>("/api/checkins/active"),
   answerCheckin: (id: string, answer: string) =>

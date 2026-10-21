@@ -1,4 +1,5 @@
 import type { UserDTO } from "@safesips/shared";
+import { config } from "../config.js";
 import { db } from "../db.js";
 import { foldName, genId, normalizeEmail, nowMs } from "../util.js";
 
@@ -150,5 +151,6 @@ export function toUserDTO(row: UserRow): UserDTO {
     imageUrl: row.image_url ?? null,
     discoverable: row.discoverable !== 0,
     searchNoticePending: row.search_notice_seen === 0,
+    isAdmin: config.adminEmails.includes(row.email_norm),
   };
 }

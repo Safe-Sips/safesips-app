@@ -47,31 +47,31 @@ export default function MapIntro({
           <li>
             <span className="legend-swatch swatch-blue" aria-hidden="true" />
             <span>
-              <strong>Blue dot — your exact spot.</strong> Only you see it. It
+              <strong>Blue dot: your exact spot.</strong> Only you see it, and it
               never leaves this device.
             </span>
           </li>
           <li>
             <span className="legend-swatch swatch-yellow" aria-hidden="true" />
             <span>
-              <strong>Yellow circle — what others see.</strong> An anonymous
-              ~200 m area around a random point near you. While SafeSips is
-              open it moves with you, in steps of about 100 m.
+              <strong>Yellow circle: what others see.</strong> An anonymous
+              area of about 200 m around a random point near you. While SafeSips
+              is open, it follows you in steps of about 100 m.
             </span>
           </li>
           <li>
             <span className="legend-swatch swatch-gray" aria-hidden="true" />
             <span>
-              <strong>Grey dots — other people sharing.</strong> Also
+              <strong>Grey dots: other people sharing.</strong> Also
               approximate and anonymous.
             </span>
           </li>
         </ul>
         <p className="muted">
           Use <strong>Share for</strong> to keep your circle up for a set time,
-          or only while the app is open. Tap <strong>Stop</strong> any time.
-          Safety reports you publish are different: they show the exact place
-          and your name.
+          or only while the app is open, and tap <strong>Stop</strong> whenever
+          you like. Safety reports are different: they show the exact place and
+          your name.
         </p>
         <div className="modal-actions">
           <button className="btn btn-primary" type="button" onClick={onClose} data-autofocus>

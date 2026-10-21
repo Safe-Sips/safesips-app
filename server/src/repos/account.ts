@@ -27,6 +27,7 @@ export interface AccountExport {
   exportedAt: number;
   note: string;
   profile: Row;
+  locationShare: Row[];
   reports: Row[];
   reportVotes: Row[];
   forumThreads: Row[];
@@ -38,6 +39,8 @@ export interface AccountExport {
   emergencyContactFor: Row[];
   friends: Row[];
   friendRequestsDeclined: Row[];
+  blockedPeople: Row[];
+  contentYouReported: Row[];
   alertsReceived: Row[];
   pushDevices: Row[];
   checkinPlans: Row[];
@@ -53,10 +56,15 @@ export function exportAccountData(userId: string): AccountExport | null {
   return {
     exportedAt: nowMs(),
     note:
-      "All data SafeSips stores about your account. Your live location is never " +
-      "stored: presence circles live only in server memory while you share. " +
-      "Password and security-answer hashes are omitted.",
+      "All data SafeSips stores about your account. Your exact location is never " +
+      "stored; while you share, only the masked circle others see is kept (see " +
+      "locationShare), and it's deleted when the share ends. Password and " +
+      "security-answer hashes are omitted.",
     profile: omit([user], ["password_hash"])[0],
+    locationShare: all(
+      `SELECT lat, lng, hold_until, started_at, updated_at, expires_at FROM presence_shares WHERE user_id = ?`,
+      userId
+    ),
     reports: all(`SELECT * FROM reports WHERE author_id = ?`, userId),
     reportVotes: all(`SELECT * FROM report_votes WHERE user_id = ?`, userId),
     forumThreads: all(`SELECT * FROM forum_threads WHERE author_id = ?`, userId),
@@ -87,6 +95,15 @@ export function exportAccountData(userId: string): AccountExport | null {
         WHERE f.requester_id = ? OR f.addressee_id = ?
            OR (f.addressee_id IS NULL AND f.invite_email_norm = ?)`,
       userId, userId, userId, userId, userId, user.email_norm
+    ),
+    blockedPeople: all(
+      `SELECT u.display_name AS person, b.created_at
+         FROM user_blocks b JOIN users u ON u.id = b.blocked_id WHERE b.blocker_id = ?`,
+      userId
+    ),
+    contentYouReported: all(
+      `SELECT target_type, target_id, reason, created_at FROM content_flags WHERE reporter_id = ?`,
+      userId
     ),
     friendRequestsDeclined: all(
       `SELECT u.display_name AS person, d.created_at

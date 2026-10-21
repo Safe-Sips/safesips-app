@@ -109,19 +109,19 @@ function ConnectionNotice({
   }
   return (
     <p className="error">
-      Can't reach SafeSips. Check your internet connection — we'll reconnect
+      Can't reach SafeSips. Check your connection — we'll reconnect
       automatically.
       {sharing &&
-        " Others keep seeing your last circle for a few minutes (or until your Share for time ends)."}
+        " Meanwhile, others still see your last circle for a few minutes, or until your sharing time ends."}
     </p>
   );
 }
 
 function sharingHint(sharedUntil: number | null): string {
-  const follows = "Your circle moves with you while SafeSips is open.";
+  const follows = "Your circle follows you while SafeSips is open.";
   return sharedUntil
-    ? `${follows} If your phone locks or you close the app it stays where you last were until ${clockTime(sharedUntil)}. Tap Stop to end it sooner.`
-    : `${follows} It disappears a few minutes after you leave the app. Auto-stops after 24 hours.`;
+    ? `${follows} If you lock your phone or close the app, it stays where you last were until ${clockTime(sharedUntil)}. Tap Stop to end it sooner.`
+    : `${follows} It disappears a few minutes after you leave the app, and stops after 24 hours at most.`;
 }
 
 export default function Controls({
@@ -170,7 +170,7 @@ export default function Controls({
             onClick={onShareGps}
             disabled={connection !== "connected"}
           >
-            Share My Location
+            Share my location
           </button>
         ) : (
           <div className="panel-mobile-sharing">
@@ -180,7 +180,7 @@ export default function Controls({
               </strong>
               <span>
                 {sharedUntil ? `until ${clockTime(sharedUntil)}` : timeSince} ·{" "}
-                {othersCount} nearby
+                {othersCount === 1 ? "1 other sharing" : `${othersCount} others sharing`}
               </span>
             </div>
             <div className="panel-mobile-sharing-actions">
@@ -202,9 +202,8 @@ export default function Controls({
 
         <div className="panel-mobile-legal" aria-label="Legal and safety information">
           <p className="legal-emergency">
-            SafeSips is <strong>not</strong> an emergency service. Call{" "}
-            <strong>{EMERGENCY_NUMBER}</strong> (or your local emergency number) in
-            an emergency.
+            SafeSips is <strong>not</strong> an emergency service. In an emergency,
+            call <strong>{EMERGENCY_NUMBER}</strong> or your local emergency number.
           </p>
           <p className="legal-links">
             <button type="button" className="legal-link" onClick={onOpenHowItWorks}>
@@ -248,17 +247,21 @@ export default function Controls({
 
       <DurationPicker value={durationMs} onChange={onDurationChange} />
 
-      <button
-        className="btn btn-primary btn-block"
-        onClick={onShareGps}
-        disabled={connection !== "connected"}
-      >
-        Share My Location
-      </button>
+      {/* While sharing, Update/Stop below take over (pressing Share again
+          would re-mask the circle for no reason). */}
+      {!sharing && (
+        <button
+          className="btn btn-primary btn-block"
+          onClick={onShareGps}
+          disabled={connection !== "connected"}
+        >
+          Share my location
+        </button>
+      )}
 
       {geoStatus && <p className="hint">{geoStatus}</p>}
       {geoError && <p className="error">{geoError}</p>}
-        <ConnectionNotice connection={connection} sharing={sharing} />
+      <ConnectionNotice connection={connection} sharing={sharing} />
       {notice && <p className="error">{notice}</p>}
 
       <div className={`sharing-card ${sharing ? "is-sharing" : ""}`}>
@@ -303,13 +306,13 @@ export default function Controls({
       </div>
 
       <p className="privacy-note">
-        Your precise location stays private. Others see only an approximate
-        <strong> 200&nbsp;m</strong> area centered on a randomized point.
+        Your exact location stays on your device. Others only see an approximate
+        <strong> 200&nbsp;m</strong> area around a random point near you.
       </p>
       <div className="legend">
         <span className="legend-item">
-          <span className="legend-swatch swatch-blue" /> Your exact spot (only
-          you)
+          <span className="legend-swatch swatch-blue" /> Your exact spot (only you
+          see it)
         </span>
         <span className="legend-item">
           <span className="legend-swatch swatch-yellow" /> Public 200&nbsp;m area

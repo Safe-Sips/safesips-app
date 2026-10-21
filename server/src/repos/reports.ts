@@ -1,6 +1,7 @@
 import { REPORT_VISIBLE_MS, type ReportDTO, type ReportInput, type ReportSafety } from "@safesips/shared";
 import { db } from "../db.js";
 import { genId, nowMs } from "../util.js";
+import { hiddenForViewerSql } from "./moderation.js";
 
 interface ReportJoinRow {
   id: string;
@@ -35,6 +36,7 @@ const selectInBbox = db.prepare(
      AND r.created_at > @minCreatedAt
      AND r.lat BETWEEN @minLat AND @maxLat
      AND r.lng BETWEEN @minLng AND @maxLng
+     ${hiddenForViewerSql("r.author_id", "report", "r.id")}
    ORDER BY r.created_at DESC
    LIMIT @limit`
 );
@@ -61,6 +63,26 @@ const countVotes = db.prepare(
   `SELECT COUNT(*) AS c FROM report_votes WHERE report_id = ?`
 );
 const reportExists = db.prepare(`SELECT author_id FROM reports WHERE id = ? AND status = 'visible'`);
+const hideReportStmt = db.prepare(`UPDATE reports SET status = 'hidden' WHERE id = ?`);
+
+/** Moderation: take a report off the map for everyone (kept for review). */
+export function hideReport(id: string): void {
+  hideReportStmt.run(id);
+}
+
+const restoreReportStmt = db.prepare(`UPDATE reports SET status = 'visible' WHERE id = ? AND status = 'hidden'`);
+export function restoreReport(id: string): boolean {
+  return restoreReportStmt.run(id).changes > 0;
+}
+
+const setAuthorReports = db.prepare(`UPDATE reports SET status = ? WHERE author_id = ? AND status = ?`);
+/** Suspending an author hides their reports; reinstating brings back exactly those. Returns affected ids. */
+export function setAuthorReportsSuspended(authorId: string, suspended: boolean): string[] {
+  const from = suspended ? "visible" : "suspended";
+  const ids = (db.prepare(`SELECT id FROM reports WHERE author_id = ? AND status = ?`).all(authorId, from) as Array<{ id: string }>).map((r) => r.id);
+  setAuthorReports.run(suspended ? "suspended" : "visible", authorId, from);
+  return ids;
+}
 
 function rowToDTO(row: ReportJoinRow): ReportDTO {
   return {

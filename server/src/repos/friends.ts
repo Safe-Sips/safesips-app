@@ -10,6 +10,7 @@ import { db } from "../db.js";
 import { foldName, genId, normalizeEmail, nowMs } from "../util.js";
 import { ensureContactCode, formatCode, normalizeCode } from "./emergencyContacts.js";
 import { computeCounts } from "./stats.js";
+import { eitherBlocked } from "./moderation.js";
 
 /**
  * Friends: SafeSips users who accepted each other. Added by name search,
@@ -119,6 +120,8 @@ const hasDecline = db.prepare(
 const searchCandidates = db.prepare(
   `SELECT id, display_name, image_url FROM users
     WHERE discoverable = 1 AND status = 'active' AND id <> @me
+      AND id NOT IN (SELECT blocked_id FROM user_blocks WHERE blocker_id = @me)
+      AND id NOT IN (SELECT blocker_id FROM user_blocks WHERE blocked_id = @me)
       AND instr(display_name, '@') = 0
       AND lower(trim(display_name)) <> lower(substr(email, 1, instr(email, '@') - 1))
       AND (name_search LIKE @contains ESCAPE '\\' OR name_search LIKE @head ESCAPE '\\')
@@ -262,7 +265,7 @@ export const requestFriendByUserId = db.transaction((me: string, targetId: strin
   const connected = target
     ? between(me, targetId).some((r) => r.status === "accepted" || addressedTo(r, me))
     : false;
-  if (!target || (!isDiscoverable(targetId) && !connected)) {
+  if (!target || (!isDiscoverable(targetId) && !connected) || eitherBlocked(me, targetId)) {
     return { ok: false, error: "That person can't be found." };
   }
   if (overLimit(me)) return { ok: false, error: LIMIT_ERROR };

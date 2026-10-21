@@ -17,6 +17,8 @@ waitlistRouter.use(
     limit: 20,
     standardHeaders: true,
     legacyHeaders: false,
+    // Same client-IP rule as the rest of the server (see clientIp.ts).
+    keyGenerator: (req) => clientIp(req),
   })
 );
 

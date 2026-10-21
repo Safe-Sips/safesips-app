@@ -7,6 +7,7 @@ import type {
 } from "@safesips/shared";
 import { db } from "../db.js";
 import { genId, normalizeEmail, nowMs } from "../util.js";
+import { eitherBlocked } from "./moderation.js";
 
 /**
  * In-app emergency contacts: links between SafeSips users. The owner (who
@@ -154,6 +155,8 @@ export function requestContact(ownerId: string, identifier: string): AddResult {
 
 /** Pending link from owner to an existing user (no-op if one exists). */
 function linkToUser(ownerId: string, targetId: string, label: string): AddResult {
+  // Someone who blocked me never gets my requests (same reply, nothing sent).
+  if (eitherBlocked(ownerId, targetId)) return { ok: true, message: "Request sent.", notifyUserId: null };
   const exists = linkByOwnerContact.get(ownerId, targetId);
   if (!exists) {
     insertLink.run({

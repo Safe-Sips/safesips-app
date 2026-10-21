@@ -33,16 +33,15 @@ type LegalDoc = "privacy" | "terms" | null;
 function geolocationErrorMessage(err: GeolocationPositionError): string {
   if (err.code === err.PERMISSION_DENIED) {
     return (
-      "Location is blocked for SafeSips. To share, allow it: tap the lock or " +
-      "info icon next to the address bar → Site settings → Location → Allow, " +
-      "then try again. On iPhone also check Settings → Privacy & Security → " +
-      "Location Services → Safari Websites."
+      "SafeSips can't use your location. Allow it in your browser (tap the lock " +
+      "or info icon next to the address → Location → Allow), then try again. " +
+      "On iPhone, also check Settings → Privacy & Security → Location Services."
     );
   }
   if (err.code === err.TIMEOUT) {
-    return "Getting your location took too long. Move near a window or outdoors and try again.";
+    return "Finding your location took too long. Move near a window or outside and try again.";
   }
-  return "Your device couldn't find your location. Turn on Location / GPS and try again.";
+  return "Your device couldn't find your location. Turn on Location Services and try again.";
 }
 
 /** Router state from the Alerts page's "See where they were last sharing". */
@@ -105,9 +104,13 @@ export default function MapPage() {
     );
   }, []);
 
-  const [acked, setAcked] = useState<boolean>(
-    () => localStorage.getItem(ACK_KEY) === "1"
-  );
+  const [acked, setAcked] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(ACK_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const [pending, setPending] = useState<PendingAction | null>(null);
 
   // Reports + safe havens.
@@ -151,10 +154,10 @@ export default function MapPage() {
   const runGps = useCallback(() => {
     setGeoError(null);
     if (!("geolocation" in navigator)) {
-      setGeoError("Geolocation is not supported on this device.");
+      setGeoError("This device can't share its location.");
       return;
     }
-    setGeoStatus("Requesting location permission…");
+    setGeoStatus("Finding your location…");
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setGeoStatus(null);
@@ -181,7 +184,11 @@ export default function MapPage() {
   );
 
   const confirmWarning = useCallback(() => {
-    localStorage.setItem(ACK_KEY, "1");
+    try {
+      localStorage.setItem(ACK_KEY, "1");
+    } catch {
+      /* storage unavailable: ask again next time */
+    }
     setAcked(true);
     const action = pending;
     setPending(null);
@@ -221,10 +228,22 @@ export default function MapPage() {
     [loadReports]
   );
 
+  // People this user blocked: their reports never show, even live ones.
+  const blockedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    api
+      .blocks()
+      .then(({ blocks }) => {
+        blockedRef.current = new Set(blocks.map((b) => b.userId));
+      })
+      .catch(() => undefined);
+  }, []);
+
   // Live report broadcasts.
   useEffect(() => {
     if (!socket) return;
     const onNew = (report: ReportDTO) => {
+      if (blockedRef.current.has(report.authorId)) return;
       setReports((prev) =>
         prev.some((r) => r.id === report.id) ? prev : [report, ...prev]
       );
@@ -274,7 +293,7 @@ export default function MapPage() {
         if (input.safety === "unsafe") setHavenPoint(point);
       } catch (e) {
         setReportError(
-          e instanceof ApiError ? e.message : "Could not publish the report."
+          e instanceof ApiError ? e.message : "Couldn't post your report. Try again."
         );
       } finally {
         setReportBusy(false);
@@ -292,7 +311,7 @@ export default function MapPage() {
         // Move the map so the pending pin is visible.
         setFocusPoint({ ...point });
       },
-      () => setReportError("Couldn't get your location. Tap the map instead."),
+      () => setReportError("Couldn't find your location. Tap the spot on the map instead."),
       { enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 }
     );
   }, []);
@@ -408,7 +427,7 @@ export default function MapPage() {
         <p className="map-empty" role="status">
           {state.selfPublic
             ? "You're sharing. No one else is sharing right now."
-            : "No one else is sharing right now. Share your circle so friends can find you."}
+            : "No one else is sharing right now. Share your location so friends can see roughly where you are."}
         </p>
       )}
 
@@ -434,6 +453,11 @@ export default function MapPage() {
           onChange={updateReportInState}
           onDelete={(id) => {
             setReports((prev) => prev.filter((r) => r.id !== id));
+            setSelected(null);
+          }}
+          onBlocked={(authorId) => {
+            blockedRef.current.add(authorId);
+            setReports((prev) => prev.filter((r) => r.authorId !== authorId));
             setSelected(null);
           }}
           onFindHavens={(r) => setHavenPoint({ lat: r.lat, lng: r.lng })}

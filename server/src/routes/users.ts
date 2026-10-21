@@ -7,7 +7,9 @@ import { config } from "../config.js";
 import { deleteAccountData, exportAccountData } from "../repos/account.js";
 import { defaultCursor, listActivity } from "../repos/activity.js";
 import { computeStats } from "../repos/stats.js";
-import { cleanAvatarUrl, setUserImage } from "../repos/users.js";
+import { cleanAvatarUrl, findUserById, setUserImage } from "../repos/users.js";
+import { blockUser, listBlocks, unblockUser } from "../repos/moderation.js";
+import { emitFriendsChanged } from "../realtime.js";
 import { purgeUserRealtime } from "../realtime.js";
 
 export const usersRouter = Router();
@@ -84,6 +86,38 @@ usersRouter.put(
     }
     setUserImage(req.auth!.userId, url);
     res.json({ imageUrl: url });
+  })
+);
+
+/** People I've blocked. */
+usersRouter.get(
+  "/me/blocks",
+  asyncHandler(async (req, res) => {
+    res.json({ blocks: listBlocks(req.auth!.userId) });
+  })
+);
+
+/** Block someone: their posts and reports disappear for me; friendship ends. */
+usersRouter.post(
+  "/:id/block",
+  asyncHandler(async (req, res) => {
+    const me = req.auth!.userId;
+    const other = req.params.id;
+    if (other === me || !findUserById(other)) {
+      res.status(404).json({ error: "User not found." });
+      return;
+    }
+    blockUser(me, other);
+    emitFriendsChanged(other);
+    res.json({ blocks: listBlocks(me) });
+  })
+);
+
+usersRouter.delete(
+  "/:id/block",
+  asyncHandler(async (req, res) => {
+    unblockUser(req.auth!.userId, req.params.id);
+    res.json({ blocks: listBlocks(req.auth!.userId) });
   })
 );
 

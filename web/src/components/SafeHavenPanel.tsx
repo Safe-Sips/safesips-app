@@ -3,6 +3,12 @@ import type { LatLng, SafeHavenDTO, SafeHavenKind } from "@safesips/shared";
 import { api } from "../api";
 import { EMERGENCY_NUMBER } from "../content/firstAid";
 
+/** OpenStreetMap phone tags can list several numbers ("+40 21…; +40 72…"): dial the first. */
+function telHref(phone: string | null | undefined): string | null {
+  const first = phone?.split(/[;,/]/)[0]?.replace(/[^\d+]/g, "");
+  return first && first.length >= 3 ? `tel:${first}` : null;
+}
+
 const KIND_LABEL: Record<SafeHavenKind, string> = {
   police: "🚓 Police",
   hospital: "🏥 Hospital",
@@ -49,7 +55,7 @@ export default function SafeHavenPanel({
   return (
     <aside className="haven-panel">
       <div className="haven-panel-head">
-        <h3>Nearby help &amp; safe havens</h3>
+        <h3>Help nearby</h3>
         <button className="panel-close" onClick={onClose} aria-label="Close nearby help">
           ✕
         </button>
@@ -60,11 +66,11 @@ export default function SafeHavenPanel({
       </a>
 
       {error && <p className="error">{error}</p>}
-      {!havens && !error && <p className="muted">Finding the closest help…</p>}
+      {!havens && !error && <p className="muted">Looking for help nearby…</p>}
       {havens && havens.length === 0 && !error && (
         <p className="muted">
-          No places found nearby. Head toward a busy, well-lit area and call {EMERGENCY_NUMBER}
-          if you need help.
+          Nothing found close by. Head somewhere busy and well lit, and call{" "}
+          {EMERGENCY_NUMBER} if you need help.
         </p>
       )}
 
@@ -73,14 +79,14 @@ export default function SafeHavenPanel({
           <li key={h.id} className="haven-row">
             <div className="haven-info">
               <span className="haven-kind">{KIND_LABEL[h.kind]}</span>
-              <span className="haven-name">{h.name ?? "Unnamed"}</span>
+              <span className="haven-name">{h.name ?? "Unnamed place"}</span>
               <span className="muted">
                 {h.distanceMeters} m{h.isOpen24_7 ? " · open 24/7" : ""}
               </span>
             </div>
             <div className="haven-links">
-              {h.phone && (
-                <a className="btn btn-ghost btn-sm" href={`tel:${h.phone}`}>
+              {telHref(h.phone) && (
+                <a className="btn btn-ghost btn-sm" href={telHref(h.phone)!}>
                   Call
                 </a>
               )}

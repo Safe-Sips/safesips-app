@@ -36,6 +36,7 @@ interface OccRow {
   prompted_at: number | null;
   answered_at: number | null;
   created_at: number;
+  wrong_attempts?: number;
 }
 
 const MINUTE = 60_000;
@@ -77,6 +78,19 @@ const selectActiveOccurrence = db.prepare(
 );
 const selectOccurrenceOwned = db.prepare(
   `SELECT * FROM checkin_occurrences WHERE id = ? AND user_id = ?`
+);
+/**
+ * Wrong answers allowed per check-in. Answers are often guessable (a pet's
+ * name), so someone else holding the phone mustn't be able to keep trying
+ * until the alert is called off: after this many, it counts as missed.
+ */
+export const MAX_WRONG_ANSWERS = 5;
+const addWrongAnswer = db.prepare(
+  `UPDATE checkin_occurrences SET wrong_attempts = wrong_attempts + 1 WHERE id = ?`
+);
+/** Force an escalation on the scheduler's next sweep. */
+const failOccurrenceNow = db.prepare(
+  `UPDATE checkin_occurrences SET status = 'prompted', deadline_at = ? WHERE id = ?`
 );
 const setOccurrenceAnswered = db.prepare(
   `UPDATE checkin_occurrences SET status = 'answered', answered_at = ? WHERE id = ?`
@@ -230,14 +244,41 @@ export function listPlans(userId: string): PlanDTO[] {
   return rows.map((r) => planToDTO(r, r.next_due));
 }
 
+const pauseOwnedActive = db.prepare(
+  `UPDATE checkin_plans SET status = 'paused' WHERE id = ? AND user_id = ? AND status = 'active'`
+);
+
+/** Pause an active plan (pending check-ins are dropped until it resumes). */
 export function pausePlan(userId: string, planId: string): boolean {
   const tx = db.transaction(() => {
-    const changed = setPlanStatusOwned.run("paused", planId, userId).changes > 0;
+    const changed = pauseOwnedActive.run(planId, userId).changes > 0;
     if (changed) cancelPendingOccurrences.run(planId);
     return changed;
   });
   return tx();
 }
+
+/**
+ * Resume a paused plan: the next check-in is one interval from now. Returns
+ * the plan, or null if it isn't this user's paused plan (or its end time has
+ * already passed, in which case it's ended).
+ */
+export type ResumeResult = { plan: PlanDTO } | { ended: true } | null;
+
+export const resumePlan = db.transaction((userId: string, planId: string): ResumeResult => {
+  const plan = selectPlanById.get(planId) as PlanRow | undefined;
+  if (!plan || plan.user_id !== userId || plan.status !== "paused") return null;
+  const now = nowMs();
+  // Its end time already passed (or comes before the next check-in): it ends.
+  if (plan.ends_at != null && plan.ends_at <= now + plan.interval_minutes * MINUTE) {
+    setPlanStatus.run("ended", plan.id);
+    return { ended: true };
+  }
+  setPlanStatus.run("active", plan.id);
+  scheduleNext({ ...plan, status: "active" }, now);
+  const dto = listPlans(userId).find((p) => p.id === planId);
+  return dto ? { plan: dto } : null;
+}) as (userId: string, planId: string) => ResumeResult;
 
 /**
  * Change who an active or paused plan alerts (null/empty = everyone). The
@@ -307,7 +348,23 @@ export const answerOccurrence = db.transaction(
 
     const correct = verifySecret(normalizeAnswer(answer), plan.answer_hash);
     if (!correct) {
-      return { correct: false, expired: false, occurrence: occToDTO(occ, plan.question) };
+      addWrongAnswer.run(occ.id);
+      const attempts = (occ.wrong_attempts ?? 0) + 1;
+      if (attempts >= MAX_WRONG_ANSWERS) {
+        failOccurrenceNow.run(now - 1, occ.id);
+        return {
+          correct: false,
+          expired: true,
+          tooManyAttempts: true,
+          occurrence: occToDTO({ ...occ, status: "prompted", deadline_at: now - 1 }, plan.question),
+        };
+      }
+      return {
+        correct: false,
+        expired: false,
+        attemptsLeft: MAX_WRONG_ANSWERS - attempts,
+        occurrence: occToDTO(occ, plan.question),
+      };
     }
 
     setOccurrenceAnswered.run(now, occ.id);

@@ -29,22 +29,22 @@ export default function SensitiveWarning({
       >
         <h2 id="sensitive-warning-title">Before you share</h2>
         <p>
-          Others will see an approximate <strong>200&nbsp;m area</strong>, not
-          your exact position. Even so, please think twice before sharing from a
-          sensitive place such as your <strong>home</strong>, school, workplace,
-          a shelter, or a medical facility.
+          Others see an approximate <strong>200&nbsp;m area</strong>, never your
+          exact position. Still, think twice before sharing from a sensitive
+          place like your <strong>home</strong>, school, workplace, a shelter or a
+          clinic.
         </p>
         <p className="muted">
-          Location masking reduces precision but does not eliminate every
-          privacy risk. SafeSips is not an emergency service — call{" "}
-          {EMERGENCY_NUMBER} in an emergency. You can stop sharing at any time.
+          Blurring your location lowers the risk but can't remove it entirely.
+          You can stop sharing at any time. SafeSips is not an emergency
+          service: in an emergency, call {EMERGENCY_NUMBER}.
         </p>
         <div className="modal-actions">
           <button className="btn btn-ghost" onClick={onCancel}>
             Cancel
           </button>
           <button className="btn btn-primary" onClick={onConfirm}>
-            I understand, continue
+            I understand
           </button>
         </div>
       </div>

@@ -41,6 +41,11 @@ export class PresenceStore {
     return record;
   }
 
+  /** Put back a record saved before a restart (keeps its original expiry). */
+  restore(record: PresenceRecord): void {
+    this.records.set(record.publicId, record);
+  }
+
   remove(publicId: string): boolean {
     return this.records.delete(publicId);
   }

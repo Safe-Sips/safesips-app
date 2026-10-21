@@ -5,95 +5,101 @@ Privacy Policy (Summary)
 
 Last updated: October 2026
 
-SafeSips ("we", "us") provides a real-time safety map and community features. Using SafeSips requires an account.
+SafeSips ("we", "us") provides a live safety map and community features. You need an account to use SafeSips.
 
-Two kinds of location — please read
-• Live presence (the moving circle): your exact GPS position stays on your device. Clients send only a randomized center point within ~50 m of your true location, and other people see only an anonymous ~200 m circle. While you share with the app open, the circle follows you in steps of about 100 m, using your device's approximate location. The circle is never linked to your account identity for other users.
-• Safety reports (pins you publish): when you choose to mark a place as safe or unsafe, you intentionally publish that EXACT point, together with your display name, to all users. This is different from the private presence circle — only report places (a venue, a street), never your home.
+Two kinds of location (please read)
+• Your location circle: your exact position stays on your device. The app sends only a random point within about 50 m of you, and other people see an anonymous circle of about 200 m around it. While the app is open, the circle follows you in steps of about 100 m, using your device's approximate location. Other users can't tell which account a circle belongs to.
+• Safety reports: when you mark a place as safe or unsafe, you choose to publish that EXACT spot, with your display name, to everyone. This is different from your private circle, so only report places like a venue or a street, never your home.
 
 What we process
-• Account: email address and display name. Sign-in (including passwords and email verification) is handled by our authentication provider, Clerk.
-• Masked presence: a randomized center point + an anonymous per-connection id + timestamps (held in memory only).
-• Safety reports: the exact point you chose, an optional note/tag, your display name, and upvotes. Reports are shown on the map for 48 hours, fading as they age, and then hidden; they stay in your account history until you delete them or your account.
-• Forum posts, your activity history (used for badges), and check-in records.
-• Friend search: by default other signed-in users can find you by your display name and see your profile picture (never your email). Turn off "Let people find me by name" on the Friends page and you can only be added with your SafeSips code or email.
-• Emergency contacts: other SafeSips users you invite by their account email or SafeSips code. They only become your contact after they accept, and either of you can remove the link at any time; we don't reveal who is behind an email or code until they accept. If you miss a check-in, each contact gets an alert in SafeSips (and a notification on their devices) with your display name and the check-in label, plus your approximate area if you are sharing your location at that moment (the same ~200 m masked circle others see, never your exact position). Alerts stay in their inbox until they delete their account or you delete yours.
+• Account: your email address, display name and profile picture. Sign-in (passwords, email verification, Google sign-in) is handled by our authentication provider, Clerk.
+• Your location circle: the random point others see, an anonymous id and timestamps. While you share, we keep this on our server so a server restart doesn't end your share, and delete it when you stop or your sharing time runs out. It never includes your exact position.
+• Safety reports: the spot you chose, an optional tag and note, your display name, and upvotes. Reports show on the map for 48 hours, fading as they age, then disappear from the map; they stay in your history until you delete them or your account.
+• Forum discussions and replies, your activity history, and your check-in records.
+• Friends: people you add and who accept. Friends can see your profile (name, picture, when you joined, and counts of your public activity) but never your email or check-ins.
+• Friend search: by default, other signed-in users can find you by your display name and see your picture (never your email). Names made from your email address are never shown in search. Turn off "Let people find me by name" on the Friends page and you can only be added with your SafeSips code or email.
+• Emergency contacts: other SafeSips users you invite. They only become your contact once they accept, and either of you can remove the link at any time; we don't reveal who is behind an email or code until they accept. If you miss a check-in, each contact you chose gets an alert in SafeSips (and a notification on their devices) with your display name and the check-in label, plus your approximate area if you're sharing your location at the time (the same masked circle others see, never your exact position). Alerts stay in their inbox until they delete their account or you delete yours.
+• Safety tools: reports you make about posts or map reports, and the people you block.
 
-What we do not do
-• We do not transmit or store your exact presence coordinates on our servers.
-• We do not link your anonymous presence circle to your account for other users.
-• We do not store raw IP addresses or use your email in security logs — only keyed (salted) hashes that can't be reversed without a server secret.
+What we don't do
+• We don't send or store your exact location.
+• We don't link your anonymous location circle to your account for other users.
+• We don't store raw IP addresses or use your email in security logs, only keyed hashes that can't be reversed without a server secret.
+• We don't sell your data or use it for advertising.
 
-Retention
-• Presence records live in server memory only. They are removed when you stop sharing or sign out, when the sharing time you chose (for example 1 hour) runs out, or, in live mode, a few minutes after your device stops sending updates (default 5 minutes).
-• Account, reports, forum posts, emergency contacts, alerts, and check-in records persist until you delete them or your account.
-• Failed sign-in attempt records (keyed hashes) are kept for about 15 minutes for abuse prevention.
-• Deleting your account erases this data immediately and permanently, including your Clerk sign-in identity.
+How long we keep things
+• Your location circle: deleted when you stop sharing or sign out, when your sharing time runs out, or, if you share only while the app is open, a few minutes after your device stops sending updates.
+• Your account, reports, posts, friends, emergency contacts, alerts and check-ins: until you delete them or your account.
+• Failed sign-in records (keyed hashes): about 15 minutes, to prevent abuse.
+• Deleting your account erases this data immediately and permanently, including your Clerk sign-in.
 
-Third-party services
-• OpenStreetMap map tiles and Nominatim geocoding may receive address queries or map tile requests from your device. See openstreetmap.org for their policies.
-• Clerk (authentication) stores your email and sign-in credentials.
-• Our email provider delivers verification emails.
-• Notifications are delivered through your browser's push service (for example Google, Mozilla or Apple). The message is end-to-end encrypted to your device; the push service only sees an address for your device, not the content.
-• Our hosting provider processes network traffic necessary to operate the service.
+Services we use
+• Map tiles: your device loads map images from our map provider (by default OpenStreetMap). "Help nearby" searches go through our server to OpenStreetMap services, without your account details.
+• Clerk (sign-in) stores your email and sign-in details.
+• Our email provider sends verification emails.
+• Notifications go through your browser's push service (for example Google, Mozilla or Apple). They're end-to-end encrypted: the push service sees an address for your device, not the message.
+• Our hosting provider handles the network traffic needed to run SafeSips.
 
 Your choices
-• You choose when to share and can stop at any time.
-• Location permission is requested by your browser or device OS and can be revoked in system settings.
+• You decide when to share and can stop at any time.
+• Your browser or phone asks before SafeSips can use your location, and you can turn that off in your settings.
 
 Your rights (GDPR)
 • Access and portability: Profile → Your data → Download my data gives you a copy of everything we store about you.
 • Erasure: Profile → Your data → Delete my account permanently deletes your account and data.
-• You can also ask us to correct your data or object to processing at the contact below, and you may complain to your data protection authority (in Romania: ANSPDCP, dataprotection.ro).
+• You can also ask us to correct your data or object to how we use it (contact below), and you can complain to your data protection authority (in Romania: ANSPDCP, dataprotection.ro).
 
-Children
-• SafeSips is not directed to children under 13. Do not use the service if you are under 13.
+Age
+• You must be at least 16 to use SafeSips.
 
 Contact
 • Privacy questions: support@safesips.app
 
-This summary is provided for transparency. Deployments may require a jurisdiction-specific policy reviewed by qualified counsel.
+This summary is here for transparency. A full policy for your jurisdiction should be reviewed by a qualified lawyer.
 `.trim();
 
 export const TERMS_OF_SERVICE = `
 Terms of Service (Summary)
 
-Last updated: June 2026
+Last updated: October 2026
 
-By using SafeSips you agree to these terms.
+By using SafeSips you agree to these terms. You must be at least 16.
 
 Not an emergency service
-• SafeSips is NOT a substitute for emergency services (e.g., ${EMERGENCY_NUMBER}). In an emergency, contact local emergency services immediately.
+• SafeSips is NOT a substitute for emergency services (such as ${EMERGENCY_NUMBER}). In an emergency, contact your local emergency services immediately.
+• Check-in alerts depend on your phone, your connection and other people. They can be delayed or fail, so never rely on SafeSips alone to stay safe.
 
 No professional advice
-• SafeSips does not provide medical, legal, security, or safety advice. Location masking reduces precision but does not guarantee anonymity or safety.
+• SafeSips doesn't give medical, legal or security advice. Blurring your location lowers the risk of being found but can't guarantee anonymity or safety.
 
 Your responsibility
-• You are solely responsible for deciding whether, where, and when to share your approximate location.
-• Do not share from sensitive places (home, school, workplace, shelter, medical facilities) unless you accept the risk that others may infer your general area.
+• You decide whether, where and when to share your approximate location.
+• Avoid sharing from sensitive places (your home, school, workplace, a shelter or a clinic) unless you accept that others may guess your general area.
+
+Community rules (zero tolerance)
+• No harassment, threats, hate, sexual content, stalking, doxxing or naming private individuals, and nothing illegal or deliberately false.
+• Don't use SafeSips to track, frighten or mislead anyone, or try to identify the people behind anonymous circles.
+• You can report posts and map reports, and block people, at any time. Content that several people report is hidden automatically, and we review reports and remove content or accounts that break these rules, usually within 24 hours.
+• To report something urgently, email support@safesips.app.
 
 Service provided "as is"
-• The service is provided without warranties of any kind, express or implied, including fitness for a particular purpose or non-infringement.
-• We do not guarantee uninterrupted, error-free, or secure operation.
+• SafeSips is provided without warranties of any kind, express or implied, including fitness for a particular purpose.
+• We don't guarantee that it will always be available, error-free or secure.
 
 Limitation of liability
-• To the maximum extent permitted by law, Safe-Sips and its operators will not be liable for any indirect, incidental, special, consequential, or punitive damages, or any loss of data, profits, or goodwill, arising from your use of the service.
-• Our total liability for any claim relating to the service is limited to the greater of (a) amounts you paid us in the twelve months before the claim, or (b) one hundred U.S. dollars (USD $100).
-
-Acceptable use
-• Do not use SafeSips to harass, stalk, endanger, or mislead others.
-• Do not attempt to deanonymize other users or disrupt the service.
+• To the maximum extent the law allows, SafeSips and its operators aren't liable for indirect, incidental, special, consequential or punitive damages, or for lost data, profits or goodwill, arising from your use of the service.
+• Our total liability for any claim is limited to the greater of what you paid us in the 12 months before the claim or 100 US dollars.
 
 Changes
-• We may update these terms. Continued use after changes constitutes acceptance.
+• We may update these terms. If you keep using SafeSips after a change, you accept the new terms.
 
 Governing law
-• These terms are governed by the laws applicable to Safe-Sips unless mandatory local consumer protections require otherwise.
+• These terms are governed by the laws that apply to SafeSips, unless your local consumer protections say otherwise.
 
 Contact
-• Legal or support inquiries: support@safesips.app
+• Legal or support questions: support@safesips.app
 
-This summary is not legal advice. Consult qualified counsel before relying on it for compliance or litigation purposes.
+This summary isn't legal advice. Have it reviewed by a qualified lawyer before relying on it.
 `.trim();
 
-export const EMERGENCY_DISCLAIMER = `SafeSips is not an emergency service. Call ${EMERGENCY_NUMBER} (or your local emergency number) in an emergency.`;
+export const EMERGENCY_DISCLAIMER = `SafeSips is not an emergency service. In an emergency, call ${EMERGENCY_NUMBER} or your local emergency number.`;

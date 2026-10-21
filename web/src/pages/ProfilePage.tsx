@@ -11,21 +11,70 @@ import Avatar from "../components/Avatar";
 import { timeAgo } from "../format";
 
 const ACTIVITY_LABEL: Record<ActivityKind, string> = {
-  report_created: "Reported a location",
-  report_upvoted: "Upvoted a location",
+  report_created: "Reported a place",
+  report_upvoted: "Upvoted a report",
   thread_created: "Started a discussion",
   post_created: "Replied in the forum",
   checkin_completed: "Completed a check-in",
 };
 
 const COUNT_LABELS: Array<{ key: keyof UserStatsDTO["counts"]; label: string }> = [
-  { key: "reports", label: "Locations reported" },
+  { key: "reports", label: "Places reported" },
   { key: "upvotesGiven", label: "Upvotes given" },
   { key: "upvotesReceived", label: "Upvotes received" },
   { key: "threads", label: "Discussions started" },
   { key: "posts", label: "Forum replies" },
   { key: "checkinsCompleted", label: "Check-ins completed" },
 ];
+
+/** People I've blocked, with Unblock. */
+function BlockedPeopleSection() {
+  const [blocks, setBlocks] = useState<Array<{ userId: string; displayName: string }> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .blocks()
+      .then((r) => setBlocks(r.blocks))
+      .catch(() => setError("Couldn't load the people you've blocked."));
+  }, []);
+
+  if (!error && (!blocks || blocks.length === 0)) return null;
+  return (
+    <section className="card">
+      <h2>Blocked people</h2>
+      <p className="muted">
+        You don't see their posts, discussions or map reports, and they can't
+        send you friend requests. Unblocking doesn't restore friendships or
+        emergency contacts; add them again if you want.
+      </p>
+      {error && <p className="error">{error}</p>}
+      <ul className="contact-list">
+        {blocks?.map((b) => (
+          <li key={b.userId} className="contact-row">
+            <strong>{b.displayName}</strong>
+            <span className="contact-actions">
+              <button
+                className="btn btn-ghost btn-sm"
+                type="button"
+                onClick={async () => {
+                  setError(null);
+                  try {
+                    setBlocks((await api.unblockUser(b.userId)).blocks);
+                  } catch {
+                    setError("Couldn't unblock. Try again.");
+                  }
+                }}
+              >
+                Unblock
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
 
 /** GDPR rights: download everything we store, or erase the account. */
 function YourDataSection() {
@@ -50,7 +99,7 @@ function YourDataSection() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not export your data.");
+      setError(err instanceof ApiError ? err.message : "Couldn't download your data. Try again.");
     } finally {
       setBusy(null);
     }
@@ -63,7 +112,7 @@ function YourDataSection() {
       await api.deleteAccount();
       await logout();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not delete your account.");
+      setError(err instanceof ApiError ? err.message : "Couldn't delete your account. Try again.");
       setBusy(null);
     }
   };
@@ -97,8 +146,9 @@ function YourDataSection() {
       {showDelete && (
         <div className="danger-zone">
           <p>
-            This permanently deletes your account, safety reports, forum posts
-            and threads (including replies inside them), votes, SOS contacts,
+            This permanently deletes your account and everything in it: your
+            reports, discussions and replies (including other people's replies
+            in your discussions), votes, friends, emergency contacts, alerts,
             check-ins and activity. <strong>It can't be undone.</strong>
           </p>
           <label className="field">
@@ -203,6 +253,7 @@ export default function ProfilePage() {
         )}
       </section>
 
+      <BlockedPeopleSection />
       <YourDataSection />
     </div>
   );

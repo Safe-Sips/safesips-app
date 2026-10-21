@@ -20,6 +20,7 @@ const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const AlertsPage = lazy(() => import("./pages/AlertsPage"));
 const FriendsPage = lazy(() => import("./pages/FriendsPage"));
 const FriendProfilePage = lazy(() => import("./pages/FriendProfilePage"));
+const AdminPage = lazy(() => import("./pages/AdminPage"));
 
 function RouteFallback() {
   return (
@@ -59,6 +60,7 @@ export default function App() {
           <Route path="/alerts" element={<AlertsPage />} />
           <Route path="/friends" element={<FriendsPage />} />
           <Route path="/friends/:userId" element={<FriendProfilePage />} />
+          <Route path="/admin" element={<AdminPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

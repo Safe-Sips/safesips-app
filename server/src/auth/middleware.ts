@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import type { UserRow } from "../repos/users.js";
 import { resolveAuthFromToken } from "./clerk.js";
+import { clientIpFrom } from "../clientIp.js";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -19,9 +20,9 @@ function bearer(req: Request): string | null {
   return token || null;
 }
 
-/** Best-effort client IP (Express honors trust proxy in production). */
+/** Best-effort client IP behind the hosting proxy (see clientIp.ts). */
 export function clientIp(req: Request): string {
-  return req.ip ?? req.socket.remoteAddress ?? "0.0.0.0";
+  return clientIpFrom(req.headers, req.socket.remoteAddress);
 }
 
 const AUTH_ERROR_MESSAGE: Record<string, string> = {

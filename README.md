@@ -225,7 +225,7 @@ Notes:
 ## Manual verification (multi-user)
 
 1. Start `npm run dev`. Open two browser tabs (or two devices) at the web app.
-2. In tab A, click **Share My Location** (or type an address and press **Go**).
+2. In tab A, click **Share my location**.
    - Tab A shows a blue dot at the exact spot and a yellow 200 m circle offset
      from it.
    - Tab B shows **only** the yellow circle (no blue dot, no exact position).
@@ -250,5 +250,21 @@ Notes:
    at the last position.
 9. Reports: a new report is solid; it fades to ~60 % over 48 h and then stops
    appearing (also for anyone loading the map later).
-10. Repeat across web + mobile to confirm both clients interoperate on the same
+10. Restart: in tab A share with "Share for: 1 hour", close tab A, then restart
+   the server (same `DATABASE_PATH`). Tab B still shows the circle with its
+   original end time; reopening tab A shows "Sharing" again. Only the masked
+   centre is in `presence_shares`, and **Stop** deletes the row.
+11. Moderation: from tab B, **Report** a post (or map report) by tab A's user. It
+   disappears for B only; after 3 different accounts report it, it's hidden for
+   everyone and shows up in `/admin` for accounts in `ADMIN_EMAILS`. **Block**
+   hides all of that person's posts, discussions and map reports for B (also
+   ones that arrive live), ends any friendship, and their friend requests no
+   longer reach B.
+12. Friends: requests, accepts and removals appear live in the other tab.
+   Declining is silent: the sender still sees "waiting", and re-sending doesn't
+   reach the person who declined.
+13. Check-ins: with two accepted contacts, pick one for a plan and miss it: only
+   that contact is alerted. Five wrong answers to one check-in count as missed
+   and alert the contacts straight away.
+14. Repeat across web + mobile to confirm both clients interoperate on the same
    server.
