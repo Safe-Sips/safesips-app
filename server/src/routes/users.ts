@@ -9,6 +9,7 @@ import { defaultCursor, listActivity } from "../repos/activity.js";
 import { computeStats } from "../repos/stats.js";
 import { cleanAvatarUrl, findUserById, setUserImage } from "../repos/users.js";
 import { backUpConnections } from "../connectionBackup.js";
+import { hideSpotsBetween } from "../friendSpots.js";
 import { blockUser, listBlocks, unblockUser } from "../repos/moderation.js";
 import { emitFriendsChanged } from "../realtime.js";
 import { purgeUserRealtime } from "../realtime.js";
@@ -108,6 +109,8 @@ usersRouter.post(
       res.status(404).json({ error: "User not found." });
       return;
     }
+    // Hide exact spots before the friendship row disappears with the block.
+    hideSpotsBetween(me, other);
     blockUser(me, other);
     backUpConnections(me, other);
     emitFriendsChanged(other);

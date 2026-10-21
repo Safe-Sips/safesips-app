@@ -19,6 +19,7 @@ import {
 } from "../repos/friends.js";
 import { findUserById } from "../repos/users.js";
 import { backUpConnections } from "../connectionBackup.js";
+import { hideSpotsBetween, showSpotsBetween } from "../friendSpots.js";
 
 /** Friends (other SafeSips users) and their profiles. */
 export const friendsRouter = Router();
@@ -101,7 +102,10 @@ friendsRouter.post(
       res.status(400).json({ error: result.error, code: "friend_request_failed" });
       return;
     }
-    if (result.notify?.accepted) backUpConnections(me, result.notify.userId);
+    if (result.notify?.accepted) {
+      backUpConnections(me, result.notify.userId);
+      showSpotsBetween(me, result.notify.userId);
+    }
     if (result.notify) {
       emitFriendsChanged(result.notify.userId);
       void sendPushToUser(result.notify.userId, result.notify.accepted
@@ -122,6 +126,7 @@ friendsRouter.post(
       return;
     }
     backUpConnections(me, requesterId);
+    showSpotsBetween(me, requesterId);
     emitFriendsChanged(requesterId);
     void sendPushToUser(requesterId, {
       title: "New friend",
@@ -144,7 +149,10 @@ friendsRouter.delete(
       return;
     }
     if (removed.other) emitFriendsChanged(removed.other);
-    if (removed.unfriended) backUpConnections(me, removed.unfriended);
+    if (removed.unfriended) {
+      backUpConnections(me, removed.unfriended);
+      hideSpotsBetween(me, removed.unfriended);
+    }
     res.json(getFriendsOverview(me));
   })
 );

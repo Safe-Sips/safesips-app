@@ -9,6 +9,7 @@ SafeSips ("we", "us") provides a live safety map and community features. You nee
 
 Two kinds of location (please read)
 • Your location circle: your exact position stays on your device. The app sends only a random point within about 50 m of you, and other people see an anonymous circle of about 200 m around it. While the app is open, the circle follows you in steps of about 100 m, using your device's approximate location. Other users can't tell which account a circle belongs to.
+• Your exact spot for friends (optional): while you share, you can switch on "Friends see exactly where I am". Only then is your exact position sent to SafeSips, and it's shown only to your friends (with your name and picture), never to anyone else. We keep only your latest position, in our server's memory (never saved to our database or logs), and delete it when you switch it off, stop sharing, or your sharing time runs out. It's off every time you start sharing, and unfriending or blocking someone hides it from them straight away.
 • Safety reports: when you mark a place as safe or unsafe, you choose to publish that EXACT spot, with your display name, to everyone. This is different from your private circle, so only report places like a venue or a street, never your home.
 
 What we process
@@ -22,7 +23,7 @@ What we process
 • Safety tools: reports you make about posts or map reports, and the people you block.
 
 What we don't do
-• We don't send or store your exact location.
+• We never store your exact location, and we only receive it while you've chosen to show it to your friends.
 • We don't link your anonymous location circle to your account for other users.
 • We don't store raw IP addresses or use your email in security logs, only keyed hashes that can't be reversed without a server secret.
 • We don't sell your data or use it for advertising.

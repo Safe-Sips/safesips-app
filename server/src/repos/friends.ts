@@ -383,6 +383,16 @@ export function areFriends(me: string, other: string): boolean {
   return acceptedFriendship(me, other) !== undefined;
 }
 
+const friendIdsOf = db.prepare(
+  `SELECT CASE WHEN requester_id = @me THEN addressee_id ELSE requester_id END AS id
+     FROM friendships WHERE status = 'accepted' AND (requester_id = @me OR addressee_id = @me)`
+);
+
+/** My accepted friends' user ids. */
+export function friendIds(me: string): string[] {
+  return (friendIdsOf.all({ me }) as Array<{ id: string }>).map((r) => r.id);
+}
+
 const friendClerkIdsOf = db.prepare(
   `SELECT u.clerk_id FROM friendships f
      JOIN users u ON u.id = CASE WHEN f.requester_id = @me THEN f.addressee_id ELSE f.requester_id END

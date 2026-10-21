@@ -275,6 +275,22 @@ export interface FriendsOverviewDTO {
   outgoing: OutgoingFriendRequestDTO[];
 }
 
+/**
+ * A friend's EXACT location. Sent only to their accepted friends, and only
+ * while they're sharing with "Friends see exactly where I am" switched on (off
+ * every time a share starts). Strangers never get this: they see only the
+ * anonymous masked circle (PresenceRecord).
+ */
+export interface FriendSpotDTO {
+  userId: string;
+  displayName: string;
+  imageUrl: string | null;
+  lat: number;
+  lng: number;
+  /** Epoch ms of the last update. */
+  updatedAt: number;
+}
+
 /** A person found by name in friend search (name + picture only). */
 export interface UserSearchResultDTO {
   userId: string;

@@ -1148,3 +1148,36 @@ test("backup: Clerk down leaves the user to retry; saves never overwrite an unre
     backup.setConnectionBackupStore(undefined);
   }
 });
+
+test("friend spots: exact spots go to friends only, never strangers or blocked people", async () => {
+  const friends = await import("../src/repos/friends.js");
+  const mod = await import("../src/repos/moderation.js");
+  const spots = await import("../src/friendSpots.js");
+  spots.resetFriendSpots();
+  const ana = makeUser("fs-ana@spots.test");
+  const bo = makeUser("fs-bo@spots.test");
+  const zed = makeUser("fs-zed@spots.test");
+  friends.restoreFriendship(ana.id, bo.id);
+
+  spots.setFriendSpot(ana.id, 44.4321, 26.1012);
+  const seen = spots.friendSpotsFor(bo.id);
+  assert.equal(seen.length, 1);
+  assert.deepEqual([seen[0].userId, seen[0].lat, seen[0].lng], [ana.id, 44.4321, 26.1012], "Bo sees Ana's exact spot");
+  assert.equal(seen[0].displayName, ana.display_name);
+  assert.deepEqual(spots.friendSpotsFor(zed.id), [], "a stranger sees nothing");
+  assert.deepEqual(spots.friendSpotsFor(ana.id), [], "and Ana doesn't get her own");
+
+  spots.clearFriendSpot(ana.id);
+  assert.deepEqual(spots.friendSpotsFor(bo.id), [], "switched off: gone");
+
+  spots.setFriendSpot(ana.id, 44.4321, 26.1012);
+  mod.blockUser(bo.id, ana.id);
+  assert.deepEqual(spots.friendSpotsFor(bo.id), [], "a block ends it (no longer friends)");
+  mod.unblockUser(bo.id, ana.id);
+  friends.restoreFriendship(ana.id, bo.id);
+  assert.equal(spots.friendSpotsFor(bo.id).length, 1, "friends again: visible again while she still shows it");
+  const f = friends.getFriendsOverview(bo.id).friends[0];
+  friends.removeFriendship(bo.id, f.id);
+  assert.deepEqual(spots.friendSpotsFor(bo.id), [], "unfriended: hidden");
+  spots.resetFriendSpots();
+});
