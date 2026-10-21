@@ -27,7 +27,7 @@ contactsRouter.get(
 
 const requestSchema = z.object({ identifier: z.string().trim().min(1).max(254) });
 
-/** Ask someone (by account email or SafeSips code) to be my emergency contact. */
+/** Ask someone (by account email) to be my emergency contact. */
 contactsRouter.post(
   "/",
   asyncHandler(async (req, res) => {

@@ -25,7 +25,7 @@ export type AuthResolveResult =
   | ({ ok: true } & ResolvedAuth)
   | AuthResolveFailure;
 
-function clerkClient() {
+export function clerkClient() {
   if (!config.clerkSecretKey) return null;
   return createClerkClient({ secretKey: config.clerkSecretKey });
 }
@@ -70,6 +70,47 @@ export async function deleteClerkUser(clerkId: string): Promise<boolean> {
   }
 }
 
+/** Clerk's "not found" (the user was deleted), as opposed to Clerk being unreachable. */
+export function isClerkNotFound(err: unknown): boolean {
+  return (err as { status?: number } | null)?.status === 404;
+}
+
+/**
+ * The local account for a Clerk user, created from their Clerk profile if this
+ * database doesn't have it yet. Null when that Clerk user doesn't exist (or
+ * has no email); throws when Clerk can't be asked.
+ */
+export async function localUserForClerkId(clerkId: string): Promise<UserRow | null> {
+  const existing = findUserByClerkId(clerkId);
+  if (existing) return existing;
+  const client = clerkClient();
+  if (!client) throw new Error("clerk_not_configured");
+  let clerkUser;
+  try {
+    clerkUser = await client.users.getUser(clerkId);
+  } catch (err) {
+    if (isClerkNotFound(err)) return null;
+    throw err;
+  }
+  const primaryEmail =
+    clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId) ??
+    clerkUser.emailAddresses[0];
+  if (!primaryEmail?.emailAddress) return null;
+
+  const displayName =
+    [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ").trim() ||
+    clerkUser.username ||
+    primaryEmail.emailAddress.split("@")[0] ||
+    "SafeSips user";
+
+  return upsertUserFromClerk({
+    clerkId,
+    email: primaryEmail.emailAddress,
+    displayName,
+    emailVerified: primaryEmail.verification?.status === "verified",
+  });
+}
+
 function authorizedParties(): string[] | undefined {
   // Only enforce azp when explicitly configured — a wrong allowlist rejects
   // valid sessions from the web app's domain.
@@ -107,32 +148,9 @@ async function userFromClerkToken(
   const existing = findUserByClerkId(sub);
   if (existing) return { user: existing };
 
-  const client = clerkClient();
-  if (!client) return { ok: false, code: "clerk_not_configured" };
-
   try {
-    const clerkUser = await client.users.getUser(sub);
-    const primaryEmail =
-      clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId) ??
-      clerkUser.emailAddresses[0];
-    if (!primaryEmail?.emailAddress) {
-      return { ok: false, code: "clerk_user_unavailable" };
-    }
-
-    const displayName =
-      [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ").trim() ||
-      clerkUser.username ||
-      primaryEmail.emailAddress.split("@")[0] ||
-      "SafeSips user";
-
-    return {
-      user: upsertUserFromClerk({
-        clerkId: sub,
-        email: primaryEmail.emailAddress,
-        displayName,
-        emailVerified: primaryEmail.verification?.status === "verified",
-      }),
-    };
+    const user = await localUserForClerkId(sub);
+    return user ? { user } : { ok: false, code: "clerk_user_unavailable" };
   } catch (err) {
     const detail = err instanceof Error ? err.message : "user_fetch_failed";
     // eslint-disable-next-line no-console

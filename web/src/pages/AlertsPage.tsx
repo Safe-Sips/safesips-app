@@ -30,7 +30,7 @@ export default function AlertsPage() {
           <p className="state-title">No alerts</p>
           <p className="muted">
             No one you look out for has missed a check-in. To become someone's
-            emergency contact, give them your SafeSips code from the Check-ins page.
+            emergency contact, they can add you by your email or from your friend profile.
           </p>
         </div>
       ) : (

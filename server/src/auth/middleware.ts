@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import type { UserRow } from "../repos/users.js";
 import { resolveAuthFromToken } from "./clerk.js";
+import { ensureFriendsRestored } from "../friendBackup.js";
 import { clientIpFrom } from "../clientIp.js";
 
 declare global {
@@ -49,7 +50,7 @@ export function requireAuth(
     return;
   }
   void resolveAuthFromToken(token)
-    .then((resolved) => {
+    .then(async (resolved) => {
       if (!resolved.ok) {
         // Suspended is a decision, not a broken session: 403 so the app shows why.
         res.status(resolved.code === "account_suspended" ? 403 : 401).json({
@@ -58,6 +59,8 @@ export function requireAuth(
         });
         return;
       }
+      // First visit since the database was wiped: bring back saved friends.
+      if (!resolved.user.friends_restored) await ensureFriendsRestored(resolved.user);
       req.auth = {
         userId: resolved.userId,
         sessionId: resolved.sessionId,

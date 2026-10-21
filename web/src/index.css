@@ -1445,21 +1445,6 @@ select option {
   color: var(--danger);
 }
 /* In-app emergency contacts + alerts. */
-.my-code {
-  margin: 12px 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.code-chip {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 15px;
-  letter-spacing: 0.08em;
-  padding: 4px 10px;
-  border-radius: 8px;
-  background: rgba(24, 33, 60, 0.07);
-}
 .card h3 {
   margin-top: 16px;
 }
@@ -1995,6 +1980,52 @@ select option {
   gap: 10px;
   color: inherit;
   text-decoration: none;
+}
+/* Friends page: who's a friend, and who's an emergency contact. */
+.friends-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  margin: 4px 0 10px;
+}
+.friends-table th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--panel-border);
+}
+.friends-table td {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--panel-border);
+  vertical-align: middle;
+}
+.friends-table th:last-child,
+.friends-table td:last-child {
+  width: 9.5rem;
+  padding-left: 12px;
+}
+.friends-table .friend-link {
+  max-width: 100%;
+}
+.friend-name {
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.friends-table .pill {
+  margin-left: 0;
+}
+.friend-theirs {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
 }
 .contact-picker {
   border: 1px solid var(--panel-border);

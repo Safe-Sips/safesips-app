@@ -1,4 +1,3 @@
-import { randomInt } from "node:crypto";
 import type {
   ContactRequestDTO,
   ContactsOverviewDTO,
@@ -11,19 +10,13 @@ import { eitherBlocked } from "./moderation.js";
 
 /**
  * In-app emergency contacts: links between SafeSips users. The owner (who
- * checks in) invites a contact by account email or SafeSips code; the contact
+ * checks in) invites a contact by account email or from their friends; the contact
  * must accept before they receive alerts. Either side can remove the link.
  */
 
-// No 0/O, 1/I/L: codes are read aloud and typed on phones.
-const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-const CODE_LENGTH = 8;
 /** Max new contact requests one user can send per 24 h (anti-spam). */
 export const MAX_REQUESTS_PER_DAY = 20;
 
-const selectCode = db.prepare(`SELECT contact_code FROM users WHERE id = ?`);
-const setCode = db.prepare(`UPDATE users SET contact_code = ? WHERE id = ? AND contact_code IS NULL`);
-const userByCode = db.prepare(`SELECT id FROM users WHERE contact_code = ?`);
 const userByEmail = db.prepare(`SELECT id FROM users WHERE email_norm = ?`);
 const userEmailNorm = db.prepare(`SELECT email_norm FROM users WHERE id = ?`);
 const countRecentRequests = db.prepare(
@@ -72,85 +65,48 @@ const acceptedContacts = db.prepare(
     WHERE l.owner_id = ? AND l.status = 'accepted'`
 );
 
-function newCode(): string {
-  let s = "";
-  for (let i = 0; i < CODE_LENGTH; i++) s += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
-  return s;
-}
-
-/** "ABCD2345" → "ABCD-2345" for display. */
-export function formatCode(code: string): string {
-  return `${code.slice(0, 4)}-${code.slice(4)}`;
-}
-
-/** Accepts "abcd-2345", "ABCD 2345", … → "ABCD2345", or null if not a code. */
-export function normalizeCode(raw: string): string | null {
-  const s = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  return s.length === CODE_LENGTH && [...s].every((ch) => CODE_ALPHABET.includes(ch)) ? s : null;
-}
-
-/** The user's SafeSips code, created on first use. */
-export function ensureContactCode(userId: string): string {
-  const existing = (selectCode.get(userId) as { contact_code: string | null } | undefined)?.contact_code;
-  if (existing) return existing;
-  for (let attempt = 0; attempt < 10; attempt++) {
-    try {
-      if (setCode.run(newCode(), userId).changes > 0) break;
-    } catch {
-      /* unique collision: try another */
-    }
-  }
-  return (selectCode.get(userId) as { contact_code: string }).contact_code;
-}
-
 export type AddResult =
   | { ok: true; message: string; notifyUserId: string | null }
   | { ok: false; error: string };
 
 /**
- * Ask someone to be my emergency contact, by account email or SafeSips code.
+ * Ask someone to be my emergency contact, by account email.
  * Email requests get the same reply whether or not the address has an account,
  * so this can't be used to find out who uses SafeSips.
  */
 export function requestContact(ownerId: string, identifier: string): AddResult {
   const raw = identifier.trim();
-  if (!raw) return { ok: false, error: "Enter their email or SafeSips code." };
+  if (!raw) return { ok: false, error: "Enter their email." };
   const since = nowMs() - 24 * 60 * 60 * 1000;
   if ((countRecentRequests.get(ownerId, since) as { c: number }).c >= MAX_REQUESTS_PER_DAY) {
     return { ok: false, error: "You've sent a lot of requests today. Try again tomorrow." };
   }
 
-  if (raw.includes("@")) {
-    const emailNorm = normalizeEmail(raw);
-    const myEmail = (userEmailNorm.get(ownerId) as { email_norm: string } | undefined)?.email_norm;
-    if (emailNorm === myEmail) return { ok: false, error: "That's your own email." };
-    const target = userByEmail.get(emailNorm) as { id: string } | undefined;
-    const exists = target
-      ? linkByOwnerContact.get(ownerId, target.id)
-      : linkByOwnerEmail.get(ownerId, emailNorm);
-    if (!exists) {
-      insertLink.run({
-        id: genId(),
-        owner_id: ownerId,
-        contact_user_id: target?.id ?? null,
-        invite_email_norm: emailNorm,
-        invite_label: emailNorm,
-        created_at: nowMs(),
-      });
-    }
-    return {
-      ok: true,
-      message: `Request sent to ${emailNorm}. If they don't use SafeSips yet, they'll see it when they sign up with that email.`,
-      notifyUserId: !exists && target ? target.id : null,
-    };
+  if (!raw.includes("@")) {
+    return { ok: false, error: "Enter their email address, or pick one of your friends." };
   }
-
-  const code = normalizeCode(raw);
-  if (!code) return { ok: false, error: "That isn't a valid email or SafeSips code (e.g. ABCD-2345)." };
-  const target = userByCode.get(code) as { id: string } | undefined;
-  if (!target) return { ok: false, error: "No SafeSips user has that code. Check it and try again." };
-  if (target.id === ownerId) return { ok: false, error: "That's your own code." };
-  return linkToUser(ownerId, target.id, formatCode(code));
+  const emailNorm = normalizeEmail(raw);
+  const myEmail = (userEmailNorm.get(ownerId) as { email_norm: string } | undefined)?.email_norm;
+  if (emailNorm === myEmail) return { ok: false, error: "That's your own email." };
+  const target = userByEmail.get(emailNorm) as { id: string } | undefined;
+  const exists = target
+    ? linkByOwnerContact.get(ownerId, target.id)
+    : linkByOwnerEmail.get(ownerId, emailNorm);
+  if (!exists) {
+    insertLink.run({
+      id: genId(),
+      owner_id: ownerId,
+      contact_user_id: target?.id ?? null,
+      invite_email_norm: emailNorm,
+      invite_label: emailNorm,
+      created_at: nowMs(),
+    });
+  }
+  return {
+    ok: true,
+    message: `Request sent to ${emailNorm}. If they don't use SafeSips yet, they'll see it when they sign up with that email.`,
+    notifyUserId: !exists && target ? target.id : null,
+  };
 }
 
 /** Pending link from owner to an existing user (no-op if one exists). */
@@ -197,7 +153,7 @@ export function getOverview(userId: string): ContactsOverviewDTO {
     id: r.id,
     status: r.status,
     userId: r.status === "accepted" ? r.contact_user_id : null,
-    // Don't reveal who is behind an email/code until they accept.
+    // Don't reveal who is behind an email until they accept.
     displayName: r.status === "accepted" ? r.display_name : null,
     inviteLabel: r.invite_label,
     createdAt: r.created_at,
@@ -210,7 +166,7 @@ export function getOverview(userId: string): ContactsOverviewDTO {
   const protects = (protecting.all(userId) as Array<{ id: string; display_name: string }>).map<ProtecteeDTO>(
     (r) => ({ id: r.id, displayName: r.display_name })
   );
-  return { myCode: formatCode(ensureContactCode(userId)), contacts, incoming: requests, protecting: protects };
+  return { contacts, incoming: requests, protecting: protects };
 }
 
 /** Accept a request addressed to me. Returns the requester's id, or null. */
@@ -220,7 +176,7 @@ export const acceptRequest = db.transaction((userId: string, linkId: string): st
     | { id: string; owner_id: string }
     | undefined;
   if (!link) return null;
-  // If they'd also added me another way (code + email), keep just one link.
+  // If they'd also added me another way (friend + email), keep just one link.
   const dup = linkByOwnerContact.get(link.owner_id, userId) as { id: string } | undefined;
   if (dup && dup.id !== link.id) deleteLink.run(dup.id);
   acceptLink.run(userId, nowMs(), link.id);

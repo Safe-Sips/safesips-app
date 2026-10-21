@@ -18,6 +18,7 @@ import {
   requestFriend,
 } from "../repos/friends.js";
 import { findUserById } from "../repos/users.js";
+import { backUpFriends } from "../friendBackup.js";
 
 /** Friends (other SafeSips users) and their profiles. */
 export const friendsRouter = Router();
@@ -88,7 +89,7 @@ friendsRouter.put(
   })
 );
 
-/** Send a friend request by SafeSips code or account email. */
+/** Send a friend request by account email, or to someone picked from search. */
 friendsRouter.post(
   "/",
   asyncHandler(async (req, res) => {
@@ -100,6 +101,7 @@ friendsRouter.post(
       res.status(400).json({ error: result.error, code: "friend_request_failed" });
       return;
     }
+    if (result.notify?.accepted) backUpFriends(me, result.notify.userId);
     if (result.notify) {
       emitFriendsChanged(result.notify.userId);
       void sendPushToUser(result.notify.userId, result.notify.accepted
@@ -119,6 +121,7 @@ friendsRouter.post(
       res.status(404).json({ error: "Request not found." });
       return;
     }
+    backUpFriends(me, requesterId);
     emitFriendsChanged(requesterId);
     void sendPushToUser(requesterId, {
       title: "New friend",
@@ -141,6 +144,7 @@ friendsRouter.delete(
       return;
     }
     if (removed.other) emitFriendsChanged(removed.other);
+    if (removed.unfriended) backUpFriends(me, removed.unfriended);
     res.json(getFriendsOverview(me));
   })
 );

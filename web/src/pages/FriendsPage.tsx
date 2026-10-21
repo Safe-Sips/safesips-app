@@ -6,10 +6,9 @@ import { useAuth } from "../auth/AuthContext";
 import { timeAgo } from "../format";
 import Avatar from "../components/Avatar";
 import FriendSearch from "../components/FriendSearch";
-import MyCode from "../components/MyCode";
 import { useSocket } from "../socket/SocketProvider";
 
-/** Your friends, requests, and adding someone by SafeSips code or email. */
+/** Your friends (and which are emergency contacts), requests, and adding someone by name or email. */
 export default function FriendsPage() {
   const { socket } = useSocket();
   const { patchUser } = useAuth();
@@ -19,6 +18,8 @@ export default function FriendsPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [asking, setAsking] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -69,6 +70,19 @@ export default function FriendsPage() {
     }
   };
 
+  const askContact = async (userId: string) => {
+    setListError(null);
+    setAsking(userId);
+    try {
+      await api.askFriendAsContact(userId);
+      setOverview(await api.friends());
+    } catch (err) {
+      setListError(err instanceof ApiError ? err.message : "Couldn't send the request.");
+    } finally {
+      setAsking(null);
+    }
+  };
+
   return (
     <div className="page friends-page">
       <div className="page-head">
@@ -85,12 +99,12 @@ export default function FriendsPage() {
           <section className="card">
             <h2>Add a friend</h2>
             <FriendSearch onChange={setOverview} />
-            <h3>Or use their SafeSips code or email</h3>
-            <MyCode code={overview.myCode} hint="Give it to friends who want to add you." />
+            <h3>Or add them by email</h3>
             <form className="inline-form" onSubmit={add}>
               <input
-                placeholder="Their SafeSips code or email"
-                aria-label="Their SafeSips code or email"
+                type="email"
+                placeholder="Their email"
+                aria-label="Their email"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 autoCapitalize="none"
@@ -121,7 +135,7 @@ export default function FriendsPage() {
                 <span className="field-hint">
                   {" "}
                   Others can search your display name and see your picture. Turn off to be added only
-                  by your code or email.
+                  by your email.
                 </span>
               </span>
             </label>
@@ -158,23 +172,53 @@ export default function FriendsPage() {
           <section className="card">
             <h2>Your friends</h2>
             {overview.friends.length === 0 ? (
-              <p className="muted">No friends yet. Send a request with their SafeSips code or email.</p>
+              <p className="muted">No friends yet. Search for them by name, or add them by email.</p>
             ) : (
-              <ul className="contact-list">
-                {overview.friends.map((f) => (
-                  <li key={f.id} className="contact-row">
-                    <Link className="friend-link" to={`/friends/${encodeURIComponent(f.userId)}`}>
-                      <Avatar name={f.displayName} imageUrl={f.imageUrl} size={36} />
-                      <strong>{f.displayName}</strong>
-                    </Link>
-                    <span className="contact-actions">
-                      <Link className="btn btn-ghost btn-sm" to={`/friends/${encodeURIComponent(f.userId)}`}>
-                        View profile
-                      </Link>
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <table className="friends-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Friend</th>
+                      <th scope="col">Emergency contact</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {overview.friends.map((f) => (
+                      <tr key={f.id}>
+                        <td>
+                          <Link className="friend-link" to={`/friends/${encodeURIComponent(f.userId)}`}>
+                            <Avatar name={f.displayName} imageUrl={f.imageUrl} size={36} />
+                            <span className="friend-name">{f.displayName}</span>
+                          </Link>
+                        </td>
+                        <td>
+                          {f.emergencyContact === "accepted" ? (
+                            <span className="pill pill-primary">Yes</span>
+                          ) : f.emergencyContact === "pending" ? (
+                            <span className="pill pill-paused">Asked</span>
+                          ) : (
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              type="button"
+                              disabled={asking === f.userId}
+                              aria-label={`Ask ${f.displayName} to be your emergency contact`}
+                              onClick={() => void askContact(f.userId)}
+                            >
+                              {asking === f.userId ? "Asking…" : "Ask"}
+                            </button>
+                          )}
+                          {f.isTheirContact && <span className="friend-theirs">You're theirs</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="field-hint">
+                  <strong>Yes</strong>: they're alerted if you miss a check-in. <strong>Asked</strong>: waiting
+                  for them to accept. <strong>You're theirs</strong>: you're alerted if they miss one.
+                </p>
+                {listError && <p className="error">{listError}</p>}
+              </>
             )}
 
             {overview.outgoing.length > 0 && (

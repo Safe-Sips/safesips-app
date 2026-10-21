@@ -50,8 +50,7 @@ Beyond the anonymous live map, SafeSips now has account-based features backed by
   hospital, fire station, fuel, pharmacy, 24/7 spots) via an Overpass proxy.
 - **Check-ins & SOS (in-app)** — schedule recurring check-ins with a security
   question. Your **emergency contacts are other SafeSips users**, added by
-  account email or their **SafeSips code** (`XXXX-XXXX`, on the Check-ins
-  page); they must **accept** before they get your alerts, and either side can
+  account email or picked from your friends; they must **accept** before they get your alerts, and either side can
   remove the link. When a check-in is due you get a **notification** (Web Push,
   works with the app closed). Miss it, and a server-side scheduler alerts every
   accepted contact: an entry in their **Alerts** inbox, a live in-app banner,

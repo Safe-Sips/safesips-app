@@ -8,13 +8,12 @@ import type {
 } from "@safesips/shared";
 import { db } from "../db.js";
 import { foldName, genId, normalizeEmail, nowMs } from "../util.js";
-import { ensureContactCode, formatCode, normalizeCode } from "./emergencyContacts.js";
 import { computeCounts } from "./stats.js";
 import { eitherBlocked } from "./moderation.js";
 
 /**
- * Friends: SafeSips users who accepted each other. Added by name search,
- * SafeSips code or account email; the other person must accept. Friends can
+ * Friends: SafeSips users who accepted each other. Added by name search or
+ * account email; the other person must accept. Friends can
  * see each other's profile and ask each other to be an emergency contact.
  *
  * A request by email is always stored against the email (addressee_id NULL),
@@ -42,7 +41,6 @@ interface FriendshipRow {
   responded_at: number | null;
 }
 
-const userByCode = db.prepare(`SELECT id FROM users WHERE contact_code = ?`);
 const userByEmail = db.prepare(`SELECT id FROM users WHERE email_norm = ?`);
 const userRow = db.prepare(
   `SELECT id, display_name, email_norm, image_url, created_at FROM users WHERE id = ?`
@@ -137,6 +135,17 @@ const searchCandidates = db.prepare(
 const myContactLink = db.prepare(
   `SELECT status FROM emergency_links WHERE owner_id = ? AND contact_user_id = ?`
 );
+/** My emergency-contact requests, by the account they went to (by id or by email). */
+const myContactLinks = db.prepare(
+  `SELECT COALESCE(l.contact_user_id, u.id) AS user_id, l.status
+     FROM emergency_links l
+     LEFT JOIN users u ON l.contact_user_id IS NULL AND u.email_norm = l.invite_email_norm
+    WHERE l.owner_id = ?`
+);
+/** People who have me as an accepted emergency contact. */
+const contactFor = db.prepare(
+  `SELECT owner_id FROM emergency_links WHERE contact_user_id = ? AND status = 'accepted'`
+);
 
 const emailOf = (userId: string): string =>
   (userRow.get(userId) as { email_norm: string } | undefined)?.email_norm ?? "";
@@ -158,7 +167,7 @@ function declined(decliner: string, requester: string): boolean {
 
 /**
  * Accept `row` as `me`. It becomes the one friendship between us; any other
- * request either of us sent the other (by code or by email) is dropped.
+ * request either of us sent the other (by name or by email) is dropped.
  */
 function acceptAs(me: string, row: FriendshipRow): void {
   for (const other of between(me, row.requester_id)) {
@@ -211,47 +220,41 @@ function overLimit(me: string): boolean {
 }
 const LIMIT_ERROR = "You've sent a lot of friend requests today. Try again tomorrow.";
 
-/** Send a friend request by SafeSips code or account email. */
+/** Send a friend request by account email. */
 export const requestFriend = db.transaction((me: string, identifier: string): FriendRequestResult => {
   const raw = identifier.trim();
-  if (!raw) return { ok: false, error: "Enter their SafeSips code or email." };
+  if (!raw) return { ok: false, error: "Enter their email." };
   if (overLimit(me)) return { ok: false, error: LIMIT_ERROR };
 
-  if (raw.includes("@")) {
-    const emailNorm = normalizeEmail(raw);
-    if (emailNorm === emailOf(me)) return { ok: false, error: "That's your own email." };
-    const sent = `Request sent to ${emailNorm}. If they use SafeSips, they'll see it there.`;
-    const targetId = (userByEmail.get(emailNorm) as { id: string } | undefined)?.id;
-    if (targetId) {
-      clearDeclineStmt.run(me, targetId);
-      const rows = between(me, targetId);
-      // Same reply in every case, so the email's owner stays private.
-      if (rows.some((r) => r.status === "accepted")) return { ok: true, message: sent, notify: null };
-      const theirs = rows.find((r) => r.status !== "accepted" && addressedTo(r, me));
-      if (theirs) {
-        acceptAs(me, theirs);
-        return { ok: true, message: sent, notify: { userId: targetId, accepted: true } };
-      }
-    }
-    if (emailInvite.get(me, emailNorm)) return { ok: true, message: sent, notify: null };
-    insertRow.run({
-      id: genId(),
-      requester_id: me,
-      addressee_id: null,
-      invite_email_norm: emailNorm,
-      invite_label: emailNorm,
-      created_at: nowMs(),
-    });
-    const notify = targetId && !declined(targetId, me) ? { userId: targetId, accepted: false } : null;
-    return { ok: true, message: sent, notify };
+  if (!raw.includes("@")) {
+    return { ok: false, error: "Enter their email address, or search for them by name." };
   }
-
-  const code = normalizeCode(raw);
-  if (!code) return { ok: false, error: "That isn't a valid SafeSips code (e.g. ABCD-2345) or email." };
-  const targetId = (userByCode.get(code) as { id: string } | undefined)?.id;
-  if (!targetId) return { ok: false, error: "No SafeSips user has that code. Check it and try again." };
-  if (targetId === me) return { ok: false, error: "That's your own code." };
-  return askUser(me, targetId, formatCode(code), "Friend request sent.");
+  const emailNorm = normalizeEmail(raw);
+  if (emailNorm === emailOf(me)) return { ok: false, error: "That's your own email." };
+  const sent = `Request sent to ${emailNorm}. If they use SafeSips, they'll see it there.`;
+  const targetId = (userByEmail.get(emailNorm) as { id: string } | undefined)?.id;
+  if (targetId) {
+    clearDeclineStmt.run(me, targetId);
+    const rows = between(me, targetId);
+    // Same reply in every case, so the email's owner stays private.
+    if (rows.some((r) => r.status === "accepted")) return { ok: true, message: sent, notify: null };
+    const theirs = rows.find((r) => r.status !== "accepted" && addressedTo(r, me));
+    if (theirs) {
+      acceptAs(me, theirs);
+      return { ok: true, message: sent, notify: { userId: targetId, accepted: true } };
+    }
+  }
+  if (emailInvite.get(me, emailNorm)) return { ok: true, message: sent, notify: null };
+  insertRow.run({
+    id: genId(),
+    requester_id: me,
+    addressee_id: null,
+    invite_email_norm: emailNorm,
+    invite_label: emailNorm,
+    created_at: nowMs(),
+  });
+  const notify = targetId && !declined(targetId, me) ? { userId: targetId, accepted: false } : null;
+  return { ok: true, message: sent, notify };
 }) as (me: string, identifier: string) => FriendRequestResult;
 
 /**
@@ -273,6 +276,12 @@ export const requestFriendByUserId = db.transaction((me: string, targetId: strin
 }) as (me: string, targetId: string) => FriendRequestResult;
 
 export function getFriendsOverview(me: string): FriendsOverviewDTO {
+  const myLinks = new Map<string, "pending" | "accepted">();
+  for (const l of myContactLinks.all(me) as Array<{ user_id: string | null; status: "pending" | "accepted" }>) {
+    // An accepted link wins over a leftover pending one.
+    if (l.user_id && myLinks.get(l.user_id) !== "accepted") myLinks.set(l.user_id, l.status);
+  }
+  const theirContact = new Set((contactFor.all(me) as Array<{ owner_id: string }>).map((r) => r.owner_id));
   const friends = (friendsOf.all({ me }) as Array<{
     id: string;
     responded_at: number | null;
@@ -286,8 +295,10 @@ export function getFriendsOverview(me: string): FriendsOverviewDTO {
     displayName: r.display_name,
     imageUrl: r.image_url,
     since: r.responded_at ?? r.created_at,
+    emergencyContact: myLinks.get(r.user_id) ?? "none",
+    isTheirContact: theirContact.has(r.user_id),
   }));
-  // One entry per person, even if they asked by both code and email.
+  // One entry per person, even if they asked by both name and email.
   const seen = new Set<string>();
   const incoming = (incomingFor.all({ me, email: emailOf(me) }) as Array<{
     id: string;
@@ -301,7 +312,6 @@ export function getFriendsOverview(me: string): FriendsOverviewDTO {
     (r) => ({ id: r.id, label: r.invite_label, createdAt: r.created_at })
   );
   return {
-    myCode: formatCode(ensureContactCode(me)),
     discoverable: isDiscoverable(me),
     friends,
     incoming,
@@ -323,11 +333,11 @@ export const acceptFriend = db.transaction((me: string, friendshipId: string): s
  * isn't mine to touch.
  *
  * Declining marks every request that person sent me as declined (so a
- * code + email pair goes in one tap) and records the decline; unfriending
+ * name + email pair goes in one tap) and records the decline; unfriending
  * records it too. Either way their later requests stay quiet.
  */
 export const removeFriendship = db.transaction(
-  (me: string, friendshipId: string): { other: string | null } | null => {
+  (me: string, friendshipId: string): { other: string | null; unfriended?: string } | null => {
     const row = rowById.get(friendshipId) as FriendshipRow | undefined;
     if (!row) return null;
     const sentByMe = row.requester_id === me;
@@ -349,7 +359,7 @@ export const removeFriendship = db.transaction(
     if (row.status === "accepted") {
       deleteRow.run(row.id);
       insertDecline.run(me, other, nowMs());
-      return { other };
+      return { other, unfriended: other };
     }
     // Declining: quietly, and all of their requests at once.
     const now = nowMs();
@@ -361,7 +371,7 @@ export const removeFriendship = db.transaction(
     insertDecline.run(me, other, now);
     return { other: null };
   }
-) as (me: string, friendshipId: string) => { other: string | null } | null;
+) as (me: string, friendshipId: string) => { other: string | null; unfriended?: string } | null;
 
 /** The accepted friendship between two users, if any. */
 function acceptedFriendship(me: string, other: string): FriendshipRow | undefined {
@@ -372,6 +382,32 @@ function acceptedFriendship(me: string, other: string): FriendshipRow | undefine
 export function areFriends(me: string, other: string): boolean {
   return acceptedFriendship(me, other) !== undefined;
 }
+
+const friendClerkIdsOf = db.prepare(
+  `SELECT u.clerk_id FROM friendships f
+     JOIN users u ON u.id = CASE WHEN f.requester_id = @me THEN f.addressee_id ELSE f.requester_id END
+    WHERE f.status = 'accepted' AND (f.requester_id = @me OR f.addressee_id = @me) AND u.clerk_id IS NOT NULL
+    ORDER BY u.clerk_id`
+);
+
+/** My friends' Clerk ids: what friendBackup.ts saves. */
+export function friendClerkIds(me: string): string[] {
+  return (friendClerkIdsOf.all({ me }) as Array<{ clerk_id: string }>).map((r) => r.clerk_id);
+}
+
+/**
+ * Make two users friends again from a backup: replaces any requests between
+ * them with one accepted friendship. No-op if they already are.
+ */
+export const restoreFriendship = db.transaction((a: string, b: string): boolean => {
+  if (a === b || areFriends(a, b)) return false;
+  for (const r of between(a, b)) deleteRow.run(r.id);
+  const now = nowMs();
+  insertRow.run({ id: genId(), requester_id: a, addressee_id: b, invite_email_norm: null, invite_label: "", created_at: now });
+  const row = between(a, b).find((r) => r.requester_id === a && r.addressee_id === b)!;
+  acceptRow.run(b, now, row.id);
+  return true;
+}) as (a: string, b: string) => boolean;
 
 /** A friend's profile; null unless we're friends. */
 export function getFriendProfile(me: string, friendId: string): FriendProfileDTO | null {

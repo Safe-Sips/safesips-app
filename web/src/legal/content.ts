@@ -17,8 +17,8 @@ What we process
 • Safety reports: the spot you chose, an optional tag and note, your display name, and upvotes. Reports show on the map for 48 hours, fading as they age, then disappear from the map; they stay in your history until you delete them or your account.
 • Forum discussions and replies, your activity history, and your check-in records.
 • Friends: people you add and who accept. Friends can see your profile (name, picture, when you joined, and counts of your public activity) but never your email or check-ins.
-• Friend search: by default, other signed-in users can find you by your display name and see your picture (never your email). Names made from your email address are never shown in search. Turn off "Let people find me by name" on the Friends page and you can only be added with your SafeSips code or email.
-• Emergency contacts: other SafeSips users you invite. They only become your contact once they accept, and either of you can remove the link at any time; we don't reveal who is behind an email or code until they accept. If you miss a check-in, each contact you chose gets an alert in SafeSips (and a notification on their devices) with your display name and the check-in label, plus your approximate area if you're sharing your location at the time (the same masked circle others see, never your exact position). Alerts stay in their inbox until they delete their account or you delete yours.
+• Friend search: by default, other signed-in users can find you by your display name and see your picture (never your email). Names made from your email address are never shown in search. Turn off "Let people find me by name" on the Friends page and you can only be added by your email.
+• Emergency contacts: other SafeSips users you invite. They only become your contact once they accept, and either of you can remove the link at any time; we don't reveal who is behind an email until they accept. If you miss a check-in, each contact you chose gets an alert in SafeSips (and a notification on their devices) with your display name and the check-in label, plus your approximate area if you're sharing your location at the time (the same masked circle others see, never your exact position). Alerts stay in their inbox until they delete their account or you delete yours.
 • Safety tools: reports you make about posts or map reports, and the people you block.
 
 What we don't do
@@ -35,7 +35,7 @@ How long we keep things
 
 Services we use
 • Map tiles: your device loads map images from our map provider (by default OpenStreetMap). "Help nearby" searches go through our server to OpenStreetMap services, without your account details.
-• Clerk (sign-in) stores your email and sign-in details.
+• Clerk (sign-in) stores your email and sign-in details, and a private backup list of your friends' account ids, so friendships survive server maintenance.
 • Our email provider sends verification emails.
 • Notifications go through your browser's push service (for example Google, Mozilla or Apple). They're end-to-end encrypted: the push service sees an address for your device, not the message.
 • Our hosting provider handles the network traffic needed to run SafeSips.

@@ -75,7 +75,7 @@ export default function FriendSearch({ onChange }: { onChange: (o: FriendsOvervi
       )}
       {loading && results === null && <p className="field-hint" role="status">Searching…</p>}
       {results !== null && results.length === 0 && !loading && (
-        <p className="muted">No one found. Try another spelling, or use their SafeSips code below.</p>
+        <p className="muted">No one found. Try another spelling, or add them by email below.</p>
       )}
       {results && results.length > 0 && (
         <ul className="contact-list search-results">
