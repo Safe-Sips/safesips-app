@@ -262,8 +262,15 @@ Notes:
 12. Friends: requests, accepts and removals appear live in the other tab.
    Declining is silent: the sender still sees "waiting", and re-sending doesn't
    reach the person who declined.
-13. Check-ins: with two accepted contacts, pick one for a plan and miss it: only
+13. Exact spot for friends: tabs A and B are friends, tab C isn't. In A, share,
+   then switch on **Friends see exactly where I am**. B shows A's picture/name pin
+   at A's exact spot (it follows A's moves); C still sees only the anonymous circle,
+   and C's WS frames never contain A's exact position. Switching it off, **Stop**,
+   the share running out, unfriending or blocking removes the pin from B at once.
+   Restarting the server forgets the spot (it's memory only) until A's app sends it
+   again. Starting a new share starts with the switch off.
+14. Check-ins: with two accepted contacts, pick one for a plan and miss it: only
    that contact is alerted. Five wrong answers to one check-in count as missed
    and alert the contacts straight away.
-14. Repeat across web + mobile to confirm both clients interoperate on the same
+15. Repeat across web + mobile to confirm both clients interoperate on the same
    server.

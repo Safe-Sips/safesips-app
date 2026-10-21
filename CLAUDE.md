@@ -44,6 +44,12 @@ Node **>= 18.18**. CI (`.github/workflows/deploy-check.yml`) runs on Node 20 fro
   put them in URLs, analytics, or any payload.
 - **Exception:** a *safety report* is an intentional public publish of an exact point tied
   to a display name — distinct from presence, and the UI warns about it. Keep them separate.
+- **Exception (friends only, opt-in):** while sharing, "Friends see exactly where I am"
+  (off every time a share starts) sends the exact spot via `friends:exact`, separate from
+  `location:update`. The server keeps only the latest spot **in memory** (never the DB,
+  never logs) and sends it **only to accepted friends** (never across a block); it's dropped
+  on toggle-off, stop, share expiry, unfriend or block (`server/src/friendSpots.ts`).
+  Strangers only ever get the masked circle; never add exact coords to `presence:*`.
 - When touching anything under presence/location/sockets, preserve this and update the
   "Manual verification (multi-user)" steps in `README.md` if behavior changes.
 

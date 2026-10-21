@@ -90,7 +90,7 @@ export interface LocationUpdatePayload {
 // the `publicId` below stays a random per-connection id and is NEVER derived
 // from the user's identity — other clients can never tell who is where.
 
-import type { ReportDTO } from "./dto";
+import type { FriendSpotDTO, ReportDTO } from "./dto";
 
 /** Events emitted by the server to clients. */
 export interface ServerToClientEvents {
@@ -153,6 +153,17 @@ export interface ServerToClientEvents {
   "contacts:changed": () => void;
   /** Someone sent/accepted/removed a friend request involving me. */
   "friends:changed": () => void;
+
+  /*
+   * Friends' EXACT locations (see FriendSpotDTO). Sent only to accepted
+   * friends' sockets — never broadcast, never part of presence:* events.
+   */
+  /** Every friend currently showing me their exact spot (on connect / sync). */
+  "friends:exact:init": (spots: FriendSpotDTO[]) => void;
+  /** A friend's exact spot appeared or moved. */
+  "friends:exact": (spot: FriendSpotDTO) => void;
+  /** A friend stopped showing me their exact spot (or we're no longer friends). */
+  "friends:exact:remove": (data: { userId: string }) => void;
 }
 
 /** Events emitted by clients to the server. */
@@ -161,4 +172,14 @@ export interface ClientToServerEvents {
   "location:update": (payload: LocationUpdatePayload) => void;
   /** Stop sharing immediately; removes the public circle everywhere. */
   "location:stop": () => void;
+  /**
+   * Opt-in, while sharing: my EXACT position, for my accepted friends only.
+   * The one deliberate exception to "exact stays on the device" (see
+   * server/src/friendSpots.ts). Rejected unless I'm sharing.
+   */
+  "friends:exact": (payload: { lat: number; lng: number }) => void;
+  /** Stop showing friends my exact spot (the anonymous circle stays). */
+  "friends:exact:stop": () => void;
+  /** Send me the friends:exact:init list again (my friends list changed). */
+  "friends:exact:sync": () => void;
 }

@@ -11,6 +11,7 @@ import {
 import {
   DEFAULT_SHARE_DURATION_MS,
   distanceMeters,
+  type FriendSpotDTO,
   LatLng,
   LIVE_MAX_ACCURACY_M,
   maskLocation,
@@ -37,6 +38,9 @@ const MIN_EMIT_GAP_MS = 3_000;
 /** Only redraw the private blue dot for moves at least this big. */
 const LIVE_DOT_STEP_M = 10;
 
+/** At most one exact-spot-for-friends update per this many ms. */
+const FRIENDS_EXACT_GAP_MS = 5_000;
+
 /** Shown when a timed "share for" window runs out, from whichever path notices. */
 const SHARE_ENDED_NOTICE = "Location sharing ended (the time you chose is up).";
 
@@ -49,9 +53,14 @@ export interface PresenceState {
   selfPublic: LatLng | null;
   /**
    * This device's exact position while sharing (the private blue dot).
-   * Local memory only — never emitted; only `selfPublic` leaves the device.
+   * Stays on the device, unless `exactForFriends` is on: then it's also sent
+   * to the server for the user's friends only (never to strangers).
    */
   exact: LatLng | null;
+  /** "Friends see exactly where I am" — off every time a share starts. */
+  exactForFriends: boolean;
+  /** Friends currently showing this user their exact spot. */
+  friendSpots: FriendSpotDTO[];
   lastUpdateAt: number | null;
   /**
    * Epoch ms when the current share ends on its own ("share for 1 hour").
@@ -88,6 +97,8 @@ export interface PresenceApi {
   clearNotice: () => void;
   /** Change the "share for" duration. If already sharing, restarts the timer. */
   setDurationMs: (ms: number) => void;
+  /** Turn "Friends see exactly where I am" on or off (only while sharing). */
+  setExactForFriends: (on: boolean) => void;
 }
 
 const PresenceContext = createContext<PresenceApi | null>(null);
@@ -133,9 +144,20 @@ function usePresenceController(): PresenceApi {
   const holdUntilRef = useRef<number | null>(null);
   const durationRef = useRef(durationMs);
   const lastEmitRef = useRef(0);
+  const [exactForFriends, setExactForFriendsState] = useState(false);
+  const exactForFriendsRef = useRef(false);
+  const lastFriendsEmitRef = useRef(0);
+  /** Latest exact position to show friends (separate from the circle's ref). */
+  const friendsExactRef = useRef<LatLng | null>(null);
+  const friendsTimerRef = useRef<number | null>(null);
+  const [friendSpots, setFriendSpots] = useState<Map<string, FriendSpotDTO>>(new Map());
 
   const stopLocal = useCallback(() => {
     sharingRef.current = false;
+    // Off every time a share ends (the server forgets the exact spot too).
+    exactForFriendsRef.current = false;
+    friendsExactRef.current = null;
+    setExactForFriendsState(false);
     maskedRef.current = null;
     shareStartedAtRef.current = null;
     holdUntilRef.current = null;
@@ -271,8 +293,29 @@ function usePresenceController(): PresenceApi {
       // waiting for the next heartbeat.
       if (sharingRef.current && maskedRef.current && !endIfExpired()) {
         emitMasked(maskedRef.current);
+        // The server may have restarted and forgotten the exact spot.
+        if (exactForFriendsRef.current && friendsExactRef.current) {
+          lastFriendsEmitRef.current = Date.now();
+          socket.emit("friends:exact", friendsExactRef.current);
+        }
       }
     };
+    const onSpotsInit = (spots: FriendSpotDTO[]) => {
+      setFriendSpots(new Map(spots.map((s) => [s.userId, s])));
+    };
+    const onSpot = (spot: FriendSpotDTO) => {
+      setFriendSpots((prev) => new Map(prev).set(spot.userId, spot));
+    };
+    const onSpotRemove = ({ userId }: { userId: string }) => {
+      setFriendSpots((prev) => {
+        if (!prev.has(userId)) return prev;
+        const next = new Map(prev);
+        next.delete(userId);
+        return next;
+      });
+    };
+    // Friends list changed: ask for the current list of friends' spots.
+    const onFriendsChanged = () => socket.emit("friends:exact:sync");
 
     socket.on("presence:self", onSelf);
     socket.on("presence:init", onInit);
@@ -282,8 +325,16 @@ function usePresenceController(): PresenceApi {
     socket.on("presence:mine", onMine);
     socket.on("error:notice", onNotice);
     socket.on("connect", onConnect);
+    socket.on("friends:exact:init", onSpotsInit);
+    socket.on("friends:exact", onSpot);
+    socket.on("friends:exact:remove", onSpotRemove);
+    socket.on("friends:changed", onFriendsChanged);
 
     return () => {
+      socket.off("friends:exact:init", onSpotsInit);
+      socket.off("friends:exact", onSpot);
+      socket.off("friends:exact:remove", onSpotRemove);
+      socket.off("friends:changed", onFriendsChanged);
       socket.off("presence:self", onSelf);
       socket.off("presence:init", onInit);
       socket.off("presence:upsert", onUpsert);
@@ -444,6 +495,57 @@ function usePresenceController(): PresenceApi {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [emitMasked, endIfExpired]);
 
+  /**
+   * Opt-in: send the exact position to the server for friends only. At most
+   * every few seconds; a move in between is sent when the gap is up.
+   */
+  const sendExactToFriends = useCallback(() => {
+    if (!socket || !exactForFriendsRef.current || !sharingRef.current) return;
+    if (friendsTimerRef.current !== null) return; // already queued
+    const wait = lastFriendsEmitRef.current + FRIENDS_EXACT_GAP_MS - Date.now();
+    const send = () => {
+      friendsTimerRef.current = null;
+      const here = friendsExactRef.current;
+      if (!here || !exactForFriendsRef.current || !sharingRef.current) return;
+      lastFriendsEmitRef.current = Date.now();
+      socket.emit("friends:exact", here);
+    };
+    if (wait <= 0) send();
+    else friendsTimerRef.current = window.setTimeout(send, wait);
+  }, [socket]);
+
+  // Follow the user's moves (the blue dot) while friends are watching.
+  useEffect(() => {
+    if (exact && exactForFriends) {
+      friendsExactRef.current = exact;
+      sendExactToFriends();
+    }
+  }, [exact, exactForFriends, sendExactToFriends]);
+
+  useEffect(
+    () => () => {
+      if (friendsTimerRef.current !== null) window.clearTimeout(friendsTimerRef.current);
+    },
+    []
+  );
+
+  const setExactForFriends = useCallback(
+    (on: boolean) => {
+      if (on && !sharingRef.current) return;
+      exactForFriendsRef.current = on;
+      setExactForFriendsState(on);
+      // Turning on: the effect above sends the current position.
+      if (!on) {
+        if (friendsTimerRef.current !== null) {
+          window.clearTimeout(friendsTimerRef.current);
+          friendsTimerRef.current = null;
+        }
+        socket?.emit("friends:exact:stop");
+      }
+    },
+    [socket]
+  );
+
   const clearNotice = useCallback(() => setNotice(null), []);
 
   const others = useMemo(
@@ -462,6 +564,8 @@ function usePresenceController(): PresenceApi {
     return r && r.expiresAt > Date.now() ? { lat: r.lat, lng: r.lng } : null;
   }, [records, ownId, selfId]);
 
+  const friendSpotList = useMemo(() => Array.from(friendSpots.values()), [friendSpots]);
+
   const state: PresenceState = {
     connection,
     selfId,
@@ -470,13 +574,15 @@ function usePresenceController(): PresenceApi {
     // is sending it.
     selfPublic: selfPublic ?? ownElsewhere,
     exact,
+    exactForFriends,
+    friendSpots: friendSpotList,
     lastUpdateAt,
     sharedUntil,
     durationMs,
     notice,
   };
 
-  return { state, publish, stop, clearNotice, setDurationMs };
+  return { state, publish, stop, clearNotice, setDurationMs, setExactForFriends };
 }
 
 /** Owns sharing/heartbeats for the whole authenticated session. */

@@ -15,6 +15,9 @@ interface ControlsProps {
   /** Selected "share for" duration; 0 = only while the app is open. */
   durationMs: number;
   onDurationChange: (ms: number) => void;
+  /** "Friends see exactly where I am" (only offered while sharing). */
+  exactForFriends: boolean;
+  onExactForFriendsChange: (on: boolean) => void;
   othersCount: number;
   onShareGps: () => void;
   onUpdate: () => void;
@@ -95,6 +98,23 @@ function DurationPicker({
   );
 }
 
+/** Opt-in, while sharing: friends (only) see the exact spot. */
+function FriendsExactToggle({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <label className="toggle-row friends-exact">
+      <input type="checkbox" checked={on} onChange={(e) => onChange(e.target.checked)} />
+      <span>
+        <strong>Friends see exactly where I am</strong>
+        <span className="field-hint">
+          {on
+            ? "Friends see your exact spot until you stop. Everyone else sees only the 200 m circle."
+            : "Off: friends see only your anonymous circle, like everyone else."}
+        </span>
+      </span>
+    </label>
+  );
+}
+
 /** Explains why sharing is unavailable and what happens to an active share. */
 function ConnectionNotice({
   connection,
@@ -134,6 +154,8 @@ export default function Controls({
   sharedUntil,
   durationMs,
   onDurationChange,
+  exactForFriends,
+  onExactForFriendsChange,
   othersCount,
   onShareGps,
   onUpdate,
@@ -195,6 +217,7 @@ export default function Controls({
         )}
 
         {sharing && <p className="hint">{sharingHint(sharedUntil)}</p>}
+        {sharing && <FriendsExactToggle on={exactForFriends} onChange={onExactForFriendsChange} />}
         {geoStatus && <p className="hint">{geoStatus}</p>}
         {geoError && <p className="error">{geoError}</p>}
         <ConnectionNotice connection={connection} sharing={sharing} />
@@ -303,11 +326,13 @@ export default function Controls({
           </div>
         )}
         {sharing && <p className="hint">{sharingHint(sharedUntil)}</p>}
+        {sharing && <FriendsExactToggle on={exactForFriends} onChange={onExactForFriendsChange} />}
       </div>
 
       <p className="privacy-note">
         Your exact location stays on your device. Others only see an approximate
-        <strong> 200&nbsp;m</strong> area around a random point near you.
+        <strong> 200&nbsp;m</strong> area around a random point near you, unless you
+        let your friends see your exact spot while sharing.
       </p>
       <div className="legend">
         <span className="legend-item">
@@ -319,6 +344,10 @@ export default function Controls({
         </span>
         <span className="legend-item">
           <span className="legend-swatch swatch-gray" /> Other people sharing
+        </span>
+        <span className="legend-item">
+          <span className="legend-swatch swatch-friend" /> A friend's exact spot (when they
+          allow it)
         </span>
       </div>
     </aside>

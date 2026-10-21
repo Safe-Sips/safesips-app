@@ -69,6 +69,8 @@ Covers mask/badges/votes/check-in logic. When adding server logic or shared rule
    validates ranges, rate-limits, stores/broadcasts only the masked center.
 3. Safety reports are the deliberate exception: an exact point published with the author's
    name. Keep that path separate from anonymous presence, and keep the UI warning.
+   The other exception is opt-in exact spots for friends (`friends:exact`,
+   `server/src/friendSpots.ts`): memory only, accepted friends only, never in `presence:*`.
 4. If presence/sharing behavior changes, update the "Manual verification (multi-user)" steps
    in `README.md` and confirm WS frames carry only masked `lat`/`lng`.
 

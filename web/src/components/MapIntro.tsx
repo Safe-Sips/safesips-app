@@ -47,8 +47,8 @@ export default function MapIntro({
           <li>
             <span className="legend-swatch swatch-blue" aria-hidden="true" />
             <span>
-              <strong>Blue dot: your exact spot.</strong> Only you see it, and it
-              never leaves this device.
+              <strong>Blue dot: your exact spot.</strong> Only you see it. While
+              sharing, you can choose to show it to your friends (never anyone else).
             </span>
           </li>
           <li>

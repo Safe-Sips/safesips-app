@@ -70,7 +70,7 @@ export default function MapPage() {
     navigate(".", { replace: true, state: null });
   };
   const { socket } = useSocket();
-  const { state, publish, stop, clearNotice, setDurationMs } = usePresence();
+  const { state, publish, stop, clearNotice, setDurationMs, setExactForFriends } = usePresence();
 
   // Exact location lives ONLY on this device and is never emitted. It's owned
   // by PresenceProvider (above the routes) so the live circle keeps following
@@ -344,6 +344,7 @@ export default function MapPage() {
         exact={exact}
         selfPublic={state.selfPublic}
         others={state.others}
+        friendSpots={state.friendSpots}
         reports={visibleReports}
         reportNow={reportNow}
         havens={havens}
@@ -366,6 +367,8 @@ export default function MapPage() {
         sharedUntil={state.sharedUntil}
         durationMs={state.durationMs}
         onDurationChange={setDurationMs}
+        exactForFriends={state.exactForFriends}
+        onExactForFriendsChange={setExactForFriends}
         othersCount={state.others.length}
         onShareGps={() => guarded({ kind: "gps" })}
         onUpdate={onUpdate}

@@ -34,6 +34,7 @@ import {
   untrackUserSocket,
   type SocketData,
 } from "./realtime.js";
+import { clearFriendSpot, friendSpotsFor, setFriendSpot } from "./friendSpots.js";
 import { resolveAuthFromToken } from "./auth/clerk.js";
 import { purgeOldAttempts } from "./auth/throttle.js";
 import { startCheckinScheduler } from "./checkinScheduler.js";
@@ -222,7 +223,11 @@ function removePresence(publicId: string, userId?: string, replacing = false): v
     forgetShare(publicId);
     if (userId && activeShareByUserId.get(userId)?.publicId === publicId) {
       activeShareByUserId.delete(userId);
-      if (!replacing) emitPresenceMine(userId, null);
+      if (!replacing) {
+        emitPresenceMine(userId, null);
+        // The share ended, so friends stop seeing the exact spot too.
+        clearFriendSpot(userId);
+      }
     }
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -262,6 +267,7 @@ io.on("connection", (socket) => {
   socket.data.publicId = publicId;
   socket.data.lastUpdateAt = 0;
   socket.data.shareStartedAt = 0;
+  socket.data.lastExactAt = 0;
 
   // Track the authenticated user's sockets so check-in prompts can reach them.
   trackUserSocket(socket.data.userId, socket.id);
@@ -280,6 +286,8 @@ io.on("connection", (socket) => {
     socket.emit("presence:mine", { publicId: existingShare.publicId });
   }
   socket.emit("presence:init", store.active());
+  // Friends who are showing this user their exact spot (friends only).
+  socket.emit("friends:exact:init", friendSpotsFor(socket.data.userId));
 
   // Hand the circle to this connection (UI shows "Sharing" with a Stop button)
   // only when no other live socket of the user owns it; otherwise the two
@@ -390,6 +398,37 @@ io.on("connection", (socket) => {
     }
   });
 
+  // Opt-in: the sharer's EXACT spot, for their friends only (friendSpots.ts).
+  // Never logged or stored on disk. Only while they're sharing a circle.
+  socket.on("friends:exact", (payload) => {
+    const now = Date.now();
+    if (now - socket.data.lastExactAt < config.minUpdateIntervalMs) return;
+    const result = validateLocationUpdate(payload);
+    if (!result.ok || !result.value) {
+      socket.emit("error:notice", { code: "invalid_payload", message: "Invalid location." });
+      return;
+    }
+    const userId = socket.data.userId;
+    const share = activeShareByUserId.get(userId);
+    if (!share || !store.get(share.publicId, now)) {
+      socket.emit("error:notice", {
+        code: "exact_needs_share",
+        message: "Share your location first, then you can show friends your exact spot.",
+      });
+      return;
+    }
+    socket.data.lastExactAt = now;
+    setFriendSpot(userId, result.value.lat, result.value.lng, now);
+  });
+
+  socket.on("friends:exact:stop", () => {
+    clearFriendSpot(socket.data.userId);
+  });
+
+  socket.on("friends:exact:sync", () => {
+    socket.emit("friends:exact:init", friendSpotsFor(socket.data.userId));
+  });
+
   socket.on("location:stop", () => {
     socket.data.shareStartedAt = 0;
     removePresence(publicId, socket.data.userId);
@@ -440,6 +479,13 @@ const sweepTimer = setInterval(() => {
     const expired = store.sweepExpired();
     for (const publicId of expired) {
       io.emit("presence:remove", { publicId });
+    }
+    // A share that ran out also stops showing friends the exact spot.
+    if (expired.length > 0) {
+      const gone = new Set(expired);
+      for (const [userId, share] of activeShareByUserId) {
+        if (gone.has(share.publicId)) clearFriendSpot(userId);
+      }
     }
     forgetExpiredShares(Date.now());
     purgeOldAttempts();

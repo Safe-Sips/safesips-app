@@ -1,6 +1,7 @@
 import type { Server } from "socket.io";
 import type {
   ClientToServerEvents,
+  FriendSpotDTO,
   ReportDTO,
   ServerToClientEvents,
 } from "@safesips/shared";
@@ -17,6 +18,8 @@ export interface SocketData {
   lastUpdateAt: number;
   /** Epoch ms when this socket started sharing; 0 if not sharing. */
   shareStartedAt: number;
+  /** Epoch ms of this socket's last exact-spot-for-friends update. */
+  lastExactAt: number;
 }
 
 type IO = Server<
@@ -134,6 +137,20 @@ export function emitContactsChanged(userId: string): void {
 export function emitFriendsChanged(userId: string): void {
   if (!io) return;
   for (const socketId of socketsByUser.get(userId) ?? []) io.to(socketId).emit("friends:changed");
+}
+
+/** A friend's exact spot, to one user's sessions (friendSpots.ts decides who). */
+export function emitFriendSpot(toUserId: string, spot: FriendSpotDTO): void {
+  if (!io) return;
+  for (const socketId of socketsByUser.get(toUserId) ?? []) io.to(socketId).emit("friends:exact", spot);
+}
+
+/** That friend's exact spot is no longer shown to this user. */
+export function emitFriendSpotRemoved(toUserId: string, userId: string): void {
+  if (!io) return;
+  for (const socketId of socketsByUser.get(toUserId) ?? []) {
+    io.to(socketId).emit("friends:exact:remove", { userId });
+  }
 }
 
 /** Push a check-in prompt to a specific user's live sockets (if any). */

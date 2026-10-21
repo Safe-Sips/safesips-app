@@ -15,6 +15,7 @@ import "leaflet/dist/leaflet.css";
 import {
   PUBLIC_RADIUS_METERS,
   reportOpacity,
+  type FriendSpotDTO,
   type LatLng,
   type PresenceRecord,
   type ReportDTO,
@@ -50,6 +51,8 @@ interface MapViewProps {
   exact: LatLng | null;
   selfPublic: LatLng | null;
   others: PresenceRecord[];
+  /** Friends who chose to show me their EXACT spot (friends only, opt-in). */
+  friendSpots: FriendSpotDTO[];
   /** Reports still on the map (expired ones already filtered out). */
   reports: ReportDTO[];
   /** Clock used to fade reports by age (ticks every few minutes). */
@@ -123,6 +126,31 @@ function havenIcon(kind: SafeHavenKind): L.DivIcon {
     className: "haven-pin-wrap",
     iconSize: [28, 28],
     iconAnchor: [14, 14],
+  });
+}
+
+/** Leaflet icons are raw HTML: escape anything that came from another user. */
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const letters = parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : (parts[0] ?? "?").slice(0, 2);
+  return letters.toUpperCase();
+}
+
+/** A friend's exact spot: their picture (or initials) in a ring. */
+function friendIcon(spot: FriendSpotDTO): L.DivIcon {
+  // imageUrl is limited to https Clerk images by the server; escaped all the same.
+  const inner = spot.imageUrl
+    ? `<img src="${escapeHtml(spot.imageUrl)}" alt="" referrerpolicy="no-referrer" />`
+    : escapeHtml(initials(spot.displayName));
+  return L.divIcon({
+    html: `<div class="friend-pin">${inner}</div>`,
+    className: "friend-pin-wrap",
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
   });
 }
 
@@ -202,6 +230,7 @@ export default function MapView({
   exact,
   selfPublic,
   others,
+  friendSpots,
   reports,
   reportNow,
   havens,
@@ -302,6 +331,21 @@ export default function MapView({
           <Tooltip direction="top" offset={[0, -12]}>
             {h.name ?? h.kind.replace("_", " ")} · {h.distanceMeters} m
             {h.isOpen24_7 ? " · 24/7" : ""}
+          </Tooltip>
+        </Marker>
+      ))}
+
+      {/* Friends who chose to show me exactly where they are. */}
+      {friendSpots.map((f) => (
+        <Marker
+          key={`friend-${f.userId}`}
+          position={[f.lat, f.lng]}
+          icon={friendIcon(f)}
+          zIndexOffset={500}
+        >
+          {/* One label (Leaflet keeps a single tooltip per marker). */}
+          <Tooltip direction="bottom" offset={[0, 16]} permanent className="friend-label">
+            {f.displayName} · <UpdatedAgo updatedAt={f.updatedAt} />
           </Tooltip>
         </Marker>
       ))}
