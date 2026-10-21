@@ -18,7 +18,8 @@ export type AuthResolveFailure =
   | { ok: false; code: "clerk_not_configured" }
   | { ok: false; code: "clerk_verify_failed"; detail?: string }
   | { ok: false; code: "clerk_user_unavailable" }
-  | { ok: false; code: "bad_token" };
+  | { ok: false; code: "bad_token" }
+  | { ok: false; code: "account_suspended" };
 
 export type AuthResolveResult =
   | ({ ok: true } & ResolvedAuth)
@@ -71,7 +72,7 @@ export async function deleteClerkUser(clerkId: string): Promise<boolean> {
 
 function authorizedParties(): string[] | undefined {
   // Only enforce azp when explicitly configured — a wrong allowlist rejects
-  // valid Netlify/custom-domain sessions.
+  // valid sessions from the web app's domain.
   const raw = process.env.CLERK_AUTHORIZED_PARTIES?.trim();
   if (!raw) return undefined;
   return raw
@@ -147,7 +148,7 @@ export async function resolveAuthFromToken(
   const clerkResult = await userFromClerkToken(token);
   if ("user" in clerkResult) {
     if (clerkResult.user.status !== "active") {
-      return { ok: false, code: "bad_token" };
+      return { ok: false, code: "account_suspended" };
     }
     return {
       ok: true,
@@ -172,6 +173,7 @@ export async function resolveAuthFromToken(
           user,
         };
       }
+      if (user) return { ok: false, code: "account_suspended" };
     }
     if (clerkResult.code === "clerk_not_configured") return clerkResult;
   }

@@ -22,10 +22,12 @@ only you can make; everything else is code.
 3. **Moderators (you).** Set `ADMIN_EMAILS=you@…` on Render. The Moderation tab
    (`/admin`) lists everything people reported; the Terms promise review
    within about 24 hours.
-4. **Move the web app to app.safesips.org (you).** Netlify ran out of credits,
-   so the live site stopped updating after PR #23. `render.yaml` defines the
-   replacement (a free Render static site); see the step-by-step guide in
-   `docs/MOVE_TO_APP_SAFESIPS_ORG.md`.
+4. ~~Move the web app to app.safesips.org.~~ **Done 21 Oct**: the app is a
+   Render static site at https://app.safesips.org, and safesips.org/app forwards
+   there. Still to do (you): stop both Netlify sites, remove `CORS_ORIGINS` /
+   `WEB_APP_URL` / `CLERK_AUTHORIZED_PARTIES` from **safesips-web** (only the API
+   uses them), and ask users to re-add the app to their Home Screen and turn
+   notifications on again (steps 8–9 of `docs/MOVE_TO_APP_SAFESIPS_ORG.md`).
 5. **Clerk production instance (you).** The sign-in form says "Development
    mode": dev instances are capped and not meant for real users. Create a
    production instance on your domain, then swap `VITE_CLERK_PUBLISHABLE_KEY`
@@ -79,7 +81,6 @@ Either way you'll need:
 - Content-Security-Policy (full) for the web app — needs testing with Clerk's
   scripts and Google sign-in; only `frame-ancestors 'none'` is set today.
 - A real tile provider for the mobile app (`mobile/src/mapStyle.ts`).
-- Show suspended users a clear message (their map just says "Offline").
 - Waitlist page is no longer linked from anywhere (re-link it or remove it).
 - Remove the unused score/badge code (profile no longer shows points).
 - Uptime monitor (e.g. UptimeRobot on `/health`) as a second line behind the

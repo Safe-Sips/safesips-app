@@ -30,9 +30,11 @@ const AUTH_ERROR_MESSAGE: Record<string, string> = {
   clerk_not_configured:
     "Server is missing CLERK_SECRET_KEY. Set it on Render and redeploy.",
   clerk_verify_failed:
-    "Clerk session could not be verified. Check that Netlify publishable and Render secret keys are from the same Clerk app.",
+    "Clerk session could not be verified. Check that the web app's publishable key and the API's secret key are from the same Clerk app.",
   clerk_user_unavailable: "Could not load your Clerk user profile.",
   bad_token: "Invalid or expired session.",
+  account_suspended:
+    "Your SafeSips account is suspended for breaking the community rules. If you think this is a mistake, email support@safesips.app.",
 };
 
 /** Reject the request unless it carries a valid Clerk or legacy token. */
@@ -49,7 +51,8 @@ export function requireAuth(
   void resolveAuthFromToken(token)
     .then((resolved) => {
       if (!resolved.ok) {
-        res.status(401).json({
+        // Suspended is a decision, not a broken session: 403 so the app shows why.
+        res.status(resolved.code === "account_suspended" ? 403 : 401).json({
           error: AUTH_ERROR_MESSAGE[resolved.code] ?? AUTH_ERROR_MESSAGE.bad_token,
           code: resolved.code,
         });

@@ -34,7 +34,9 @@ services:
         source: /*
         destination: /index.html
     headers:
-      # Same security headers the Netlify site had (web/public/_headers).
+      # Security headers. frame-ancestors / X-Frame-Options stop other sites
+      # embedding SafeSips to trick people into tapping "Share" or "Delete
+      # account" (clickjacking). Geolocation is only for SafeSips itself.
       - path: /*
         name: X-Frame-Options
         value: DENY
