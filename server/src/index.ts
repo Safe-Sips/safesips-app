@@ -1,3 +1,4 @@
+import path from "node:path";
 import { randomUUID } from "node:crypto";
 import http, { type IncomingHttpHeaders } from "node:http";
 import { clientIpFrom } from "./clientIp.js";
@@ -140,6 +141,12 @@ app.get("/health", (_req, res) => {
     if (config.allowTestToken) {
       payload.activeUsers = store.active().length;
     }
+    // Is the database on Render's persistent disk (kept through deploys)?
+    payload.storage = path.resolve(config.databasePath).startsWith("/var/data/") ? "disk" : "temporary";
+    const created = db.prepare(`SELECT value FROM app_meta WHERE key = 'created_at'`).get() as
+      | { value: string }
+      | undefined;
+    if (created) payload.dataSince = new Date(Number(created.value)).toISOString();
     res.json(payload);
   } catch (err) {
     // eslint-disable-next-line no-console
