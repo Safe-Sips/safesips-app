@@ -820,6 +820,12 @@ body {
      behind it (that's what bounced the navy into view). */
   overscroll-behavior-y: contain;
 }
+/* Always a pixel taller than the screen, so even a short page (an empty
+   forum or alerts list) scrolls and bounces instead of feeling stuck. The
+   bounce shows the light page colour, not the navy. */
+.shell-main > .page {
+  min-height: calc(100% + 1px);
+}
 .map-page {
   position: absolute;
   inset: 0;
