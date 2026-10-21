@@ -1882,6 +1882,37 @@ select option {
   height: 100%;
   object-fit: cover;
 }
+/* "More info" toggle (components/MoreInfo.tsx). */
+.more-info {
+  margin: 6px 0 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.more-info summary {
+  cursor: pointer;
+  width: fit-content;
+  font-weight: 700;
+  color: var(--accent);
+  list-style: none;
+}
+.more-info summary::-webkit-details-marker {
+  display: none;
+}
+.more-info summary::before {
+  content: "ⓘ ";
+}
+.more-info[open] summary {
+  margin-bottom: 4px;
+}
+.more-info-body {
+  line-height: 1.45;
+}
+.settings-row {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+.settings-row .field-hint,
 .friends-exact .field-hint {
   display: block;
   margin-top: 2px;

@@ -53,8 +53,8 @@ export default function NewThreadPage() {
           />
         </label>
         <p className="field-hint">
-          Be kind and keep it about places and safety. Don't name or share
-          details about private people. Abusive posts are removed.
+          Be kind, keep it about places and safety, and don't name private people.
+          Abusive posts are removed.
         </p>
         {error && <p className="error">{error}</p>}
         <button className="btn btn-primary" disabled={busy} type="submit">

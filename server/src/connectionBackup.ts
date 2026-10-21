@@ -1,4 +1,6 @@
+import fs from "node:fs";
 import { clerkClient, isClerkNotFound, localUserForClerkId } from "./auth/clerk.js";
+import { config } from "./config.js";
 import {
   contactClerkIds,
   hasAcceptedLink,
@@ -7,7 +9,13 @@ import {
 } from "./repos/emergencyContacts.js";
 import { eitherBlocked } from "./repos/moderation.js";
 import { areFriends, friendClerkIds, restoreFriendship } from "./repos/friends.js";
-import { findUserById, markFriendsRestored, type UserRow } from "./repos/users.js";
+import {
+  findUserByClerkId,
+  findUserById,
+  markFriendsRestored,
+  upsertUserFromClerk,
+  type UserRow,
+} from "./repos/users.js";
 
 /**
  * Friendships and accepted emergency contacts are backed up to each user's
@@ -100,12 +108,77 @@ function clerkStore(): ConnectionBackupStore | null {
   };
 }
 
+/**
+ * Dev/CI only: a JSON file standing in for Clerk, so end-to-end tests can wipe
+ * a real server's database and check what comes back. Only with test tokens
+ * on, which is never the case on a hosted deploy (config.isHostedDeploy).
+ */
+function fileStore(file: string): ConnectionBackupStore {
+  type Entry = SavedConnections & { email: string; displayName: string };
+  const load = (): Record<string, Entry> => {
+    try {
+      return JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, Entry>;
+    } catch {
+      return {};
+    }
+  };
+  return {
+    async read(clerkId) {
+      const e = load()[clerkId];
+      return e ? { friends: e.friends, contacts: e.contacts, protecting: e.protecting } : EMPTY;
+    },
+    async write(clerkId, saved) {
+      const all = load();
+      const user = findUserByClerkId(clerkId);
+      all[clerkId] = {
+        ...saved,
+        email: user?.email ?? all[clerkId]?.email ?? "",
+        displayName: user?.display_name ?? all[clerkId]?.displayName ?? "",
+      };
+      fs.writeFileSync(file, JSON.stringify(all));
+    },
+    async localUser(clerkId) {
+      const existing = findUserByClerkId(clerkId);
+      if (existing) return existing;
+      const e = load()[clerkId];
+      if (!e?.email) return null;
+      return upsertUserFromClerk({ clerkId, email: e.email, displayName: e.displayName, emailVerified: true });
+    },
+  };
+}
+const testBackupFile = config.allowTestToken ? process.env.CONNECTION_BACKUP_FILE?.trim() : undefined;
+
 let storeOverride: ConnectionBackupStore | null | undefined;
 /** Tests: use this store instead of Clerk (null = no backups). */
 export function setConnectionBackupStore(store: ConnectionBackupStore | null | undefined): void {
   storeOverride = store;
 }
-const store = () => (storeOverride !== undefined ? storeOverride : clerkStore());
+const store = () =>
+  storeOverride !== undefined ? storeOverride : testBackupFile ? fileStore(testBackupFile) : clerkStore();
+
+/** Dev/CI: the file store is on (test-token users then get Clerk-style ids). */
+export function usesTestBackupFile(): boolean {
+  return Boolean(testBackupFile);
+}
+
+/**
+ * How many connections are saved for this user right now, as the app shows it
+ * ("saved to your account"). Waits for saves still on their way. Null when
+ * backups aren't available (no Clerk) or can't be read just now.
+ */
+export async function savedConnectionCounts(
+  user: UserRow
+): Promise<{ friends: number; contacts: number; protecting: number } | null> {
+  const backups = store();
+  if (!backups || !user.clerk_id) return null;
+  await queues.get(user.id);
+  try {
+    const saved = await backups.read(user.clerk_id);
+    return { friends: saved.friends.length, contacts: saved.contacts.length, protecting: saved.protecting.length };
+  } catch {
+    return null;
+  }
+}
 
 /** What the database says `userId` has right now. */
 function currentConnections(userId: string): SavedConnections {

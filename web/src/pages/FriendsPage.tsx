@@ -2,16 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { FriendsOverviewDTO } from "@safesips/shared";
 import { api, ApiError } from "../api";
-import { useAuth } from "../auth/AuthContext";
 import { timeAgo } from "../format";
 import Avatar from "../components/Avatar";
 import FriendSearch from "../components/FriendSearch";
 import { useSocket } from "../socket/SocketProvider";
+import MoreInfo from "../components/MoreInfo";
 
 /** Your friends (and which are emergency contacts), requests, and adding someone by name or email. */
 export default function FriendsPage() {
   const { socket } = useSocket();
-  const { patchUser } = useAuth();
   const [overview, setOverview] = useState<FriendsOverviewDTO | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [identifier, setIdentifier] = useState("");
@@ -88,10 +87,6 @@ export default function FriendsPage() {
       <div className="page-head">
         <h1>Friends</h1>
       </div>
-      <p className="muted">
-        Add the people you go out with. Friends can see each other's profile,
-        and you can ask a friend to be your emergency contact in one tap.
-      </p>
       {loadError && <p className="error">{loadError}</p>}
 
       {overview && (
@@ -117,37 +112,14 @@ export default function FriendsPage() {
             </form>
             {message && <p className="hint" role="status">{message}</p>}
             {error && <p className="error">{error}</p>}
-            <label className="toggle-row">
-              <input
-                type="checkbox"
-                checked={overview.discoverable}
-                onChange={(e) => {
-                  const on = e.target.checked;
-                  void run(async () => {
-                    const o = await api.setDiscoverable(on);
-                    patchUser({ discoverable: on, searchNoticePending: false });
-                    return o;
-                  });
-                }}
-              />
-              <span>
-                <strong>Let people find me by name</strong>
-                <span className="field-hint">
-                  {" "}
-                  Others can search your display name and see your picture. Turn off to be added only
-                  by your email.
-                </span>
-              </span>
-            </label>
           </section>
 
           {overview.incoming.length > 0 && (
             <section className="card" aria-label="Friend requests for you">
               <h2>Requests for you</h2>
-              <p className="field-hint">
-                Declining is private: they aren't told, and they can't send you new requests unless
-                you add them.
-              </p>
+              <MoreInfo label="What happens if I decline?">
+                They aren't told, and they can't send you new requests unless you add them.
+              </MoreInfo>
               <ul className="contact-list">
                 {overview.incoming.map((r) => (
                   <li key={r.id} className="contact-row">
@@ -213,10 +185,10 @@ export default function FriendsPage() {
                     ))}
                   </tbody>
                 </table>
-                <p className="field-hint">
+                <MoreInfo label="What do these mean?">
                   <strong>Yes</strong>: they're alerted if you miss a check-in. <strong>Asked</strong>: waiting
                   for them to accept. <strong>You're theirs</strong>: you're alerted if they miss one.
-                </p>
+                </MoreInfo>
                 {listError && <p className="error">{listError}</p>}
               </>
             )}

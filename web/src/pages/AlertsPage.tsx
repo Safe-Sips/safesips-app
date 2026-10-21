@@ -15,21 +15,14 @@ export default function AlertsPage() {
       <div className="page-head">
         <h1>Alerts</h1>
       </div>
-      <p className="muted">
-        If someone who has you as an emergency contact misses a check-in, you'll
-        see it here. Try to reach them, and let their other contacts know you're
-        on it.
-      </p>
+      <p className="muted">When someone you look out for misses a check-in, it shows up here.</p>
 
       {error && <p className="error">{error}</p>}
 
       {alerts.length === 0 ? (
         <div className="state-card">
           <p className="state-title">No alerts</p>
-          <p className="muted">
-            No one you look out for has missed a check-in. To become someone's
-            emergency contact, they can add you by your email or from your friend profile.
-          </p>
+          <p className="muted">No one you look out for has missed a check-in.</p>
         </div>
       ) : (
         <ul className="alert-list">
