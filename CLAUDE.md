@@ -57,6 +57,8 @@ Node **>= 18.18**. CI (`.github/workflows/deploy-check.yml`) runs on Node 20 fro
   fix critical/high, skip nits unless asked, max 3 runs on the same diff. It also reads
   `.cursor/rules/`. In-session `/code-review` and `/security-review` are also available.
 - Deploy: `npm run deploy:compose` (Docker; web :8080, api :4000, nginx templates in `deploy/`).
-  Web also ships via **Netlify**; API + WS target `api.safesips.org`, web `app.safesips.org`.
+  Web ships as a **Render static site** at `app.safesips.org` (`render.yaml`; Netlify was retired after
+  running out of credits). API + WS on Render (`safesips-app.onrender.com`, optionally `api.safesips.org`).
+  `safesips.org` is the marketing site (GitHub Pages, `Safe-Sips/safesips-website`); `/app` forwards to the app.
 
 For the full build/test/debug/deploy playbook, see the `safesips-workflow` skill in `.claude/skills/`.

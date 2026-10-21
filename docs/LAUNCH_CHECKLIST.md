@@ -22,18 +22,18 @@ only you can make; everything else is code.
 3. **Moderators (you).** Set `ADMIN_EMAILS=you@…` on Render. The Moderation tab
    (`/admin`) lists everything people reported; the Terms promise review
    within about 24 hours.
-4. **Netlify production deploys (you).** PR #24 (merged 20 Oct ~21:30 UTC) never
-   reached production even though its deploy preview built fine. Check
-   Netlify → Deploys for a failed/locked/cancelled build (or auto-publishing
-   turned off) and trigger a deploy of `main`.
+4. **Move the web app to app.safesips.org (you).** Netlify ran out of credits,
+   so the live site stopped updating after PR #23. `render.yaml` defines the
+   replacement (a free Render static site); see the step-by-step guide in
+   `docs/MOVE_TO_APP_SAFESIPS_ORG.md`.
 5. **Clerk production instance (you).** The sign-in form says "Development
    mode": dev instances are capped and not meant for real users. Create a
    production instance on your domain, then swap `VITE_CLERK_PUBLISHABLE_KEY`
-   (Netlify) and `CLERK_SECRET_KEY` (Render). Enable **Sign in with Apple** in
+   (web app on Render) and `CLERK_SECRET_KEY` (API on Render). Enable **Sign in with Apple** in
    Clerk — Apple requires it when you offer Google sign-in (guideline 4.8).
 6. **Map tiles (you).** openstreetmap.org's tile servers don't allow app-scale
    use. Get a free key from MapTiler or Stadia Maps and set
-   `VITE_MAP_TILE_URL` / `VITE_MAP_TILE_ATTRIBUTION` on Netlify (no code change).
+   `VITE_MAP_TILE_URL` / `VITE_MAP_TILE_ATTRIBUTION` on the web app's Render site (no code change).
 
 ## 2. Getting into the App Store / Google Play
 
