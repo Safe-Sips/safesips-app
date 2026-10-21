@@ -58,6 +58,10 @@ function parseOrigins(raw: string | undefined): string[] {
 }
 
 const isProduction = process.env.NODE_ENV === "production";
+// Render and most PaaS set their own marker (RENDER=true). A hosted deploy is
+// production-like even when NODE_ENV wasn't set — the free plan doesn't set it.
+// Security-sensitive dev features must stay off here regardless of NODE_ENV.
+const isHostedDeploy = isProduction || Boolean(process.env.RENDER?.trim());
 const rawOrigins = parseOrigins(process.env.CORS_ORIGINS);
 
 if (isProduction) {
@@ -162,8 +166,10 @@ export const config = {
   checkinSweepIntervalMs: intEnv("CHECKIN_SWEEP_INTERVAL_MS", 15_000),
 
   // Allows scripts/smoke-test.mjs to mint a throwaway token via /api/test-token.
-  // NEVER enable in production.
-  allowTestToken: boolEnv("ALLOW_TEST_TOKEN") && !isProduction,
+  // Off on any hosted deploy (RENDER set) even if NODE_ENV isn't "production",
+  // so a stray ALLOW_TEST_TOKEN can never open an account-takeover endpoint live.
+  allowTestToken: boolEnv("ALLOW_TEST_TOKEN") && !isHostedDeploy,
+  isHostedDeploy,
 };
 
 if (isProduction && !config.clerkSecretKey) {
