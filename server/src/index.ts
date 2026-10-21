@@ -55,6 +55,9 @@ void db;
 
 const app = express();
 
+// Don't advertise the framework (one less fingerprint for an attacker).
+app.disable("x-powered-by");
+
 // Render (and other reverse proxies) set X-Forwarded-For; needed for rate limits.
 app.set("trust proxy", 1);
 
@@ -77,7 +80,9 @@ app.use((_req, res, next) => {
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("Permissions-Policy", "geolocation=(self)");
-  if (config.isProduction) {
+  // Any hosted deploy serves over HTTPS only (Render terminates TLS), so pin it.
+  // Keyed on the hosted signal, not NODE_ENV, which the free plan doesn't set.
+  if (config.isHostedDeploy) {
     res.setHeader(
       "Strict-Transport-Security",
       "max-age=31536000; includeSubDomains"
