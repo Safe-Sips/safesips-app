@@ -5,6 +5,7 @@ import ContactPicker from "../components/ContactPicker";
 import { usePushNotifications } from "../hooks/usePushNotifications";
 import { timeUntil } from "../format";
 import { useSocket } from "../socket/SocketProvider";
+import MoreInfo from "../components/MoreInfo";
 
 export default function CheckinSetupPage() {
   const { socket } = useSocket();
@@ -48,11 +49,13 @@ export default function CheckinSetupPage() {
         <h1>Check-ins &amp; SOS</h1>
       </div>
       <p className="muted">
-        Heading somewhere unfamiliar? Set up check-ins. SafeSips asks you a
-        personal question on a schedule, one you need a clear head to answer. If
-        you miss it, <strong>your emergency contacts are alerted in SafeSips</strong>,
-        along with your approximate area if you're sharing your location.
+        SafeSips asks you a question on a schedule. Miss one and{" "}
+        <strong>your emergency contacts are alerted</strong>.
       </p>
+      <MoreInfo label="How it works">
+        Pick a question you need a clear head to answer. Alerts reach your contacts in SafeSips,
+        with your approximate area if you're sharing your location.
+      </MoreInfo>
       {loadError && <p className="error">{loadError}</p>}
 
       {overview && (
@@ -60,6 +63,31 @@ export default function CheckinSetupPage() {
       )}
       <CheckinPlansSection plans={plans} contacts={acceptedContacts} onChange={load} />
     </div>
+  );
+}
+
+/** "Saved to your account": these contacts come back after a server reset. */
+function BackupNote({ overview }: { overview: ContactsOverviewDTO }) {
+  const [saved, setSaved] = useState<{ contacts: number; protecting: number } | null>(null);
+  useEffect(() => {
+    let active = true;
+    api
+      .backupStatus()
+      .then((r) => active && setSaved(r.saved))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [overview]);
+  if (!saved || saved.contacts + saved.protecting === 0) return null;
+  const parts = [
+    saved.contacts > 0 && `${saved.contacts} ${saved.contacts === 1 ? "contact" : "contacts"}`,
+    saved.protecting > 0 && `${saved.protecting} ${saved.protecting === 1 ? "person" : "people"} you look out for`,
+  ].filter(Boolean);
+  return (
+    <p className="field-hint backup-note">
+      ✓ Saved to your account ({parts.join(", ")}), kept through app updates.
+    </p>
   );
 }
 
@@ -105,10 +133,6 @@ function EmergencyContactsSection({
   return (
     <section className="card">
       <h2>Emergency contacts</h2>
-      <p className="muted">
-        Your emergency contacts are other SafeSips users. Once they accept your
-        request, they're alerted in the app if you miss a check-in.
-      </p>
 
       {overview.incoming.length > 0 && (
         <div className="contact-requests" role="region" aria-label="Requests for you">
@@ -169,6 +193,8 @@ function EmergencyContactsSection({
           ))}
         </ul>
       )}
+
+      <BackupNote overview={overview} />
 
       <form className="inline-form" onSubmit={add}>
         <input
@@ -541,9 +567,6 @@ function CheckinPlansSection({
  * device. When they're simply off there's nothing to say: tapping Start asks.
  */
 function PushHint({ status }: { status: ReturnType<typeof usePushNotifications>["status"] }) {
-  if (status === "off") {
-    return <p className="field-hint">SafeSips will ask to send you notifications, so your reminders arrive even when it's closed.</p>;
-  }
   if (status === "denied") {
     return (
       <p className="hint">

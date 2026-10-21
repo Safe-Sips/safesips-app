@@ -8,7 +8,7 @@ import { deleteAccountData, exportAccountData } from "../repos/account.js";
 import { defaultCursor, listActivity } from "../repos/activity.js";
 import { computeStats } from "../repos/stats.js";
 import { cleanAvatarUrl, findUserById, setUserImage } from "../repos/users.js";
-import { backUpConnections } from "../connectionBackup.js";
+import { backUpConnections, savedConnectionCounts } from "../connectionBackup.js";
 import { hideSpotsBetween } from "../friendSpots.js";
 import { blockUser, listBlocks, unblockUser } from "../repos/moderation.js";
 import { emitFriendsChanged } from "../realtime.js";
@@ -34,6 +34,14 @@ usersRouter.get(
     if (!q) return;
     const before = q.cursor ?? defaultCursor();
     res.json(listActivity(req.auth!.userId, before, ACTIVITY_LIMIT));
+  })
+);
+
+/** What's saved to the account (Clerk) so it comes back after a server reset. */
+usersRouter.get(
+  "/me/backup",
+  asyncHandler(async (req, res) => {
+    res.json({ saved: await savedConnectionCounts(req.auth!.user) });
   })
 );
 

@@ -11,7 +11,9 @@ import {
   findUserByEmail,
   markEmailVerified,
   toUserDTO,
+  upsertUserFromClerk,
 } from "../repos/users.js";
+import { usesTestBackupFile } from "../connectionBackup.js";
 
 export const authRouter = Router();
 
@@ -69,6 +71,15 @@ if (config.allowTestToken) {
         : null;
       const email = as ? `smoke-${as}@safesips.local` : "smoke@safesips.local";
       let user = findUserByEmail(email);
+      if (!user && usesTestBackupFile()) {
+        // Backup end-to-end tests: Clerk-style ids, so connections are saved.
+        user = upsertUserFromClerk({
+          clerkId: `test_${as ?? "main"}`,
+          email,
+          displayName: as ? `Smoke ${as}` : "Smoke Test",
+          emailVerified: true,
+        });
+      }
       if (!user) {
         user = createUser({
           email,

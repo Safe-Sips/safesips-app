@@ -246,6 +246,9 @@ export const api = {
     request<FriendsOverviewDTO>(`/api/friends/${encodeURIComponent(id)}/accept`, { method: "POST", body: {} }),
   removeFriend: (id: string) =>
     request<FriendsOverviewDTO>(`/api/friends/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  /** What's saved to the account so it survives a server reset (null: unknown). */
+  backupStatus: () =>
+    request<{ saved: { friends: number; contacts: number; protecting: number } | null }>("/api/users/me/backup"),
   setAvatar: (imageUrl: string | null) =>
     request<{ imageUrl: string | null }>("/api/users/me/avatar", { method: "PUT", body: { imageUrl } }),
   friendProfile: (userId: string) =>

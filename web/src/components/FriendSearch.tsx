@@ -80,12 +80,8 @@ export default function FriendSearch({ onChange }: { onChange: (o: FriendsOvervi
           />
         </span>
       </label>
-      {q.length < MIN_CHARS && (
-        <p className="field-hint">
-          {q.length === 0
-            ? "Results show up as you type. Only people who allow it can be found."
-            : `Keep typing: at least ${MIN_CHARS} letters.`}
-        </p>
+      {q.length > 0 && q.length < MIN_CHARS && (
+        <p className="field-hint">Keep typing: at least {MIN_CHARS} letters.</p>
       )}
       {loading && results === null && <p className="field-hint" role="status">Searching…</p>}
       {results !== null && results.length === 0 && !loading && (

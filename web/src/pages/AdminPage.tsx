@@ -52,8 +52,7 @@ export default function AdminPage() {
         <h1>Moderation</h1>
       </div>
       <p className="muted">
-        Posts and map reports that people reported. Anything reported by 3 or more
-        people is already hidden. Please review new items within 24 hours.
+        Review new items within 24 hours. Anything reported by 3+ people is already hidden.
       </p>
       {error && <p className="error">{error}</p>}
       {items && items.length === 0 && (

@@ -9,6 +9,7 @@ import { api, ApiError } from "../api";
 import { useAuth } from "../auth/AuthContext";
 import Avatar from "../components/Avatar";
 import { timeAgo } from "../format";
+import MoreInfo from "../components/MoreInfo";
 
 const ACTIVITY_LABEL: Record<ActivityKind, string> = {
   report_created: "Reported a place",
@@ -27,6 +28,40 @@ const COUNT_LABELS: Array<{ key: keyof UserStatsDTO["counts"]; label: string }> 
   { key: "checkinsCompleted", label: "Check-ins completed" },
 ];
 
+/** Account settings: who can find me by name in Friends search. */
+function SettingsSection() {
+  const { user, patchUser } = useAuth();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!user) return null;
+  const on = user.discoverable !== false;
+  const toggle = async (next: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.setDiscoverable(next);
+      patchUser({ discoverable: next, searchNoticePending: false });
+    } catch {
+      setError("Couldn't save that. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="card">
+      <h2>Settings</h2>
+      <label className="toggle-row settings-row">
+        <input type="checkbox" checked={on} disabled={busy} onChange={(e) => void toggle(e.target.checked)} />
+        <span>
+          <strong>Let people find me by name</strong>
+          <span className="field-hint">They see your name and picture in Friends search, never your email.</span>
+        </span>
+      </label>
+      {error && <p className="error">{error}</p>}
+    </section>
+  );
+}
+
 /** People I've blocked, with Unblock. */
 function BlockedPeopleSection() {
   const [blocks, setBlocks] = useState<Array<{ userId: string; displayName: string }> | null>(null);
@@ -43,11 +78,10 @@ function BlockedPeopleSection() {
   return (
     <section className="card">
       <h2>Blocked people</h2>
-      <p className="muted">
-        You don't see their posts, discussions or map reports, and they can't
-        send you friend requests. Unblocking doesn't restore friendships or
-        emergency contacts; add them again if you want.
-      </p>
+      <MoreInfo>
+        You don't see their posts, discussions or map reports, and they can't send you friend
+        requests. Unblocking doesn't restore friendships or emergency contacts.
+      </MoreInfo>
       {error && <p className="error">{error}</p>}
       <ul className="contact-list">
         {blocks?.map((b) => (
@@ -120,10 +154,6 @@ function YourDataSection() {
   return (
     <section className="card">
       <h2>Your data</h2>
-      <p className="muted">
-        Download a copy of everything SafeSips stores about you, or permanently
-        delete your account.
-      </p>
       <div className="data-actions">
         <button
           className="btn btn-ghost"
@@ -216,6 +246,8 @@ export default function ProfilePage() {
       </div>
 
       {error && <p className="error">{error}</p>}
+
+      <SettingsSection />
 
       {stats && (
         <>

@@ -59,10 +59,6 @@ export default function ForumListPage() {
           New discussion
         </Link>
       </div>
-      <p className="muted">
-        Share tips and look out for each other. Keep it kind and useful, and
-        report anything abusive.
-      </p>
 
       {error && (
         <div className="state-card" role="alert">

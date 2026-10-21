@@ -138,10 +138,9 @@ function ConnectionNotice({
 }
 
 function sharingHint(sharedUntil: number | null): string {
-  const follows = "Your circle follows you while SafeSips is open.";
   return sharedUntil
-    ? `${follows} If you lock your phone or close the app, it stays where you last were until ${clockTime(sharedUntil)}. Tap Stop to end it sooner.`
-    : `${follows} It disappears a few minutes after you leave the app, and stops after 24 hours at most.`;
+    ? `If you close the app, your circle stays where you last were until ${clockTime(sharedUntil)}.`
+    : "Your circle disappears a few minutes after you leave the app.";
 }
 
 export default function Controls({
@@ -330,9 +329,7 @@ export default function Controls({
       </div>
 
       <p className="privacy-note">
-        Your exact location stays on your device. Others only see an approximate
-        <strong> 200&nbsp;m</strong> area around a random point near you, unless you
-        let your friends see your exact spot while sharing.
+        Others only see an anonymous <strong>200&nbsp;m</strong> area, never your exact spot.
       </p>
       <div className="legend">
         <span className="legend-item">

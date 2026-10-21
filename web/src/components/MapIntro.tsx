@@ -68,10 +68,7 @@ export default function MapIntro({
           </li>
         </ul>
         <p className="muted">
-          Use <strong>Share for</strong> to keep your circle up for a set time,
-          or only while the app is open, and tap <strong>Stop</strong> whenever
-          you like. Safety reports are different: they show the exact place and
-          your name.
+          Safety reports are different: they show the exact place and your name.
         </p>
         <div className="modal-actions">
           <button className="btn btn-primary" type="button" onClick={onClose} data-autofocus>
