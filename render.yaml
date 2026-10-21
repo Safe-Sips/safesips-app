@@ -1,0 +1,63 @@
+# Render Blueprint for the SafeSips web app (the static site at
+# app.safesips.org). Create it with: Render → New → Blueprint → this repo.
+#
+# Only the web app is defined here. The API (safesips-app on Render) already
+# exists and is managed in the dashboard; it is not touched by this file.
+services:
+  - type: web
+    runtime: static
+    name: safesips-web
+    branch: main
+    # The monorepo root: the web app needs the shared package built first.
+    buildCommand: npm ci && npm run build:shared && npm run build -w @safesips/web
+    staticPublishPath: web/dist
+    # One build per merge to main, none per pull request (saves build minutes).
+    pullRequestPreviewsEnabled: false
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      # Clerk publishable key (pk_test_… / pk_live_…). Set it in the dashboard
+      # when Render asks; it's public, but kept out of git like before.
+      - key: VITE_CLERK_PUBLISHABLE_KEY
+        sync: false
+      # The API. Change to https://api.safesips.org if you give it that domain.
+      - key: VITE_SERVER_URL
+        value: https://safesips-app.onrender.com
+      # Optional: map tiles from a provider (see web/.env.example).
+      - key: VITE_MAP_TILE_URL
+        sync: false
+      - key: VITE_MAP_TILE_ATTRIBUTION
+        sync: false
+    routes:
+      # Single-page app: any path that isn't a real file loads the app.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      # Same security headers the Netlify site had (web/public/_headers).
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Content-Security-Policy
+        value: "frame-ancestors 'none'"
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Permissions-Policy
+        value: "geolocation=(self), camera=(), microphone=(), payment=()"
+      - path: /*
+        name: Strict-Transport-Security
+        value: "max-age=31536000; includeSubDomains"
+      # The service worker must always be revalidated (else users can be stuck
+      # on an old version); hashed build files never change.
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache
+      - path: /assets/*
+        name: Cache-Control
+        value: "public, max-age=31536000, immutable"
