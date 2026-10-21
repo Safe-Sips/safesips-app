@@ -429,15 +429,15 @@ test("presence: a dropped owner hands the circle to the user's newest session", 
   assert.equal(pickHandoverSocket({ droppedIsOwner: true, remainingSocketIds: [] }), null);
 });
 
-test("emergency contacts: SafeSips codes are typed forgivingly and formatted", async () => {
+test("people are added by email or by name, not by code", async () => {
   const ec = await import("../src/repos/emergencyContacts.js");
+  const friends = await import("../src/repos/friends.js");
   const u = makeUser("code-owner@test.local");
-  const code = ec.ensureContactCode(u.id);
-  assert.match(code, /^[A-HJ-NP-Z2-9]{8}$/, "no ambiguous 0/O/1/I/L");
-  assert.equal(ec.ensureContactCode(u.id), code, "stable once created");
-  assert.equal(ec.normalizeCode(` ${code.slice(0, 4).toLowerCase()}-${code.slice(4)} `), code);
-  assert.equal(ec.normalizeCode("ABC"), null);
-  assert.equal(ec.formatCode("ABCD2345"), "ABCD-2345");
+  const c = ec.requestContact(u.id, "ABCD-2345");
+  const f = friends.requestFriend(u.id, "ABCD-2345");
+  assert.ok(!c.ok && /email/.test(c.error), "contacts ask for an email");
+  assert.ok(!f.ok && /email/.test(f.error), "friends ask for an email");
+  assert.ok(!("myCode" in friends.getFriendsOverview(u.id)) && !("myCode" in ec.getOverview(u.id)));
 });
 
 test("emergency contacts: request rules (self, duplicates, no account probing)", async () => {
@@ -446,8 +446,6 @@ test("emergency contacts: request rules (self, duplicates, no account probing)",
   const friend = makeUser("req-friend@test.local");
 
   assert.equal(ec.requestContact(owner.id, "req-owner@test.local").ok, false, "can't add own email");
-  assert.equal(ec.requestContact(owner.id, ec.ensureContactCode(owner.id)).ok, false, "can't add own code");
-  assert.equal(ec.requestContact(owner.id, "ZZZZ-ZZZZ").ok, false, "unknown code is an error");
 
   // Same reply for a real and an unknown email: no way to probe who has an account.
   const real = ec.requestContact(owner.id, "req-friend@test.local");
@@ -461,9 +459,9 @@ test("emergency contacts: request rules (self, duplicates, no account probing)",
     assert.equal(real.notifyUserId, friend.id, "an existing user is notified");
   }
 
-  // Adding the same person again (email, then code) doesn't duplicate them.
+  // Adding the same person again (email, then as a friend) doesn't duplicate them.
   ec.requestContact(owner.id, "req-friend@test.local");
-  ec.requestContact(owner.id, ec.ensureContactCode(friend.id));
+  ec.requestContactForUser(owner.id, friend.id);
   const mine = ec.getOverview(owner.id).contacts;
   assert.equal(mine.filter((c) => c.inviteLabel !== "nobody-here@test.local").length, 1);
   assert.ok(mine.every((c) => c.displayName === null), "names hidden until they accept");
@@ -510,10 +508,10 @@ test("missed check-in alerts accepted contacts in-app and by push", async () => 
   const pat = makeUser("alert-pat@test.local");
   const pending = makeUser("alert-pending@test.local");
   for (const c of [mo, pat]) {
-    ec.requestContact(owner.id, ec.ensureContactCode(c.id));
+    ec.requestContactForUser(owner.id, c.id);
     ec.acceptRequest(c.id, ec.getOverview(c.id).incoming[0].id);
   }
-  ec.requestContact(owner.id, ec.ensureContactCode(pending.id)); // never accepts
+  ec.requestContactForUser(owner.id, pending.id); // never accepts
 
   const plan = checkins.createPlan(owner.id, {
     label: "Club", intervalMinutes: 60, graceMinutes: 10, question: "q?", answer: "a", endsAt: null,
@@ -601,19 +599,18 @@ test("check-ins keep going after a miss (next one is scheduled)", () => {
   assert.equal(next.deadline_at - next.due_at, 60_000, "with the plan's answer window");
 });
 
-test("friends: request by code, accept, profile only for friends", async () => {
+test("friends: request by email, accept, profile only for friends", async () => {
   const friends = await import("../src/repos/friends.js");
   const contacts = await import("../src/repos/emergencyContacts.js");
   const ana = makeUser("fr-ana@example.com");
   const bo = makeUser("fr-bo@example.com");
   const cy = makeUser("fr-cy@example.com");
-  const boCode = friends.getFriendsOverview(bo.id).myCode;
 
-  const sent = friends.requestFriend(ana.id, boCode.toLowerCase());
+  const sent = friends.requestFriend(ana.id, "FR-BO@example.com");
   assert.ok(sent.ok && sent.notify?.userId === bo.id && !sent.notify.accepted);
   // Pending: Bo sees the request; Ana sees only what she typed, not his name.
   assert.equal(friends.getFriendsOverview(bo.id).incoming[0].fromDisplayName, ana.display_name);
-  assert.equal(friends.getFriendsOverview(ana.id).outgoing[0].label, boCode);
+  assert.equal(friends.getFriendsOverview(ana.id).outgoing[0].label, "fr-bo@example.com");
   assert.equal(friends.getFriendProfile(ana.id, bo.id), null, "no profile before accepting");
 
   const reqId = friends.getFriendsOverview(bo.id).incoming[0].id;
@@ -626,8 +623,14 @@ test("friends: request by code, accept, profile only for friends", async () => {
   assert.equal(friends.getFriendProfile(cy.id, bo.id), null, "strangers can't see profiles");
 
   // A friend can be asked to be an emergency contact; it's still a request.
+  assert.equal(friends.getFriendsOverview(ana.id).friends[0].emergencyContact, "none");
   assert.ok(contacts.requestContactForUser(ana.id, bo.id).ok);
   assert.equal(friends.getFriendProfile(ana.id, bo.id)?.emergencyContact, "pending");
+  assert.equal(friends.getFriendsOverview(ana.id).friends[0].emergencyContact, "pending", "the friends list shows it too");
+  contacts.acceptRequest(bo.id, contacts.getOverview(bo.id).incoming[0].id);
+  assert.equal(friends.getFriendsOverview(ana.id).friends[0].emergencyContact, "accepted");
+  assert.equal(friends.getFriendsOverview(bo.id).friends[0].isTheirContact, true, "Bo sees he's Ana's contact");
+  assert.equal(friends.getFriendsOverview(ana.id).friends[0].isTheirContact, false);
 
   // Unfriend from either side.
   assert.equal(friends.removeFriendship(cy.id, reqId), null);
@@ -667,11 +670,11 @@ test("friends: email replies don't reveal accounts; asking back accepts", async 
   assert.equal(friends.getFriendProfile(di.id, late.id)?.displayName, late.display_name);
 });
 
-test("friends: code + email requests from one person show once and merge on accept", async () => {
+test("friends: search + email requests from one person show once and merge on accept", async () => {
   const friends = await import("../src/repos/friends.js");
   const fi = makeUser("fr-fi@example.com");
   const gu = makeUser("fr-gu@example.com");
-  friends.requestFriend(fi.id, friends.getFriendsOverview(gu.id).myCode);
+  friends.requestFriendByUserId(fi.id, gu.id);
   friends.requestFriend(fi.id, "fr-gu@example.com");
   const incoming = friends.getFriendsOverview(gu.id).incoming;
   assert.equal(incoming.length, 1, "one entry per person");
@@ -805,10 +808,9 @@ test("declining is private and stops repeat requests; adding back clears it", as
   const friends = await import("../src/repos/friends.js");
   const pest = users.createUser({ email: "dc-pest@example.com", displayName: "Pest One", passwordHash: "x" });
   const her = users.createUser({ email: "dc-her@example.com", displayName: "Her Two", passwordHash: "x" });
-  const herCode = friends.getFriendsOverview(her.id).myCode;
 
-  // Code + email requests show once; one Decline handles both.
-  assert.ok(friends.requestFriend(pest.id, herCode).ok);
+  // Search + email requests show once; one Decline handles both.
+  assert.ok(friends.requestFriendByUserId(pest.id, her.id).ok);
   assert.ok(friends.requestFriend(pest.id, "dc-her@example.com").ok);
   const req = friends.getFriendsOverview(her.id).incoming;
   assert.equal(req.length, 1);
@@ -820,7 +822,7 @@ test("declining is private and stops repeat requests; adding back clears it", as
   const again = friends.requestFriendByUserId(pest.id, her.id);
   assert.ok(again.ok && again.notify === null, "no notification");
   for (const o of friends.getFriendsOverview(pest.id).outgoing) friends.removeFriendship(pest.id, o.id);
-  const fresh = friends.requestFriend(pest.id, herCode);
+  const fresh = friends.requestFriend(pest.id, "dc-her@example.com");
   assert.ok(fresh.ok && fresh.notify === null, "cancel + re-send is silent too");
   assert.equal(friends.getFriendsOverview(her.id).incoming.length, 0);
   assert.equal(friends.searchUsers(her.id, "pest")[0]?.relation, "none", "her search doesn't show a request");
@@ -1035,4 +1037,74 @@ test("moderation: deleted content can't be restored; suspension hides and restor
   assert.equal(sees(), true, "reinstating brings them back");
   assert.ok(reports.getReportDTO(rep.id, reader.id));
   assert.equal(forum.getThreadDetail(threadId, reader.id)?.posts[0].isOpener, true);
+});
+
+/** An in-memory stand-in for the friend lists saved in Clerk. */
+function fakeBackups(saved: Record<string, string[]>, opts: { failReads?: boolean } = {}) {
+  return {
+    saved,
+    async read(clerkId: string) {
+      if (opts.failReads) throw new Error("Clerk is down");
+      return saved[clerkId] ?? [];
+    },
+    async write(clerkId: string, ids: string[]) {
+      saved[clerkId] = ids;
+    },
+    async localUser(clerkId: string) {
+      // Like Clerk: accounts that exist there get a local row on demand.
+      if (!(clerkId in saved)) return null;
+      return (
+        users.findUserByClerkId(clerkId) ??
+        users.upsertUserFromClerk({ clerkId, email: `${clerkId}@backup.test`, displayName: clerkId, emailVerified: true })
+      );
+    },
+  };
+}
+const clerkUser = (id: string) =>
+  users.upsertUserFromClerk({ clerkId: id, email: `${id}@backup.test`, displayName: id, emailVerified: true });
+
+test("friend backup: a wiped database gets friendships back, only when both still agree", async () => {
+  const friends = await import("../src/repos/friends.js");
+  const backup = await import("../src/friendBackup.js");
+  const ana = clerkUser("bk_ana");
+  // Bo isn't in this (wiped) database yet; Cy unfriended Ana; Di still has her.
+  const store = fakeBackups({ bk_ana: ["bk_bo", "bk_cy", "bk_di", "bk_gone"], bk_bo: ["bk_ana"], bk_cy: [], bk_di: ["bk_ana"] });
+  assert.equal(await backup.restoreFriends(ana, store), true);
+  const bo = users.findUserByClerkId("bk_bo")!;
+  const di = users.findUserByClerkId("bk_di")!;
+  assert.ok(friends.areFriends(ana.id, bo.id), "Bo is back (his account is recreated from Clerk)");
+  assert.ok(friends.areFriends(ana.id, di.id));
+  assert.equal(friends.areFriends(ana.id, users.findUserByClerkId("bk_cy")!.id), false, "Cy's unfriend stands");
+  assert.equal(users.findUserByClerkId("bk_gone"), undefined, "deleted accounts are skipped");
+  assert.equal(users.findUserById(ana.id)?.friends_restored, 1);
+  assert.equal(await backup.restoreFriends(users.findUserById(ana.id)!, store), true, "running it again is harmless");
+  assert.equal(friends.getFriendsOverview(ana.id).friends.length, 2);
+});
+
+test("friend backup: Clerk down leaves the user to retry; saves never overwrite an unrestored list", async () => {
+  const friends = await import("../src/repos/friends.js");
+  const backup = await import("../src/friendBackup.js");
+  const eve = clerkUser("bk_eve");
+  assert.equal(await backup.restoreFriends(eve, fakeBackups({}, { failReads: true })), false);
+  assert.equal(users.findUserById(eve.id)?.friends_restored, 0, "not marked: tried again later");
+
+  // Fay (restored) and Gus (not yet) were friends before the wipe. Fay unfriends
+  // Gus before he signs in: his restore must not bring her back.
+  const fay = clerkUser("bk_fay");
+  const gus = clerkUser("bk_gus");
+  users.markFriendsRestored(fay.id);
+  const store = fakeBackups({ bk_fay: ["bk_gus"], bk_gus: ["bk_fay", "bk_hal"], bk_hal: ["bk_gus"] });
+  backup.setFriendBackupStore(store);
+  try {
+    friends.restoreFriendship(fay.id, gus.id);
+    const f = friends.getFriendsOverview(fay.id).friends[0];
+    const removed = friends.removeFriendship(fay.id, f.id);
+    backup.backUpFriends(fay.id, removed?.unfriended);
+    await backup.friendBackupsSettled();
+    assert.deepEqual(store.saved.bk_fay, [], "Fay's list is saved without Gus");
+    assert.equal(friends.areFriends(fay.id, gus.id), false, "and Gus's restore didn't undo it");
+    assert.deepEqual(store.saved.bk_gus, ["bk_hal"], "Gus keeps his other friend (restored first, then saved)");
+  } finally {
+    backup.setFriendBackupStore(undefined);
+  }
 });

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import type { ContactsOverviewDTO, PlanContactDTO, PlanDTO } from "@safesips/shared";
 import { api, ApiError } from "../api";
 import ContactPicker from "../components/ContactPicker";
-import MyCode from "../components/MyCode";
 import NotificationsCard from "../components/NotificationsCard";
 import { timeUntil } from "../format";
 import { useSocket } from "../socket/SocketProvider";
@@ -113,8 +112,6 @@ function EmergencyContactsSection({
         request, they're alerted in the app if you miss a check-in.
       </p>
 
-      <MyCode code={overview.myCode} hint="Share it with people who want to add you." />
-
       {overview.incoming.length > 0 && (
         <div className="contact-requests" role="region" aria-label="Requests for you">
           <h3>Requests for you</h3>
@@ -140,7 +137,7 @@ function EmergencyContactsSection({
 
       <h3>Your contacts</h3>
       {overview.contacts.length === 0 ? (
-        <p className="muted">No contacts yet. Add someone by their email or SafeSips code, or from a friend's profile.</p>
+        <p className="muted">No contacts yet. Add someone by their email, or from a friend's profile.</p>
       ) : (
         <ul className="contact-list">
           {overview.contacts.map((c) => (
@@ -177,8 +174,9 @@ function EmergencyContactsSection({
 
       <form className="inline-form" onSubmit={add}>
         <input
-          placeholder="Their email or SafeSips code"
-          aria-label="Their email or SafeSips code"
+          type="email"
+          placeholder="Their email"
+          aria-label="Their email"
           value={identifier}
           onChange={(e) => setIdentifier(e.target.value)}
           autoCapitalize="none"

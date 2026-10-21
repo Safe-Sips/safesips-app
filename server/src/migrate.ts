@@ -382,6 +382,10 @@ export function runMigrations(db: Database.Database): void {
       // Everyone gets a one-time in-app notice that name search exists.
       db.exec(`ALTER TABLE users ADD COLUMN search_notice_seen INTEGER NOT NULL DEFAULT 0`);
     }
+    if (!userCols.some((c) => c.name === "friends_restored")) {
+      // 1 once the friend list saved in Clerk was restored (friendBackup.ts).
+      db.exec(`ALTER TABLE users ADD COLUMN friends_restored INTEGER NOT NULL DEFAULT 0`);
+    }
     if (!userCols.some((c) => c.name === "name_search")) {
       // Folded display name (lower-case, no accents) for friend search.
       db.exec(`ALTER TABLE users ADD COLUMN name_search TEXT`);

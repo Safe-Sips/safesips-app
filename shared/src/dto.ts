@@ -197,7 +197,7 @@ export interface ActivityDTO {
 /* -------------------------- Emergency contacts -------------------------- */
 /*
  * Emergency contacts are other SafeSips users. You add someone by their
- * account email or their SafeSips code; they must accept before they receive
+ * account email or from their friends; they must accept before they receive
  * your check-in alerts. Alerts arrive as notifications inside SafeSips.
  */
 
@@ -228,8 +228,6 @@ export interface ProtecteeDTO {
 }
 
 export interface ContactsOverviewDTO {
-  /** My SafeSips code, to give to people who want to add me. */
-  myCode: string;
   contacts: EmergencyContactDTO[];
   incoming: ContactRequestDTO[];
   protecting: ProtecteeDTO[];
@@ -248,6 +246,10 @@ export interface FriendDTO {
   displayName: string;
   imageUrl: string | null;
   since: number;
+  /** Whether I asked them to be my emergency contact, and if they accepted. */
+  emergencyContact: "none" | "pending" | "accepted";
+  /** Whether I'm their emergency contact. */
+  isTheirContact: boolean;
 }
 
 /** A friend request someone sent me. */
@@ -266,8 +268,6 @@ export interface OutgoingFriendRequestDTO {
 }
 
 export interface FriendsOverviewDTO {
-  /** My SafeSips code (the same one used for emergency contacts). */
-  myCode: string;
   /** Whether other users can find me by name in friend search. */
   discoverable: boolean;
   friends: FriendDTO[];

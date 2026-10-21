@@ -15,6 +15,8 @@ export interface UserRow {
   image_url?: string | null;
   discoverable?: number;
   search_notice_seen?: number;
+  /** 1 once friendships saved in Clerk were restored into this database. */
+  friends_restored?: number;
   created_at: number;
   updated_at: number;
 }
@@ -36,6 +38,12 @@ const updateClerkId = db.prepare(
 );
 
 const updateImage = db.prepare(`UPDATE users SET image_url = ?, updated_at = ? WHERE id = ?`);
+const setFriendsRestored = db.prepare(`UPDATE users SET friends_restored = 1 WHERE id = ?`);
+
+/** Friendships saved in Clerk are now in this database (see friendBackup.ts). */
+export function markFriendsRestored(userId: string): void {
+  setFriendsRestored.run(userId);
+}
 
 /** Hosts Clerk serves profile pictures from. Nothing else is accepted. */
 const AVATAR_HOSTS = new Set(["img.clerk.com", "images.clerk.dev"]);
