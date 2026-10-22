@@ -249,7 +249,7 @@ function EmergencyContactsSection({
 
 // 1 minute is for trying the feature out: prompts every minute, and contacts
 // are alerted every minute while you don't answer.
-const INTERVAL_OPTIONS = [1, 30, 60, 90, 120];
+const INTERVAL_OPTIONS = [1, 10, 15, 30, 60, 90, 120];
 const GRACE_OPTIONS = [1, 5, 10, 15, 20];
 const minutesLabel = (m: number) => (m === 1 ? "1 minute" : `${m} minutes`);
 
